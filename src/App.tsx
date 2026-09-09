@@ -6,7 +6,7 @@ import Home from "./screens/Home";
 import Akmon from "./screens/Akmon";
 import Library from "./screens/Library";
 import Trends from "./screens/Trends";
-import Build from "./screens/Build";
+import Studio from "./screens/Studio";
 import Settings from "./screens/Settings";
 
 export default function App() {
@@ -36,13 +36,13 @@ export default function App() {
 
   return (
     <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column" }}>
-      {screen !== "settings" && <TopBar />}
+      {screen !== "settings" && screen !== "build" && <TopBar />}
       <main style={{ flex: 1, position: "relative" }}>
         {screen === "home" && <Home />}
         {screen === "akmon" && <Akmon />}
         {screen === "library" && <Library />}
         {screen === "trends" && <Trends />}
-        {screen === "build" && <Build />}
+        {screen === "build" && <Studio />}
         {screen === "settings" && <Settings />}
       </main>
       {screen !== "settings" && settings.cedalionDock && <CedalionDock />}

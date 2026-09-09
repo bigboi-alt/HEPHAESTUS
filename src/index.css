@@ -96,7 +96,7 @@ a { color: inherit; }
 
 .dim { color: var(--fg-dim); }
 .faint { color: var(--fg-faint); }
-.mono-sm { font-size: 11px; }
+.mono-sm { font-family: var(--mono, ui-monospace, SFMono-Regular, Menlo, monospace); font-size: 11px; }
 
 .panel {
   border: 1px solid var(--line);
@@ -126,6 +126,9 @@ a { color: inherit; }
   font-weight: 500;
 }
 .btn-primary:hover { color: var(--accent-fg); opacity: 0.88; border-color: var(--accent); }
+.btn-ghost { background: transparent; color: var(--fg-dim); }
+.btn-ghost:hover { color: var(--fg); border-color: var(--fg-faint); }
+.underline { text-decoration: underline; text-underline-offset: 2px; }
 
 .input {
   background: transparent;
@@ -185,3 +188,16 @@ a { color: inherit; }
 }
 .ws-opt:hover { color: var(--fg); border-color: var(--fg-faint); }
 .ws-opt[data-on="true"] { background: var(--raise); border-color: var(--fg-dim); color: var(--fg); }
+
+/* ---------- studio — free-canvas builder ---------- */
+.cv-dots {
+  background-image: radial-gradient(circle, var(--line) 1px, transparent 1.4px);
+  background-size: 24px 24px;
+}
+.cv-pg { transition: box-shadow 240ms ease; }
+.cv-pg.cv-fade { animation: cvFade 380ms ease; }
+@keyframes cvFade { from { opacity: 0; } to { opacity: 1; } }
+.cv-pg.cv-slide { animation: cvSlide 420ms cubic-bezier(.2,.75,.25,1); }
+@keyframes cvSlide { from { opacity: 0; transform: translateX(46px); } to { opacity: 1; transform: none; } }
+.cv-pg.cv-scale { animation: cvScale 400ms cubic-bezier(.2,.75,.25,1); }
+@keyframes cvScale { from { opacity: 0; transform: scale(.985); } to { opacity: 1; transform: none; } }

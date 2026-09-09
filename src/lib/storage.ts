@@ -23,6 +23,8 @@ export type Settings = {
   trendsAutoRefresh: boolean;
   displayName: string;
   handle: string;
+  /** last position of the floating cedalion window */
+  chatRect?: { x: number; y: number; w: number; h: number } | null;
 };
 
 export const DEFAULT_SETTINGS: Settings = {
