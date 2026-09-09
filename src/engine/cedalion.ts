@@ -1,0 +1,901 @@
+/**
+ * HEPHAESTUS · CEDALION
+ *
+ * The guide. A deterministic critic and answerer — no model, no API, no key.
+ * Everything it says is derived from measurable properties of your palette
+ * plus a curated rule base. If it makes a claim, it can show the number.
+ *
+ * Named for the man who carried the blinded Hephaestus on his shoulders
+ * and pointed him at the sunrise. It doesn't do the work. It points.
+ */
+
+import {
+  contrastRatio, deltaE, fixContrast, hexToOklch,
+  round, simulateCvd, wcagLevel, type CvdType,
+} from "./color";
+import { describeColor, ROLE_ORDER, type Palette, type Role } from "./akmon";
+import { getPurpose, getTrend, TRENDS, type Purpose } from "../data/trends";
+
+/* ------------------------------------------------------------------ *
+ * report types
+ * ------------------------------------------------------------------ */
+
+export type Severity = "critical" | "warning" | "note" | "win";
+
+export type Fix = {
+  label: string;
+  role: Role;
+  hex: string;
+};
+
+export type Finding = {
+  id: string;
+  severity: Severity;
+  title: string;
+  detail: string;
+  evidence?: string;
+  fix?: Fix;
+};
+
+export type CategoryScore = {
+  id: string;
+  label: string;
+  score: number;   // 0..100
+  weight: number;
+  summary: string;
+};
+
+export type Audit = {
+  score: number;             // 0..100 weighted
+  grade: string;             // S / A / B / C / D
+  headline: string;
+  categories: CategoryScore[];
+  findings: Finding[];
+};
+
+const GRADE = (n: number) =>
+  n >= 92 ? "S" : n >= 82 ? "A" : n >= 70 ? "B" : n >= 55 ? "C" : "D";
+
+/* ------------------------------------------------------------------ *
+ * the audit
+ * ------------------------------------------------------------------ */
+
+const EMPTY_AUDIT: Audit = {
+  score: 0,
+  grade: "D",
+  headline: "This palette is missing roles I need in order to judge it.",
+  categories: [],
+  findings: [
+    {
+      id: "malformed",
+      severity: "critical",
+      title: "Incomplete palette",
+      detail: `A palette needs all ${ROLE_ORDER.length} roles: ${ROLE_ORDER.join(", ")}. Regenerate it in Akmon and it will be rebuilt correctly.`,
+    },
+  ],
+};
+
+export function auditPalette(p: Palette, purposeId?: string): Audit {
+  if (!p?.swatches || ROLE_ORDER.some((r) => !p.swatches.find((s) => s.role === r))) {
+    return EMPTY_AUDIT;
+  }
+  const get = (r: Role) => p.swatches.find((s) => s.role === r)!;
+  const bg = get("background").hex;
+  const surface = get("surface").hex;
+  const border = get("border").hex;
+  const text = get("text").hex;
+  const muted = get("muted").hex;
+  const primary = get("primary").hex;
+  const secondary = get("secondary").hex;
+  const accent = get("accent").hex;
+  const purpose = purposeId ? getPurpose(purposeId) : undefined;
+  const floor = purpose?.contrastFloor ?? 4.5;
+
+  const findings: Finding[] = [];
+  const categories: CategoryScore[] = [];
+
+  /* --- 1. contrast & legibility ----------------------------------- */
+  {
+    let score = 100;
+    const checks: { role: Role; hex: string; need: number; what: string }[] = [
+      { role: "text", hex: text, need: Math.max(7, floor), what: "body text on background" },
+      { role: "muted", hex: muted, need: 4.5, what: "secondary text on background" },
+      { role: "primary", hex: primary, need: 3, what: "primary UI element on background" },
+      { role: "accent", hex: accent, need: 3, what: "accent element on background" },
+    ];
+    for (const c of checks) {
+      const ratio = contrastRatio(c.hex, bg);
+      if (ratio < c.need) {
+        const deficit = c.need - ratio;
+        const severity: Severity = c.role === "text" || deficit > 1.5 ? "critical" : "warning";
+        score -= severity === "critical" ? 30 : 14;
+        const fixed = fixContrast(c.hex, bg, c.need);
+        findings.push({
+          id: `contrast-${c.role}`,
+          severity,
+          title: `${c.what} is below ${c.need}:1`,
+          detail: `Measured ${round(ratio, 2)}:1 — ${wcagLevel(ratio)}. ${
+            c.role === "text"
+              ? "This is the single most common reason a good-looking palette fails in production."
+              : "Interactive and informational elements need 3:1 minimum under WCAG 2.2 non-text contrast."
+          }`,
+          evidence: `${c.hex} on ${bg} = ${round(ratio, 2)}:1`,
+          fix: fixed ? { label: `Lift ${c.role} to ${round(contrastRatio(fixed, bg), 2)}:1`, role: c.role, hex: fixed } : undefined,
+        });
+      }
+    }
+
+    // text on surface too — cards are where contrast quietly dies
+    const onSurface = contrastRatio(text, surface);
+    if (onSurface < 4.5) {
+      score -= 18;
+      const fixed = fixContrast(text, surface, 4.5);
+      findings.push({
+        id: "contrast-text-surface",
+        severity: "warning",
+        title: "Text on raised surfaces drops below AA",
+        detail: "Your background passes but your card surface doesn't. Anything inside a panel becomes the weakest text on the page.",
+        evidence: `${text} on ${surface} = ${round(onSurface, 2)}:1`,
+        fix: fixed ? { label: "Correct text colour", role: "text", hex: fixed } : undefined,
+      });
+    }
+
+    const borderContrast = contrastRatio(border, bg);
+    if (borderContrast < 1.25) {
+      score -= 8;
+      findings.push({
+        id: "border-invisible",
+        severity: "note",
+        title: "Borders are effectively invisible",
+        detail: "At this contrast the border will disappear on most laptop screens at typical brightness. Either commit to borderless (use spacing and surface shifts) or push it to at least 1.4:1.",
+        evidence: `${border} on ${bg} = ${round(borderContrast, 2)}:1`,
+      });
+    }
+
+    if (score >= 100) {
+      findings.push({
+        id: "contrast-win",
+        severity: "win",
+        title: "Every text pair clears WCAG AA",
+        detail: `Body text sits at ${round(contrastRatio(text, bg), 2)}:1 against the background.`,
+      });
+    }
+
+    score = Math.max(0, score);
+    categories.push({
+      id: "contrast",
+      label: "contrast & legibility",
+      score,
+      weight: 0.3,
+      summary: score >= 90 ? "Readable everywhere" : score >= 65 ? "Mostly readable, some weak pairs" : "Legibility failures present",
+    });
+  }
+
+  /* --- 2. colour-vision safety ------------------------------------ */
+  {
+    let score = 100;
+    const keyPairs: [string, string, string][] = [
+      [primary, accent, "primary and accent"],
+      [primary, secondary, "primary and secondary"],
+      [secondary, accent, "secondary and accent"],
+    ];
+    const types: CvdType[] = ["deuteranopia", "protanopia", "tritanopia"];
+    const collapses: string[] = [];
+
+    for (const [a, b, label] of keyPairs) {
+      const normal = deltaE(a, b);
+      if (normal < 0.05) continue; // already handled by distinctiveness
+      for (const t of types) {
+        const d = deltaE(simulateCvd(a, t), simulateCvd(b, t));
+        if (d < 0.055 && normal > 0.08) {
+          collapses.push(`${label} merge under ${t} (ΔE ${round(d, 3)} vs ${round(normal, 3)} normal)`);
+          break;
+        }
+      }
+    }
+
+    if (collapses.length) {
+      score -= collapses.length * 25;
+      findings.push({
+        id: "cvd-collapse",
+        severity: "warning",
+        title: `${collapses.length} colour pair${collapses.length > 1 ? "s" : ""} collapse for colour-blind users`,
+        detail: "Around 1 in 12 men cannot separate these. If either colour ever carries meaning on its own — status, category, chart series — that meaning is lost. Separate them by lightness, not just hue, or pair colour with a shape or label.",
+        evidence: collapses.join("; "),
+      });
+    } else {
+      findings.push({
+        id: "cvd-win",
+        severity: "win",
+        title: "Palette survives colour-vision simulation",
+        detail: "Key colours stay distinguishable under deuteranopia, protanopia and tritanopia.",
+      });
+    }
+
+    // lightness separation is the real insurance policy
+    const lPrimary = hexToOklch(primary).l;
+    const lAccent = hexToOklch(accent).l;
+    if (Math.abs(lPrimary - lAccent) < 0.08) {
+      score -= 12;
+      findings.push({
+        id: "cvd-lightness",
+        severity: "note",
+        title: "Primary and accent share almost the same lightness",
+        detail: "Hue difference alone is fragile — it vanishes in greyscale, in bright sunlight, and for colour-blind users. Pull them at least 0.12 apart in OKLCH lightness.",
+        evidence: `L ${round(lPrimary, 3)} vs ${round(lAccent, 3)}`,
+      });
+    }
+
+    score = Math.max(0, score);
+    categories.push({
+      id: "cvd",
+      label: "colour-vision safety",
+      score,
+      weight: 0.15,
+      summary: score >= 90 ? "Safe under simulation" : score >= 60 ? "One risky pair" : "Multiple collapses",
+    });
+  }
+
+  /* --- 3. harmony & structure ------------------------------------- */
+  {
+    let score = 100;
+    const chromatic = [primary, secondary, accent].map(hexToOklch);
+    const hues = chromatic.map((c) => c.h);
+    const chromas = chromatic.map((c) => c.c);
+    const lights = p.swatches.map((s) => hexToOklch(s.hex).l).sort((a, b) => a - b);
+
+    // lightness spread — a palette with no dark and no light has no hierarchy
+    const spread = lights[lights.length - 1] - lights[0];
+    if (spread < 0.5) {
+      score -= 22;
+      findings.push({
+        id: "harmony-spread",
+        severity: "warning",
+        title: "Not enough lightness range",
+        detail: "Everything sits in the same tonal band, so nothing can visually dominate. A working interface palette usually spans at least 0.6 in OKLCH lightness from its darkest to lightest token.",
+        evidence: `range ${round(spread, 3)} (L ${round(lights[0], 2)} → ${round(lights[lights.length - 1], 2)})`,
+      });
+    }
+
+    // mid-tone crowding: too many swatches at similar L
+    const midCluster = lights.filter((l) => l > 0.35 && l < 0.7).length;
+    if (midCluster >= 5) {
+      score -= 10;
+      findings.push({
+        id: "harmony-mud",
+        severity: "note",
+        title: "Mid-tone crowding",
+        detail: `${midCluster} of ${lights.length} tokens live in the muddy middle (L 0.35–0.70). Push your surfaces further out so the accents have somewhere to land.`,
+      });
+    }
+
+    // chroma discipline
+    const loud = chromas.filter((c) => c > 0.16).length;
+    if (loud >= 3) {
+      score -= 14;
+      findings.push({
+        id: "harmony-loud",
+        severity: "note",
+        title: "Three competing high-chroma colours",
+        detail: "2026 practice is one loud colour carried by a large neutral base — saturation reads as confidence only when it's rationed. Demote one of these to a tint or a neutral.",
+        evidence: `chroma ${chromas.map((c) => round(c, 3)).join(", ")}`,
+      });
+    }
+
+    // hue relationship sanity
+    const hueGap = (a: number, b: number) => {
+      const d = Math.abs(a - b) % 360;
+      return d > 180 ? 360 - d : d;
+    };
+    const gapPS = hueGap(hues[0], hues[1]);
+    if (gapPS > 12 && gapPS < 32 && p.scheme !== "analogous" && p.scheme !== "hue-drift") {
+      score -= 8;
+      findings.push({
+        id: "harmony-awkward",
+        severity: "note",
+        title: "Primary and secondary hues are awkwardly close",
+        detail: `${Math.round(gapPS)}° apart reads as a mistake rather than a decision — close enough to look like a rendering error, far enough to not be a tint. Either bring them within 12° or push past 35°.`,
+      });
+    }
+
+    // neutral base check
+    const neutrals = [bg, surface, border].map((h) => hexToOklch(h).c);
+    if (neutrals.every((c) => c < 0.004)) {
+      score -= 6;
+      findings.push({
+        id: "harmony-flat-neutrals",
+        severity: "note",
+        title: "Neutrals are perfectly grey",
+        detail: "Pure greys feel cheap next to a chromatic brand. Mix 1–2% of your primary hue into the background and surfaces — invisible individually, obviously better as a system.",
+      });
+    } else if (neutrals.some((c) => c > 0.002 && c < 0.03)) {
+      findings.push({
+        id: "harmony-tinted-win",
+        severity: "win",
+        title: "Neutrals are tinted, not grey",
+        detail: "The background carries a trace of the brand hue. This is the detail that separates designed palettes from picked ones.",
+      });
+    }
+
+    score = Math.max(0, score);
+    categories.push({
+      id: "harmony",
+      label: "harmony & structure",
+      score,
+      weight: 0.2,
+      summary: score >= 90 ? "Well structured" : score >= 65 ? "Workable, some tension" : "Structurally unbalanced",
+    });
+  }
+
+  /* --- 4. distinctiveness ----------------------------------------- */
+  {
+    let score = 100;
+    const pairs: [Role, Role][] = [
+      ["background", "surface"], ["surface", "border"], ["primary", "secondary"],
+      ["primary", "accent"], ["secondary", "accent"], ["text", "muted"],
+    ];
+    for (const [a, b] of pairs) {
+      const d = deltaE(get(a).hex, get(b).hex);
+      if (d < 0.028) {
+        score -= 18;
+        findings.push({
+          id: `dup-${a}-${b}`,
+          severity: "warning",
+          title: `${a} and ${b} are the same colour`,
+          detail: `ΔE of ${round(d, 3)} is below the threshold of noticeable difference. You have ${ROLE_ORDER.length} roles but fewer than that many colours — one of them is doing no work.`,
+        });
+      } else if (d < 0.05 && a !== "background") {
+        score -= 6;
+        findings.push({
+          id: `near-${a}-${b}`,
+          severity: "note",
+          title: `${a} and ${b} are very close`,
+          detail: `ΔE ${round(d, 3)}. Fine if intentional (surface elevation), a problem if these two need to be told apart.`,
+        });
+      }
+    }
+    score = Math.max(0, score);
+    categories.push({
+      id: "distinct",
+      label: "distinctiveness",
+      score,
+      weight: 0.15,
+      summary: score >= 90 ? "Every role is doing work" : "Some roles duplicate each other",
+    });
+  }
+
+  /* --- 5. purpose fit --------------------------------------------- */
+  {
+    let score = 82;
+    let summary = "No purpose selected — scored as general-purpose UI.";
+    if (purpose) {
+      summary = `Judged as ${purpose.label.toLowerCase()}.`;
+      const accentC = hexToOklch(accent).c;
+      const primaryC = hexToOklch(primary).c;
+      const primaryH = hexToOklch(primary).h;
+
+      const trustish = ["finance", "health", "internal"].includes(purpose.group);
+      const expressive = ["portfolio", "brand", "gaming", "media"].includes(purpose.group);
+
+      if (trustish && accentC > 0.24) {
+        score -= 22;
+        findings.push({
+          id: "purpose-too-loud",
+          severity: "warning",
+          title: `Too saturated for ${purpose.label.toLowerCase()}`,
+          detail: `Accent chroma ${round(accentC, 3)} reads as consumer-playful. In this sector saturation is read as unseriousness — money and health products earn trust with restraint. Target 0.08–0.18.`,
+        });
+      }
+      if (expressive && primaryC < 0.06 && accentC < 0.09) {
+        score -= 18;
+        findings.push({
+          id: "purpose-too-timid",
+          severity: "warning",
+          title: `Too timid for ${purpose.label.toLowerCase()}`,
+          detail: "This palette is almost entirely neutral. For work that competes on personality, an all-grey system is indistinguishable from every template. Give one colour permission to be loud.",
+        });
+      }
+      if (purpose.group === "finance" && primaryH > 15 && primaryH < 55 && primaryC > 0.14) {
+        score -= 10;
+        findings.push({
+          id: "purpose-warning-hue",
+          severity: "note",
+          title: "Primary sits in the warning-colour band",
+          detail: "Saturated orange in a financial interface competes with your own alert states. Either shift the brand hue or plan a non-orange warning colour now.",
+        });
+      }
+      if (purpose.contrastFloor >= 7 && contrastRatio(text, bg) < 7) {
+        score -= 20;
+        findings.push({
+          id: "purpose-contrast-floor",
+          severity: "warning",
+          title: `${purpose.label} should target AAA (7:1) body text`,
+          detail: `Sustained-use and trust-critical interfaces should exceed the AA floor. Currently ${round(contrastRatio(text, bg), 2)}:1.`,
+        });
+      }
+      if (purpose.group === "media" && p.mode === "light") {
+        score -= 8;
+        findings.push({
+          id: "purpose-mode",
+          severity: "note",
+          title: "Light mode for a media surface",
+          detail: "Artwork and video read better against dark chrome, and dark is the default expectation in this category. Consider generating the dark variant as primary.",
+        });
+      }
+      if (score >= 82) {
+        findings.push({
+          id: "purpose-win",
+          severity: "win",
+          title: `Reads correctly for ${purpose.label.toLowerCase()}`,
+          detail: purpose.brief,
+        });
+      }
+    }
+    score = Math.max(0, Math.min(100, score));
+    categories.push({ id: "purpose", label: "purpose fit", score, weight: 0.12, summary });
+  }
+
+  /* --- 6. trend alignment ----------------------------------------- */
+  {
+    const matched = matchTrends(p, purpose);
+    const score = Math.max(35, Math.min(100, 55 + matched.length * 12));
+    if (matched.length) {
+      findings.push({
+        id: "trend-align",
+        severity: "note",
+        title: `Aligns with ${matched.length} current trend${matched.length > 1 ? "s" : ""}`,
+        detail: matched.map((t) => `${t.name} (${t.status})`).join(", "),
+      });
+    }
+    categories.push({
+      id: "trend",
+      label: "trend alignment",
+      score,
+      weight: 0.08,
+      summary: matched.length ? matched.map((t) => t.name).join(", ") : "No strong trend signature",
+    });
+  }
+
+  const total = categories.reduce((s, c) => s + c.score * c.weight, 0);
+  const weightSum = categories.reduce((s, c) => s + c.weight, 0);
+  const score = Math.round(total / weightSum);
+
+  const critical = findings.filter((f) => f.severity === "critical").length;
+  const warnings = findings.filter((f) => f.severity === "warning").length;
+
+  const headline =
+    critical > 0
+      ? `${critical} blocking issue${critical > 1 ? "s" : ""} — this will fail an accessibility review.`
+      : warnings > 0
+        ? `Solid foundation with ${warnings} thing${warnings > 1 ? "s" : ""} worth fixing before you build on it.`
+        : score >= 92
+          ? "This is production-ready. I'd ship it."
+          : "Clean palette. Nothing blocking, a few refinements available.";
+
+  const order: Record<Severity, number> = { critical: 0, warning: 1, note: 2, win: 3 };
+  findings.sort((a, b) => order[a.severity] - order[b.severity]);
+
+  return { score, grade: GRADE(score), headline, categories, findings };
+}
+
+/** Which curated trends does this palette's measurable shape match? */
+export function matchTrends(p: Palette, purpose?: Purpose) {
+  const get = (r: Role) => p.swatches.find((s) => s.role === r)!;
+  const chromas = ["primary", "secondary", "accent"].map((r) => hexToOklch(get(r as Role).hex).c);
+  const maxC = Math.max(...chromas);
+  const textContrast = contrastRatio(get("text").hex, get("background").hex);
+  const neutralTint = hexToOklch(get("background").hex).c;
+
+  return TRENDS.filter((t) => {
+    const r = t.rules;
+    if (r.modeBias && r.modeBias !== "either" && r.modeBias !== p.mode) return false;
+    if (r.chroma && (maxC < r.chroma[0] || maxC > r.chroma[1])) return false;
+    if (r.contrastMin && textContrast < r.contrastMin) return false;
+    if (purpose?.resists.includes(t.id)) return false;
+    return !!(r.chroma || r.contrastMin || r.modeBias);
+  })
+    .sort((a, b) => (purpose?.favours.includes(b.id) ? 1 : 0) - (purpose?.favours.includes(a.id) ? 1 : 0))
+    .slice(0, 4)
+    .map((t) => ({ id: t.id, name: t.name, status: t.status, why: t.summary, tint: neutralTint }));
+}
+
+/* ------------------------------------------------------------------ *
+ * conversation
+ * ------------------------------------------------------------------ */
+
+export type CedalionContext = {
+  palette?: Palette;
+  purposeId?: string;
+  screen?: string;
+};
+
+export type Answer = {
+  text: string;
+  bullets?: string[];
+  refs?: string[];
+  suggestions?: string[];
+};
+
+type Rule = {
+  id: string;
+  keys: string[];
+  weight?: number;
+  answer: (ctx: CedalionContext) => Answer;
+};
+
+const P = (ctx: CedalionContext) => ctx.palette;
+const roleHex = (p: Palette, r: Role) => p.swatches.find((s) => s.role === r)!.hex;
+
+const RULES: Rule[] = [
+  {
+    id: "greeting",
+    keys: ["hi", "hello", "hey", "yo", "sup", "greetings"],
+    answer: () => ({
+      text: "I'm Cedalion. I read what you're building and tell you what's actually wrong with it — measured, not guessed. Ask me about your palette, contrast, a trend, or what to do next.",
+      suggestions: ["Score my palette", "Is this accessible?", "What's a bento grid?", "What should I fix first?"],
+    }),
+  },
+  {
+    id: "identity",
+    keys: ["who are you", "what are you", "your name", "cedalion", "are you ai", "chatgpt", "gpt", "llm", "model"],
+    answer: () => ({
+      text: "Cedalion — the critic built into Hephaestus. No language model, no API, no network call. Every judgement I make comes from colour science (OKLab distance, WCAG contrast maths, colour-vision simulation) plus a curated rule base of current design practice. That's why I work offline and why I can always show you the number behind a claim.",
+      bullets: [
+        "Contrast: WCAG 2.2 relative luminance ratios",
+        "Colour difference: ΔE in OKLab, perceptually uniform",
+        "Colour blindness: LMS projection for the three dichromacies",
+        "Trends: a versioned, human-curated library, refreshable",
+      ],
+    }),
+  },
+  {
+    id: "score",
+    keys: ["score", "rate", "grade", "how good", "review", "critique", "judge", "audit", "check my", "roast"],
+    weight: 1.3,
+    answer: (ctx) => {
+      const p = P(ctx);
+      if (!p) return { text: "Generate or open a palette first and I'll score it across contrast, colour-vision safety, harmony, distinctiveness, purpose fit and trend alignment." };
+      const a = auditPalette(p, ctx.purposeId);
+      const top = a.findings.filter((f) => f.severity !== "win").slice(0, 3);
+      return {
+        text: `${a.score}/100 — grade ${a.grade}. ${a.headline}`,
+        bullets: top.length ? top.map((f) => `${f.title} — ${f.detail}`) : ["Nothing blocking. The full breakdown is in the audit panel."],
+        refs: a.categories.map((c) => `${c.label}: ${c.score}`),
+      };
+    },
+  },
+  {
+    id: "fix-first",
+    keys: ["fix first", "what should i fix", "biggest problem", "worst", "priority", "what's wrong", "whats wrong", "improve"],
+    weight: 1.3,
+    answer: (ctx) => {
+      const p = P(ctx);
+      if (!p) return { text: "Open a palette and I'll rank its problems by how much damage each one does." };
+      const a = auditPalette(p, ctx.purposeId);
+      const worst = a.findings.find((f) => f.severity === "critical") ?? a.findings.find((f) => f.severity === "warning");
+      if (!worst) return { text: `Nothing is broken — you're at ${a.score}/100. If you want to push higher, the lowest category is "${[...a.categories].sort((x, y) => x.score - y.score)[0].label}".` };
+      return {
+        text: `Start here: ${worst.title}.`,
+        bullets: [worst.detail, worst.evidence ?? "", worst.fix ? `One-click fix available: ${worst.fix.label}` : ""].filter(Boolean),
+      };
+    },
+  },
+  {
+    id: "contrast",
+    keys: ["contrast", "wcag", "accessible", "accessibility", "a11y", "readable", "legible", "aa", "aaa", "ratio"],
+    weight: 1.2,
+    answer: (ctx) => {
+      const p = P(ctx);
+      const base: Answer = {
+        text: "WCAG 2.2 thresholds: 4.5:1 for body text (AA), 3:1 for text at 24px+ or 19px bold, 3:1 for UI components and focus indicators, 7:1 for AAA. Contrast is computed from relative luminance, which is why a mid-yellow can fail against white while looking bright.",
+        bullets: [
+          "Never encode meaning in hue alone — pair with icon, text or position",
+          "Focus rings need 3:1 against both the component and the background behind it",
+          "Placeholder text is text: it needs 4.5:1, which most designs get wrong",
+        ],
+      };
+      if (!p) return base;
+      const bg = roleHex(p, "background");
+      const rows = (["text", "muted", "primary", "secondary", "accent"] as Role[]).map((r) => {
+        const ratio = contrastRatio(roleHex(p, r), bg);
+        return `${r}: ${round(ratio, 2)}:1 — ${wcagLevel(ratio)}`;
+      });
+      return { ...base, text: `Against your background ${bg}:`, refs: rows, bullets: base.bullets };
+    },
+  },
+  {
+    id: "colorblind",
+    keys: ["colorblind", "colour blind", "color blind", "deuteranopia", "protanopia", "tritanopia", "cvd", "vision deficiency"],
+    answer: (ctx) => {
+      const p = P(ctx);
+      const base: Answer = {
+        text: "Roughly 8% of men and 0.5% of women have some colour-vision deficiency — deuteranopia (red-green) is by far the most common. The fix is never a special mode; it's designing so hue is redundant.",
+        bullets: [
+          "Separate meaningful colours by lightness, not only hue",
+          "Red/green status pairs are the classic failure — add icons or text",
+          "Charts: vary line style and direct-label the series",
+        ],
+      };
+      if (!p) return base;
+      const pairs: [Role, Role][] = [["primary", "accent"], ["primary", "secondary"], ["secondary", "accent"]];
+      const refs = pairs.map(([a, b]) => {
+        const d = deltaE(simulateCvd(roleHex(p, a), "deuteranopia"), simulateCvd(roleHex(p, b), "deuteranopia"));
+        return `${a} vs ${b} under deuteranopia: ΔE ${round(d, 3)}${d < 0.055 ? " — collapses" : " — holds"}`;
+      });
+      return { ...base, refs };
+    },
+  },
+  {
+    id: "palette-explain",
+    keys: ["my palette", "this palette", "explain", "what colors", "what colours", "describe", "tell me about"],
+    answer: (ctx) => {
+      const p = P(ctx);
+      if (!p) return { text: "No palette loaded yet. Type something like \"deep dusty teal with burnt orange\" in Akmon and I'll take it apart for you." };
+      const primary = hexToOklch(roleHex(p, "primary"));
+      const accent = hexToOklch(roleHex(p, "accent"));
+      return {
+        text: `"${p.name}" — a ${p.mode} ${p.scheme.replace("-", " ")} palette built around ${describeColor(roleHex(p, "primary"))}.`,
+        bullets: [
+          `Primary sits at OKLCH ${round(primary.l, 2)} / ${round(primary.c, 3)} / ${Math.round(primary.h)}° — ${primary.c > 0.18 ? "high chroma, it will dominate" : primary.c > 0.09 ? "moderate chroma, comfortable for large areas" : "low chroma, it reads almost neutral"}.`,
+          `Accent is ${Math.round(Math.abs(accent.h - primary.h) % 360)}° from primary, ${accent.l > primary.l ? "lighter" : "darker"} by ${round(Math.abs(accent.l - primary.l), 2)} L.`,
+          `Background is ${p.mode === "dark" ? "dark" : "light"} at L ${round(hexToOklch(roleHex(p, "background")).l, 2)} with ${round(hexToOklch(roleHex(p, "background")).c, 3)} chroma of the brand hue mixed in.`,
+        ],
+      };
+    },
+  },
+  {
+    id: "trends-now",
+    keys: ["trend", "trends", "latest", "2026", "current", "in style", "popular", "modern", "whats hot", "what's hot"],
+    weight: 1.1,
+    answer: (ctx) => {
+      const core = TRENDS.filter((t) => t.status === "core").slice(0, 4);
+      const rising = TRENDS.filter((t) => t.status === "rising").slice(0, 4);
+      const p = P(ctx);
+      const matched = p ? matchTrends(p, ctx.purposeId ? getPurpose(ctx.purposeId) : undefined) : [];
+      return {
+        text: "Where 2026 actually landed: bento grids and dark-first themes became infrastructure, motion theatrics got replaced by calm interfaces, and a raw anti-grid counter-movement emerged in reaction to bento being everywhere.",
+        bullets: [
+          `Settled (safe to build on): ${core.map((t) => t.name).join(", ")}`,
+          `Rising (early but real): ${rising.map((t) => t.name).join(", ")}`,
+          `Divisive (works or embarrasses): ${TRENDS.filter((t) => t.status === "polarizing").map((t) => t.name).join(", ")}`,
+          matched.length ? `Your current palette already reads as: ${matched.map((t) => t.name).join(", ")}.` : "Open the Trends screen for the full library with rules and recipes.",
+        ],
+      };
+    },
+  },
+  {
+    id: "harmony",
+    keys: ["harmony", "scheme", "complementary", "analogous", "triadic", "monochrome", "which scheme", "color theory", "colour theory"],
+    answer: () => ({
+      text: "Scheme choice is mostly a decision about how much tension you want. In OKLCH the classic rules behave better than in HSL because equal hue steps actually look equal.",
+      bullets: [
+        "Monochrome — one hue, tonal range does all the work. Hardest to get wrong, easiest to make boring.",
+        "Analogous (±20-35°) — calm and cohesive; needs a lightness accent or it goes flat.",
+        "Complementary (180°) — maximum tension. Use one as 90% of the surface and the other as 10%, never 50/50.",
+        "Split-complement (±150-170°) — the complement's contrast without the vibration.",
+        "Triadic (120°) — vivid and hard to balance; mute two of the three.",
+        "Neutral + one accent — what most shipped products actually are.",
+      ],
+    }),
+  },
+  {
+    id: "typography",
+    keys: ["font", "typeface", "typography", "type scale", "text size", "line height", "leading", "letter spacing", "kerning"],
+    answer: () => ({
+      text: "Typography rules that hold regardless of trend:",
+      bullets: [
+        "Body 16px minimum on the web, 15px acceptable in dense tools, never below 13px for anything sustained.",
+        "Line height 1.5-1.65 for body, 1.05-1.2 for large headings. Longer lines need more leading.",
+        "Measure 55-75 characters. Wider and the eye loses the line return.",
+        "Pick one scale ratio and stay in it: 1.2 for dense UI, 1.25 general, 1.333 marketing, 1.5+ editorial.",
+        "Tighten tracking as size grows: -0.02em to -0.04em on display sizes, 0 on body, +0.02em on all-caps micro labels.",
+        "Two typefaces maximum. One with several weights beats two with two.",
+      ],
+    }),
+  },
+  {
+    id: "spacing",
+    keys: ["spacing", "padding", "margin", "whitespace", "white space", "grid", "gutter", "layout", "rhythm", "8pt"],
+    answer: () => ({
+      text: "Space is the cheapest quality signal in interface design.",
+      bullets: [
+        "Use a 4px base with an 8px rhythm: 4, 8, 12, 16, 24, 32, 48, 64, 96. Never arbitrary numbers.",
+        "Related things must be closer to each other than to anything else — proximity beats borders and boxes.",
+        "Padding inside a container should exceed the gap between its children, or the container reads as broken.",
+        "Vertical space between sections should be 2-3x the space inside them.",
+        "When something feels wrong and you can't name it, the answer is usually more space, not more colour.",
+      ],
+    }),
+  },
+  {
+    id: "hierarchy",
+    keys: ["hierarchy", "focus", "attention", "emphasis", "cta", "call to action", "eye catching", "hooked", "engaging", "retention"],
+    answer: () => ({
+      text: "Holding attention is a hierarchy problem, not a decoration problem. Every screen should have exactly one thing that wins.",
+      bullets: [
+        "Rank the elements 1-2-3 before styling. If two elements tie for first, the user stalls.",
+        "Emphasis budget: size, weight, colour, space, motion. Spend at most two on any single element.",
+        "The loudest colour in the palette belongs to the single most important action, and nowhere else.",
+        "Users decide in under a second whether a page is for them — that judgement is made on the headline and the first visual, not on your feature list.",
+        "Motion is the strongest attention magnet, which is exactly why it should be reserved for state changes.",
+      ],
+    }),
+  },
+  {
+    id: "dark-mode",
+    keys: ["dark mode", "dark theme", "light mode", "night mode"],
+    answer: () => ({
+      text: "Dark mode is a separate design, not an inversion.",
+      bullets: [
+        "Never pure black backgrounds — L 0.10-0.16. Pure black plus white text causes halation and makes text vibrate.",
+        "Never pure white text either. Around 92-96% lightness reads as crisp without glare.",
+        "Elevate with lightness, not shadow. Shadows are nearly invisible on dark surfaces.",
+        "Saturated colours look louder on dark: reduce chroma by roughly 15-25% when porting a light palette.",
+        "Test in a dark room and in daylight — dark themes fail in opposite directions.",
+      ],
+    }),
+  },
+  {
+    id: "brand-color",
+    keys: ["which color", "what color should", "pick a color", "brand color", "brand colour", "color meaning", "psychology"],
+    answer: (ctx) => {
+      const purpose = ctx.purposeId ? getPurpose(ctx.purposeId) : undefined;
+      const base = [
+        "Blue reads institutional and safe — which is why finance defaults to it, and why finance all looks the same.",
+        "Green splits between money/growth and eco/organic depending on chroma: high chroma reads financial, low chroma reads natural.",
+        "Orange and yellow are attention colours; using them as brand colours means fighting your own alert states.",
+        "Purple codes as premium or creative-tech, and has been heavily colonised by AI products since 2023.",
+        "Red is unavoidable for errors — if it's your brand colour, plan a different error colour from day one.",
+        "The strongest move is often a neutral brand with one unexpected accent, because it survives every context.",
+      ];
+      if (!purpose) return { text: "Colour meaning is contextual, but some constraints are practical rather than cultural:", bullets: base };
+      return {
+        text: `For ${purpose.label.toLowerCase()}: ${purpose.brief}`,
+        bullets: [`Priorities: ${purpose.priorities.join(" · ")}`, `Contrast floor: ${purpose.contrastFloor}:1`, ...base.slice(0, 3)],
+      };
+    },
+  },
+  {
+    id: "bento",
+    keys: ["bento", "bento grid", "tiles", "modular grid"],
+    answer: () => {
+      const t = getTrend("bento")!;
+      return { text: `${t.name} — ${t.summary}`, bullets: [`Signals: ${t.signals.join(", ")}`, `Use when: ${t.useWhen.join("; ")}`, `Avoid when: ${t.avoidWhen.join("; ")}`, `Recipe: ${t.recipe}`] };
+    },
+  },
+  {
+    id: "brutalism",
+    keys: ["brutalism", "brutalist", "anti-design", "neo-brutalism", "raw"],
+    answer: () => {
+      const t = getTrend("neo-brutalism")!;
+      const s = getTrend("soft-brutalism")!;
+      return { text: `${t.name} — ${t.summary}`, bullets: [`Signals: ${t.signals.join(", ")}`, `Avoid when: ${t.avoidWhen.join("; ")}`, `Recipe: ${t.recipe}`, `Safer sibling — ${s.name}: ${s.summary}`] };
+    },
+  },
+  {
+    id: "glass",
+    keys: ["glass", "glassmorphism", "blur", "frosted", "liquid glass", "backdrop"],
+    answer: () => {
+      const t = getTrend("liquid-glass")!;
+      return { text: `${t.name} — ${t.summary}`, bullets: [`Use when: ${t.useWhen.join("; ")}`, `Avoid when: ${t.avoidWhen.join("; ")}`, `Recipe: ${t.recipe}`, "Never put body text on glass — the contrast changes as the content behind it scrolls."] };
+    },
+  },
+  {
+    id: "motion",
+    keys: ["animation", "motion", "transition", "easing", "duration", "micro-interaction", "microinteraction"],
+    answer: () => ({
+      text: "Motion should report state, not perform.",
+      bullets: [
+        "120-200ms for state changes, 200-320ms for entrances, over 400ms only for deliberate storytelling.",
+        "Ease-out entering, ease-in leaving. Linear only for continuous things like spinners.",
+        "Animate transform and opacity. Animating width, height, top or left forces layout and drops frames.",
+        "Honour prefers-reduced-motion — it's a WCAG requirement, not a nicety.",
+        "The test: remove the animation. If no information is lost, it was decoration.",
+      ],
+    }),
+  },
+  {
+    id: "export",
+    keys: ["export", "css", "tailwind", "variables", "tokens", "code", "download", "copy"],
+    answer: () => ({
+      text: "Akmon exports the palette as CSS custom properties, SCSS variables, a Tailwind config fragment, JSON with OKLCH plus contrast metadata, or an SVG sheet. Directions export as a full token file — radius, spacing, type scale, motion and shadow.",
+      bullets: [
+        "Structure tokens in three tiers: primitive (blue-600) → semantic (--action-bg) → component (--button-bg).",
+        "Components should never reference primitives directly — that's what makes retheming possible later.",
+      ],
+    }),
+  },
+  {
+    id: "akmon",
+    keys: ["akmon", "how do i use", "how does this work", "workflow", "get started", "what can you do", "help"],
+    answer: () => ({
+      text: "Hephaestus runs in three moves.",
+      bullets: [
+        "Akmon — describe a palette in plain language (\"deep dusty teal, burnt orange accent, dark\") or hit generate for a fresh coordinate in the colour space. Lock the swatches you like, regenerate the rest, save it as a card.",
+        "Purpose — say what you're building. You get the sections that matter, the priorities, and design directions assembled from current trend atoms.",
+        "Me — I audit whatever is on screen and answer questions. I'm on every screen, not just inside Akmon.",
+      ],
+      suggestions: ["Score my palette", "What's trending in 2026?", "How much space between sections?"],
+    }),
+  },
+  {
+    id: "mix",
+    keys: ["mix", "blend", "combine", "merge", "interpolate", "gradient between"],
+    answer: () => ({
+      text: "The Mixer blends colours in OKLab, which is why it doesn't produce the grey mud you get from mixing in sRGB or the neon detour you get from mixing in HSL.",
+      bullets: [
+        "sRGB mixing: fast, wrong. Blue + yellow gives dead grey.",
+        "HSL mixing: takes the long way round the hue wheel and passes through colours neither input contained.",
+        "OKLab mixing: perceptually straight line. Blue + yellow gives the green your eye expects.",
+        "For gradients, mix in OKLab and add a midpoint stop if the two ends differ by more than 0.3 in lightness.",
+      ],
+    }),
+  },
+  {
+    id: "how-many-colors",
+    keys: ["how many colors", "how many colours", "too many colors", "number of colors"],
+    answer: () => ({
+      text: "A shipped interface needs fewer colours than people expect, and more tones than they plan for.",
+      bullets: [
+        "One brand hue, one accent, one neutral ramp covers 90% of products.",
+        "Plus four semantic colours you can't avoid: success, warning, danger, info.",
+        "Each of those needs 3 tones minimum (surface, border, text) — that's where the count actually grows.",
+        "If you have three brand colours, one of them is decoration. Find out which and demote it.",
+      ],
+    }),
+  },
+];
+
+const FALLBACK_SUGGESTIONS = [
+  "Score my palette",
+  "What should I fix first?",
+  "What's trending in 2026?",
+  "Is this accessible?",
+  "How much spacing should I use?",
+];
+
+/** Deterministic intent match: keyword coverage weighted by phrase length. */
+export function ask(question: string, ctx: CedalionContext = {}): Answer {
+  const q = ` ${question.toLowerCase().replace(/[^\w\s'-]/g, " ").replace(/\s+/g, " ").trim()} `;
+  if (!q.trim()) return { text: "Ask me anything about what you're building.", suggestions: FALLBACK_SUGGESTIONS };
+
+  let best: Rule | undefined;
+  let bestScore = 0;
+  for (const rule of RULES) {
+    let score = 0;
+    for (const k of rule.keys) {
+      if (q.includes(` ${k} `) || q.includes(` ${k}`) || q.includes(`${k} `)) {
+        score += k.length * (k.includes(" ") ? 2.2 : 1);
+      }
+    }
+    score *= rule.weight ?? 1;
+    if (score > bestScore) { bestScore = score; best = rule; }
+  }
+
+  if (!best || bestScore < 3) {
+    const p = P(ctx);
+    if (p) {
+      const a = auditPalette(p, ctx.purposeId);
+      return {
+        text: "I don't have a rule for that one — I'd rather say so than invent an answer. Here's what I can tell you about what's on screen right now:",
+        bullets: [`${p.name} scores ${a.score}/100 (${a.grade}). ${a.headline}`],
+        suggestions: FALLBACK_SUGGESTIONS,
+      };
+    }
+    return {
+      text: "I don't have a rule for that one, and I won't guess. I cover colour, contrast, accessibility, typography, spacing, hierarchy, motion, current trends, and anything measurable about your palette.",
+      suggestions: FALLBACK_SUGGESTIONS,
+    };
+  }
+
+  return best.answer(ctx);
+}
+
+export const CEDALION_STARTERS = [
+  "Score my palette",
+  "What should I fix first?",
+  "What's actually trending in 2026?",
+  "Is this readable for colour-blind users?",
+  "Which scheme suits a fintech dashboard?",
+  "How much space between sections?",
+];

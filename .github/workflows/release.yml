@@ -1,0 +1,89 @@
+# Releases Hephaestus desktop builds for Windows, macOS (Intel + Apple
+# Silicon) and Linux. Runs on every push to main/master (and manually).
+#
+# How it works
+#   1. Each runner builds the frontend + the Tauri binary for its OS.
+#   2. tauri-action finds (or creates) a DRAFT GitHub release tagged
+#      v<VERSION> and uploads every installer to it as an asset.
+#      Drafts keep being updated on later pushes, so just keep pushing.
+#   3. When you are happy: open the repo on github.com -> Releases ->
+#      edit the draft -> "Publish release". The Cloudflare download site
+#      picks the published release up automatically.
+#
+# Before a new release, bump the version everywhere:
+#     node tools/bump.mjs 0.2.0
+
+name: release
+
+on:
+  push:
+    branches: [main, master]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-tauri:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: macos-latest # Apple Silicon
+            args: --target aarch64-apple-darwin
+          - platform: macos-latest # Intel
+            args: --target x86_64-apple-darwin
+          - platform: ubuntu-22.04
+            args: ''
+          - platform: windows-latest
+            args: ''
+
+    runs-on: ${{ matrix.platform }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: setup node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          # only used on macOS runners
+          targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
+
+      - name: cache cargo
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: './src-tauri -> target'
+
+      - name: install Linux system dependencies
+        if: matrix.platform == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf xdg-utils
+
+      - name: install frontend dependencies
+        run: npm ci
+
+      - name: build + upload to draft release
+        uses: tauri-apps/tauri-action@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tagName: v__VERSION__
+          releaseName: 'Hephaestus v__VERSION__'
+          releaseBody: |
+            Desktop build of Hephaestus v__VERSION__.
+
+            **Installers**
+            - Windows — `*_x64-setup.exe` (recommended) or `*.msi`
+            - macOS — `*_aarch64.dmg` (Apple Silicon) or `*_x64.dmg` (Intel). Unsigned for now: right-click the app -> Open the first time.
+            - Linux — `*.deb` (Debian/Ubuntu) or `*.AppImage` (any distro: chmod +x and run)
+
+            Runs 100% local. No account, no telemetry, no AI.
+          releaseDraft: true
+          prerelease: false
+          args: ${{ matrix.args }}

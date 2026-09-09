@@ -1,0 +1,146 @@
+/* HEPHAESTUS · shell styles
+   Monospace, hairline borders, no gradients, no shadows.
+   The tool should look like the workbench, not the artwork. */
+
+:root {
+  --font: ui-monospace, "SF Mono", "JetBrains Mono", "Cascadia Mono", Menlo, Consolas, monospace;
+
+  --bg: #000000;
+  --surface: #050505;
+  --raise: #0b0b0b;
+  --line: #1b1b1b;
+  --line-soft: #121212;
+  --fg: #f2f2f2;
+  --fg-dim: #8a8a8a;
+  --fg-faint: #4a4a4a;
+  --accent: #ffffff;
+  --accent-fg: #000000;
+
+  --ok: #4ade80;
+  --warn: #fbbf24;
+  --bad: #f87171;
+
+  --r: 2px;
+  --pad: 20px;
+  --dur: 140ms;
+}
+
+[data-theme="graphite"] {
+  --bg: #0e1012; --surface: #141719; --raise: #1a1e21; --line: #282c30;
+  --line-soft: #1d2124; --fg: #e9ebee; --fg-dim: #878d95; --fg-faint: #565c63;
+}
+[data-theme="paper"] {
+  --bg: #faf9f6; --surface: #ffffff; --raise: #f3f2ed; --line: #dedbd2;
+  --line-soft: #eceae3; --fg: #14150f; --fg-dim: #6b6a62; --fg-faint: #a3a199;
+  --accent: #14150f; --accent-fg: #faf9f6;
+}
+[data-theme="blueprint"] {
+  --bg: #05070d; --surface: #090d16; --raise: #0e1421; --line: #17233a;
+  --line-soft: #0f1729; --fg: #dce6f5; --fg-dim: #7286a6; --fg-faint: #445775;
+  --accent: #7fb2ff; --accent-fg: #04070e;
+}
+[data-theme="ember"] {
+  --bg: #0a0605; --surface: #110b08; --raise: #17100c; --line: #2a1a12;
+  --line-soft: #1c120d; --fg: #f4eae2; --fg-dim: #97806f; --fg-faint: #5f4d41;
+  --accent: #ff7043; --accent-fg: #0a0605;
+}
+
+[data-density="compact"] { --pad: 14px; }
+[data-motion="off"] * { transition: none !important; animation: none !important; }
+
+* { box-sizing: border-box; }
+
+html, body, #root { height: 100%; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--font);
+  font-size: 13px;
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+  letter-spacing: 0.01em;
+}
+
+::selection { background: var(--fg); color: var(--bg); }
+
+::-webkit-scrollbar { width: 9px; height: 9px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--line); border-radius: 0; }
+::-webkit-scrollbar-thumb:hover { background: var(--fg-faint); }
+
+button, input, textarea, select {
+  font: inherit;
+  color: inherit;
+  letter-spacing: inherit;
+}
+
+button { cursor: pointer; background: none; border: none; padding: 0; }
+a { color: inherit; }
+
+/* ---------- primitives ---------- */
+
+.label {
+  font-size: 10px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--fg-faint);
+}
+
+.dim { color: var(--fg-dim); }
+.faint { color: var(--fg-faint); }
+.mono-sm { font-size: 11px; }
+
+.panel {
+  border: 1px solid var(--line);
+  background: var(--surface);
+}
+
+.btn {
+  border: 1px solid var(--line);
+  padding: 7px 14px;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: lowercase;
+  color: var(--fg-dim);
+  background: transparent;
+  transition: color var(--dur), border-color var(--dur), background var(--dur);
+  white-space: nowrap;
+}
+.btn:hover { color: var(--fg); border-color: var(--fg-faint); }
+.btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.btn[data-active="true"] { color: var(--fg); border-color: var(--fg-dim); background: var(--raise); }
+.btn:disabled { opacity: 0.35; cursor: not-allowed; }
+
+.btn-primary {
+  background: var(--accent);
+  color: var(--accent-fg);
+  border-color: var(--accent);
+  font-weight: 500;
+}
+.btn-primary:hover { color: var(--accent-fg); opacity: 0.88; border-color: var(--accent); }
+
+.input {
+  background: transparent;
+  border: 1px solid var(--line);
+  padding: 9px 12px;
+  color: var(--fg);
+  width: 100%;
+  outline: none;
+  font-size: 12px;
+  transition: border-color var(--dur);
+}
+.input::placeholder { color: var(--fg-faint); }
+.input:focus { border-color: var(--fg-faint); }
+
+.row { display: flex; align-items: center; }
+.gap-1 { gap: 6px; } .gap-2 { gap: 10px; } .gap-3 { gap: 16px; } .gap-4 { gap: 24px; }
+
+.rule { height: 1px; background: var(--line); border: 0; margin: 0; }
+
+.fade-in { animation: fade 240ms ease-out; }
+@keyframes fade { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+
+.spin { animation: spin 900ms linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }

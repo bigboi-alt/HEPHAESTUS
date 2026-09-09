@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>hephaestus — downloads</title>
+<meta name="description" content="Hephaestus — design intelligence for the rest of us. Colour palettes from plain language, trend-aware directions, rule-based critique. No AI. Fully local." />
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: #000; color: #e8e8e6; }
+  body { font: 14px/1.6 ui-monospace, "SF Mono", "Cascadia Mono", "Roboto Mono", Menlo, Consolas, monospace; }
+  .wrap { max-width: 760px; margin: 0 auto; padding: 56px 24px 96px; }
+  header .logo { font-size: 22px; letter-spacing: 0.14em; text-transform: lowercase; color: #fff; }
+  header .logo b { color: #8f8; font-weight: 400; }
+  header .tag { margin-top: 6px; color: #7a7a76; font-size: 12px; }
+  .status { margin: 36px 0 8px; font-size: 12px; color: #9a9a94; text-transform: lowercase; letter-spacing: 0.08em; }
+  .status .dot { display: inline-block; width: 8px; height: 8px; background: #444; margin-right: 8px; border-radius: 50%; }
+  .status.live .dot { background: #6f6; }
+  .status.err .dot { background: #f66; }
+  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; margin-top: 14px; }
+  .card { border: 1px solid #2a2a28; background: #0a0a09; padding: 18px 16px; }
+  .card h2 { font-size: 13px; font-weight: 400; text-transform: lowercase; letter-spacing: 0.1em; color: #fff; margin: 0 0 2px; }
+  .card .os-note { color: #6f6f6a; font-size: 11px; margin-bottom: 14px; }
+  .dl { display: block; border: 1px solid #3a3a38; padding: 9px 12px; margin-bottom: 8px; color: #e8e8e6; text-decoration: none; font-size: 12px; transition: background .15s, border-color .15s; }
+  .dl:hover { background: #141412; border-color: #8f8; color: #fff; }
+  .dl small { display: block; color: #6f6f6a; font-size: 10px; }
+  .dl.disabled { pointer-events: none; color: #4a4a46; border-color: #222; }
+  .meta { margin-top: 34px; padding-top: 16px; border-top: 1px solid #1c1c1a; color: #6f6f6a; font-size: 11px; }
+  .meta a { color: #9a9a94; }
+  .note { margin-top: 10px; color: #6f6f6a; font-size: 11px; }
+  #errbox { display: none; border: 1px solid #3a2016; background: #120a05; color: #c99; padding: 10px 12px; font-size: 12px; margin-top: 14px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="logo">hephaestus<b>/dl</b></div>
+    <div class="tag">design intelligence for the rest of us — palettes, trends, rules. no ai. fully local. free.</div>
+  </header>
+
+  <div class="status" id="status"><span class="dot"></span><span id="statusText">reading latest release…</span></div>
+  <div id="errbox"></div>
+
+  <div class="cards">
+    <div class="card">
+      <h2>windows</h2>
+      <div class="os-note">10 / 11 — x64</div>
+      <a class="dl disabled" id="w-setup" href="#">installer <small>.exe — recommended</small></a>
+      <a class="dl disabled" id="w-msi" href="#">msi <small>.msi — group policy friendly</small></a>
+    </div>
+    <div class="card">
+      <h2>macos</h2>
+      <div class="os-note">13+ — unsigned, right-click → open</div>
+      <a class="dl disabled" id="m-arm" href="#">apple silicon <small>.dmg — aarch64</small></a>
+      <a class="dl disabled" id="m-intel" href="#">intel <small>.dmg — x86_64</small></a>
+    </div>
+    <div class="card">
+      <h2>linux</h2>
+      <div class="os-note">glibc distros</div>
+      <a class="dl disabled" id="l-appimage" href="#">appimage <small>any distro — chmod +x</small></a>
+      <a class="dl disabled" id="l-deb" href="#">deb <small>debian / ubuntu</small></a>
+    </div>
+  </div>
+
+  <p class="note">your os wasn't detected? every file of the latest release is listed on the <a id="relLink" href="#" style="color:#8f8">release page</a>.</p>
+
+  <div class="meta">
+    <div>hephaestus <span id="ver">—</span> · source: private repo · palettes &amp; settings never leave your machine</div>
+  </div>
+</div>
+
+<script>
+// ── set these once ─────────────────────────────────────────────────────
+var OWNER = "your-github-username"; // e.g. "ada"
+var REPO  = "hephaestus";           // your private repo name
+// ───────────────────────────────────────────────────────────────────────
+
+var els = {
+  w:  { setup: document.getElementById("w-setup"),  msi: document.getElementById("w-msi") },
+  m:  { arm: document.getElementById("m-arm"), intel: document.getElementById("m-intel") },
+  l:  { ai: document.getElementById("l-appimage"), deb: document.getElementById("l-deb") },
+  rel: document.getElementById("relLink"),
+  ver: document.getElementById("ver"),
+};
+var statusEl = document.getElementById("status");
+var statusText = document.getElementById("statusText");
+var errbox = document.getElementById("errbox");
+
+function pick(assets, nameRe) {
+  var hit = assets.filter(function (a) { return nameRe.test(a.name); });
+  return hit.length ? hit[0] : null;
+}
+function setBtn(a, asset) {
+  if (!a || !asset) return;
+  a.href = asset.browser_download_url;
+  a.classList.remove("disabled");
+  if (asset.size) {
+    var mb = (asset.size / 1048576).toFixed(1) + " MB";
+    var s = a.querySelector("small");
+    if (s && s.textContent.indexOf(".") === 0) s.textContent = s.textContent + " · " + mb;
+  }
+}
+function fail(msg) {
+  statusEl.classList.add("err");
+  statusText.textContent = msg;
+  errbox.style.display = "block";
+  errbox.textContent = "Could not read the latest release. If the repo is private, GitHub does not let anonymous visitors see releases — make the repo public (Settings → General → Danger Zone), then reload. Otherwise check OWNER/REPO at the top of this page.";
+  els.rel.href = "https://github.com/" + OWNER + "/" + REPO + "/releases/latest";
+}
+
+fetch("https://api.github.com/repos/" + OWNER + "/" + REPO + "/releases/latest", { headers: { Accept: "application/vnd.github+json" } })
+  .then(function (r) { if (!r.ok) throw new Error("http " + r.status); return r.json(); })
+  .then(function (rel) {
+    els.ver.textContent = rel.tag_name;
+    els.rel.href = rel.html_url;
+    els.rel.textContent = "release page";
+    var as = rel.assets;
+    setBtn(els.w.setup,  pick(as, /setup\.exe$/i));
+    setBtn(els.w.msi,    pick(as, /\.msi$/i));
+    setBtn(els.m.arm,    pick(as, /aarch64.*\.dmg$/i) || pick(as, /arm64.*\.dmg$/i));
+    setBtn(els.m.intel,  pick(as, /x86_64.*\.dmg$/i) || pick(as, /x64.*\.dmg$/i));
+    setBtn(els.l.ai,     pick(as, /\.appimage$/i));
+    setBtn(els.l.deb,    pick(as, /\.deb$/i));
+    statusEl.classList.add("live");
+    statusText.textContent = "latest release: " + rel.tag_name + " — published " + new Date(rel.published_at).toUTCString().slice(0, 16);
+  })
+  .catch(fail);
+</script>
+</body>
+</html>
