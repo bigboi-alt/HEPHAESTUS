@@ -33,10 +33,8 @@ export default function Home() {
             <h1 style={{ fontSize: 40, fontWeight: 400, margin: "8px 0 10px", letterSpacing: "-0.02em" }}>
               {settings.displayName || "Maker"}
             </h1>
-            <p className="dim" style={{ margin: "0 0 20px", fontSize: 13, maxWidth: 560 }}>
-              Describe a palette and Akmon forges it. Pick what you're building and Hephaestus
-              assembles a direction from what's actually working in 2026. Cedalion scores all of it,
-              out loud, with the numbers.
+            <p className="dim" style={{ margin: "0 0 18px", fontSize: 13, maxWidth: 560 }}>
+              Plain language in — palette, purpose, build — and a real site comes out. Cedalion checks the numbers.
             </p>
 
             <div className="row gap-1" style={{ maxWidth: 620 }}>
@@ -52,8 +50,8 @@ export default function Home() {
 
             <div className="row gap-1" style={{ marginTop: 12, flexWrap: "wrap" }}>
               <button className="btn" onClick={() => go("akmon")}>open akmon</button>
-              <button className="btn" onClick={() => go("build")}>choose a purpose</button>
-              <button className="btn" onClick={() => go("trends")}>trend library</button>
+              <button className="btn" onClick={() => go("build")}>build a site</button>
+              <button className="btn" onClick={() => go("trends")}>what's trending</button>
             </div>
           </div>
 

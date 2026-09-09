@@ -15,6 +15,12 @@ import {
 
 export type Screen = "home" | "akmon" | "library" | "trends" | "build" | "settings";
 
+export type BuildMeta = {
+  purposeLabel: string;
+  sectionsOn: number;
+  sectionNames: string[];
+};
+
 export type ChatTurn = {
   id: string;
   role: "you" | "cedalion";
@@ -33,6 +39,7 @@ type State = {
   current: Palette | null;
   purposeId: string | null;
   chat: ChatTurn[];
+  buildMeta: BuildMeta | null;
   cedalionOpen: boolean;
   toast: string | null;
 
@@ -54,6 +61,7 @@ type State = {
   setPurpose: (id: string | null) => void;
   pushChat: (turn: Omit<ChatTurn, "id" | "at">) => void;
   clearChat: () => void;
+  setBuildMeta: (m: BuildMeta | null) => void;
   setCedalionOpen: (v: boolean) => void;
   say: (msg: string) => void;
 };
@@ -81,6 +89,7 @@ export const useApp = create<State>((set, get) => ({
   current: null,
   purposeId: null,
   chat: [],
+  buildMeta: null,
   cedalionOpen: false,
   toast: null,
 
@@ -194,6 +203,7 @@ export const useApp = create<State>((set, get) => ({
     }),
 
   clearChat: () => set({ chat: [] }),
+  setBuildMeta: (buildMeta) => set({ buildMeta }),
   setCedalionOpen: (cedalionOpen) => set({ cedalionOpen }),
   say: (toast) => {
     set({ toast });

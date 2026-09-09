@@ -1,3 +1,19 @@
+# Deploys the public download site (site/) to Cloudflare Pages.
+#
+# The deploy step skips itself until you add the two secrets, so it never
+# fails a push while unconfigured. To switch it on:
+#
+#   1. Create a Pages project once:
+#        npx wrangler pages project create hephaestus-downloads
+#      (or just run this workflow — the first deploy creates the project)
+#
+#   2. Repo -> Settings -> Secrets and variables -> Actions -> New secrets:
+#        CLOUDFLARE_API_TOKEN   (token with "Cloudflare Pages: Edit")
+#        CLOUDFLARE_ACCOUNT_ID  (your Cloudflare account id)
+#
+#   3. Re-run this workflow manually ("Run workflow") or push a change
+#      under site/.
+
 name: site
 
 on:
@@ -12,9 +28,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # GitHub does not allow `secrets` in a job-level `if:` — only in
+      # step-level expressions. So the guard lives on the deploy step.
       - name: cloudflare secrets not configured yet
         if: ${{ secrets.CLOUDFLARE_API_TOKEN == '' || secrets.CLOUDFLARE_ACCOUNT_ID == '' }}
-        run: echo "::warning::site deploy skipped — add CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID repo secrets and re-run this workflow"
+        run: echo "::warning::site deploy skipped — add CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID repo secrets (see README, 'Secrets — what lives where') and re-run this workflow"
 
       - name: deploy to cloudflare pages
         if: ${{ secrets.CLOUDFLARE_API_TOKEN != '' && secrets.CLOUDFLARE_ACCOUNT_ID != '' }}

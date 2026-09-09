@@ -507,6 +507,8 @@ export type CedalionContext = {
   palette?: Palette;
   purposeId?: string;
   screen?: string;
+  /** Live facts about a site being built in the Build workspace. */
+  buildSite?: { purposeLabel: string; sectionsOn: number; sectionNames: string[]; score?: number };
 };
 
 export type Answer = {
@@ -844,6 +846,12 @@ const RULES: Rule[] = [
       ],
     }),
   },
+
+  { id: "cheer", keys: ["thanks", "thank you", "thx", "ty", "awesome", "nice", "cool", "love it", "great work", "well done", "good job", "perfect"], weight: 1.6, answer: cheer },
+  { id: "smalltalk", keys: ["how are you", "how's it going", "what's up", "you ok", "bored"], weight: 1.5, answer: smalltalkAnswer },
+  { id: "joke", keys: ["joke", "funny", "laugh", "haha", "lol", "make me smile"], weight: 2.2, answer: jokeAnswer },
+  { id: "pop", keys: ["pop", "boring", "plain", "dull", "flat", "livelier", "exciting", "more energy", "stand out", "wow"], weight: 1.4, answer: popAnswer },
+  { id: "mysite", keys: ["my site", "the site", "my page", "the page", "landing page", "my landing", "the landing", "what i built", "generated site", "preview", "the website"], weight: 2.6, answer: siteAnswer },
 ];
 
 const FALLBACK_SUGGESTIONS = [
@@ -854,7 +862,69 @@ const FALLBACK_SUGGESTIONS = [
   "How much spacing should I use?",
 ];
 
+
+
 /** Deterministic intent match: keyword coverage weighted by phrase length. */
+
+/* ---- the friendly layer: personality + live build awareness ---- */
+function cheer(_ctx: CedalionContext): Answer {
+  return {
+    text: "You're welcome. I'm only as good as the measurements I stand on — but the measurements are very good.",
+    suggestions: ["Score my palette", "What should I fix first?", "Give me a joke"],
+  };
+}
+function smalltalkAnswer(ctx: CedalionContext): Answer {
+  const p = ctx.palette;
+  if (p) {
+    const a = auditPalette(p, ctx.purposeId);
+    return {
+      text: "Running at my usual pace: rules compiled, maths sharp, zero hallucinations. The palette on screen (" + p.name + ") scores " + a.score + "/100 right now — so there's always something to improve.",
+      suggestions: ["What should I fix first?", "Is this accessible?", "Score my palette"],
+    };
+  }
+  return {
+    text: "Calm and fully local. No model to feed, no API bill to worry about — just rule tables and colour maths, humming along. Ask me about anything on screen.",
+    suggestions: ["Give me a joke", "What's trending in 2026?"],
+  };
+}
+function jokeAnswer(): Answer {
+  return {
+    text: "Rule base says: a designer walks into a bar, pulls up a stool, and the bar stools are all #EEEEEE with no border — an accessibility finding that will not reproduce in Figma.",
+    bullets: ["Real talk: I can only reuse jokes I'm given, like everything else I do. Deterministic comedy is still a research project — no AI in here, remember?"],
+  };
+}
+function popAnswer(ctx: CedalionContext) {
+  const p = ctx.palette;
+  if (!p) return { text: "Show me a palette first — then I'll tell you exactly which knob to turn to make it pop. I'm a critic, not a wand." };
+  const acc = p.swatches.find((x) => x.role === "accent");
+  const pri = p.swatches.find((x) => x.role === "primary");
+  if (!acc || !pri) return { text: "This palette is missing its accent or primary — generate a full palette and I'll tune it." };
+  return {
+    text: "Let's make it pop without breaking the brief. Three measured moves, in order of payoff:",
+    bullets: [
+      "1 · Let the accent act like an accent. It is currently doing under 10% of the surface work — buttons, links, one highlight each screen. More chrome dilutes the pop.",
+      "2 · Raise the accent's chroma. Push it toward saturation in OKLCH (add 0.02-0.04 chroma, hold lightness) and give the primary CTA a filled accent background. Restraint elsewhere is what makes this loud enough.",
+      "3 · Add one loud moment per screen, not six. A saturated hero chip or stat, then calm everything around it — contrast between loud and quiet is the pop.",
+    ],
+    refs: ["hint: on a dark background, a slightly lighter accent reads louder than a more saturated one"],
+    suggestions: ["Score my palette", "Is my contrast okay?"],
+  };
+}
+function siteAnswer(ctx: CedalionContext) {
+  const bs = ctx.buildSite;
+  const p = ctx.palette;
+  const a = p ? auditPalette(p, ctx.purposeId) : null;
+  const lines: string[] = [];
+  if (bs) {
+    lines.push("You're building a " + bs.purposeLabel + " with " + bs.sectionsOn + " sections on. " + (a ? "Its palette scores " + a.score + "/100 (" + a.grade + ")." : ""));
+    if (bs.sectionsOn < 4) lines.push("More sections than " + bs.sectionsOn + " would tell the story fully — add features or proof before the CTA.");
+    if (bs.sectionsOn > 10) lines.push("At " + bs.sectionsOn + " sections the page is long — check each one earns its scroll, and keep the final CTA above the fold of every screen size.");
+    if (a && a.score < 82) lines.push("Fix the palette first: " + a.headline);
+  }
+  lines.push("The strongest marketing pages repeat one idea in three different languages: a promise, a proof, and a price. Make sure each section is speaking one of those.");
+  return { text: "Here's my read on the site you're building:", bullets: lines, suggestions: ["Score my palette", "How do I make this pop?"] };
+}
+
 export function ask(question: string, ctx: CedalionContext = {}): Answer {
   const q = ` ${question.toLowerCase().replace(/[^\w\s'-]/g, " ").replace(/\s+/g, " ").trim()} `;
   if (!q.trim()) return { text: "Ask me anything about what you're building.", suggestions: FALLBACK_SUGGESTIONS };
@@ -894,8 +964,8 @@ export function ask(question: string, ctx: CedalionContext = {}): Answer {
 export const CEDALION_STARTERS = [
   "Score my palette",
   "What should I fix first?",
+  "How do I make this pop?",
+  "Give me a joke",
   "What's actually trending in 2026?",
   "Is this readable for colour-blind users?",
-  "Which scheme suits a fintech dashboard?",
-  "How much space between sections?",
 ];

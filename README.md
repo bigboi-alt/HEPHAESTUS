@@ -173,6 +173,32 @@ node tools/bump.mjs 0.2.0
    While the repo is private the page says releases are unreachable, which is GitHub
    enforcing privacy, not a bug.
 
+### Secrets — what lives where
+
+| Secret | Needed for | Where it lives | In repo files? |
+|---|---|---|---|
+| `GITHUB_TOKEN` | creating releases/uploading installers | automatic — GitHub injects it every run | never |
+| `CLOUDFLARE_API_TOKEN` | deploying the download site | GitHub → repo **Settings → Secrets and variables → Actions** | never |
+| `CLOUDFLARE_ACCOUNT_ID` | same (tells wrangler which account) | same place | never |
+| Tauri updater signing key (later) | signing auto-update manifests | same place, when auto-update is wired in | public half only, deliberately |
+
+**Setup order for Cloudflare (do it when you want the site live — desktop releases need none of this):**
+
+1. dash.cloudflare.com → top-right avatar → **My Profile → API Tokens → Create Token** → **Create Custom Token**:
+   - token name: `hephaestus-pages`
+   - permission: **Account → Cloudflare Pages → Edit** (nothing else)
+   - Account resources: **Include → your account**
+   - Create → **copy the token now** (Cloudflare shows it only once)
+2. **Account ID**: dash.cloudflare.com home page → right column → copy the long hex ID.
+3. Optional but recommended: Workers & Pages → **Create → Pages → Upload assets** → project name `hephaestus-downloads` (first deploy also auto-creates it, this just makes it visible first).
+4. github.com repo → **Settings → Secrets and variables → Actions → New repository secret**, twice:
+   - name `CLOUDFLARE_API_TOKEN`, value = token from step 1
+   - name `CLOUDFLARE_ACCOUNT_ID`, value = ID from step 2
+   Names must match **exactly** — a typo is a silent skip, not an error.
+5. Run the **site** workflow manually once (repo → Actions → site → Run workflow), then open `https://hephaestus-downloads.pages.dev`. Buttons stay disabled until the repo is public — GitHub refuses anonymous reads of private releases, which is correct behaviour.
+
+Actions billing note: builds on **public** repos are unlimited/free; on **private** repos they burn the 2,000 free minutes/month. Since a public download site is the endgame anyway, flip the repo public when you start iterating releases.
+
 ### macOS signing (later)
 
 Bundles are unsigned for now — first launch on macOS needs right-click → Open. Notarization

@@ -8,7 +8,7 @@
 
 import type { Palette } from "../engine/akmon";
 
-export type ThemeId = "obsidian" | "graphite" | "paper" | "blueprint" | "ember";
+export type ThemeId = "obsidian" | "graphite" | "paper" | "claude" | "blueprint" | "ember";
 
 export type Settings = {
   theme: ThemeId;

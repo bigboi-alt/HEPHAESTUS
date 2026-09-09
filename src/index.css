@@ -30,9 +30,15 @@
   --line-soft: #1d2124; --fg: #e9ebee; --fg-dim: #878d95; --fg-faint: #565c63;
 }
 [data-theme="paper"] {
-  --bg: #faf9f6; --surface: #ffffff; --raise: #f3f2ed; --line: #dedbd2;
-  --line-soft: #eceae3; --fg: #14150f; --fg-dim: #6b6a62; --fg-faint: #a3a199;
-  --accent: #14150f; --accent-fg: #faf9f6;
+  --bg: #f6f4ef; --surface: #fffdf9; --raise: #eeebe2; --line: #d2ccbe;
+  --line-soft: #e3ded2; --fg: #1a1812; --fg-dim: #6d675a; --fg-faint: #a49c8b;
+  --accent: #1a1812; --accent-fg: #f6f4ef;
+}
+/* claude · warm cream shell, dusted-orange voice */
+[data-theme="claude"] {
+  --bg: #f4efe4; --surface: #fcf9f1; --raise: #ece4d2; --line: #d5c9b0;
+  --line-soft: #e6ddca; --fg: #221b10; --fg-dim: #7b6d53; --fg-faint: #b1a488;
+  --accent: #c4562a; --accent-fg: #fff6ea; --ok: #2f9e63; --warn: #b97a17; --bad: #c2452f;
 }
 [data-theme="blueprint"] {
   --bg: #05070d; --surface: #090d16; --raise: #0e1421; --line: #17233a;
@@ -144,3 +150,92 @@ a { color: inherit; }
 
 .spin { animation: spin 900ms linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
+
+/* ---------- cedalion buddy (pixel bobble-head) ---------- */
+.cb {
+  display: inline-block;
+  position: relative;
+  line-height: 0;
+  transform-origin: 50% 90%;
+}
+.cb svg { display: block; }
+.cb .cb-breath {
+  animation: cbBreath 3.4s ease-in-out infinite;
+  transform-origin: 50% 92%;
+}
+.cb .cb-bob {
+  animation: cbBob 2.6s ease-in-out infinite;
+  transform-origin: 50% 88%;
+  transform-box: view-box;
+}
+.cb .cb-eye {
+  animation: cbBlink 4.6s infinite;
+  transform-box: fill-box;
+  transform-origin: 50% 50%;
+}
+.cb[data-motion="off"] .cb-breath, .cb[data-motion="off"] .cb-bob,
+.cb[data-motion="off"] .cb-eye { animation: none; }
+@keyframes cbBreath {
+  0%, 100% { transform: scaleY(1); } 50% { transform: scaleY(1.012); }
+}
+@keyframes cbBob {
+  0%, 100% { transform: rotate(0deg); }
+  50% { transform: rotate(3deg); }
+}
+@keyframes cbBlink {
+  0%, 91%, 100% { transform: scaleY(1); }
+  94% { transform: scaleY(0.06); }
+}
+/* hop: bumped into the air, lands, sits (chat opens) */
+.cb-hop { animation: cbHop 620ms cubic-bezier(0.34, 1.35, 0.5, 1) both; }
+@keyframes cbHop {
+  0%   { transform: translateY(0) rotate(0deg); }
+  28%  { transform: translateY(-26px) rotate(-5deg); }
+  52%  { transform: translateY(0) rotate(2deg) scale(1.08, 0.9); }
+  70%  { transform: translateY(-11px) rotate(-1deg); }
+  86%  { transform: translateY(-1px) scale(1.02, 0.98); }
+  100% { transform: translateY(0); }
+}
+/* fall: drops and sits again (chat closes) */
+.cb-fall { animation: cbFall 480ms cubic-bezier(0.4, 0, 0.6, 1) both; }
+@keyframes cbFall {
+  0%   { transform: translateY(-14px); }
+  58%  { transform: translateY(0) scale(1.1, 0.86); }
+  78%  { transform: translateY(-3px); }
+  100% { transform: translateY(0); }
+}
+
+/* ---------- build workspace (live site + smart panel) ---------- */
+.ws { display: flex; gap: 0; height: 100%; min-height: 0; }
+.ws-stage { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; }
+.ws-frame {
+  flex: 1 1 auto; min-height: 0; width: 100%; border: 0;
+  background: #fff;
+}
+.ws-panel {
+  width: 388px; min-width: 300px; max-width: 46vw;
+  border-left: 1px solid var(--line);
+  background: var(--surface);
+  display: flex; flex-direction: column; min-height: 0;
+  animation: wsIn 220ms ease-out;
+}
+@keyframes wsIn { from { transform: translateX(24px); opacity: 0; } to { transform: none; opacity: 1; } }
+.ws-tab {
+  border: 1px solid var(--line); padding: 6px 10px; font-size: 10px;
+  letter-spacing: 0.12em; text-transform: uppercase; color: var(--fg-faint);
+}
+.ws-tab[data-active="true"] { color: var(--fg); border-color: var(--fg-faint); background: var(--raise); }
+.ws-chip {
+  border: 1px solid var(--line); padding: 4px 9px; font-size: 10px;
+  color: var(--fg-dim); background: transparent; text-transform: none;
+}
+.ws-chip:hover { color: var(--fg); border-color: var(--fg-faint); }
+.ws-chip[data-on="true"] {
+  background: var(--accent); color: var(--accent-fg); border-color: var(--accent);
+}
+.ws-opt {
+  width: 26px; height: 24px; display: inline-flex; align-items: center;
+  justify-content: center; border: 1px solid var(--line); color: var(--fg-dim); font-size: 12px;
+}
+.ws-opt:hover { color: var(--fg); border-color: var(--fg-faint); }
+.ws-opt[data-on="true"] { background: var(--raise); border-color: var(--fg-dim); color: var(--fg); }

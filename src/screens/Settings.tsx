@@ -17,7 +17,8 @@ const SECTIONS: { id: Section; label: string }[] = [
 const THEMES: { id: ThemeId; label: string; note: string; swatch: string[] }[] = [
   { id: "obsidian", label: "Obsidian", note: "pure black, maximum contrast", swatch: ["#000000", "#0b0b0b", "#1b1b1b", "#f2f2f2"] },
   { id: "graphite", label: "Graphite", note: "softer dark, easier at night", swatch: ["#0e1012", "#1a1e21", "#282c30", "#e9ebee"] },
-  { id: "paper", label: "Paper", note: "warm light, print-adjacent", swatch: ["#faf9f6", "#f3f2ed", "#dedbd2", "#14150f"] },
+  { id: "paper", label: "Paper", note: "warm light, print-adjacent", swatch: ["#f6f4ef", "#fffdf9", "#d2ccbe", "#1a1812"] },
+  { id: "claude", label: "Claude", note: "cream shell, dusted-orange voice", swatch: ["#f4efe4", "#fcf9f1", "#c4562a", "#221b10"] },
   { id: "blueprint", label: "Blueprint", note: "cold blue-black, technical", swatch: ["#05070d", "#0e1421", "#17233a", "#dce6f5"] },
   { id: "ember", label: "Ember", note: "the forge itself", swatch: ["#0a0605", "#17100c", "#2a1a12", "#ff7043"] },
 ];
