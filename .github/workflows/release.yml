@@ -68,6 +68,33 @@ jobs:
       - name: install frontend dependencies
         run: npm ci
 
+      # Guard: a push must NEVER silently overwrite a PUBLISHED release.
+      # Same version as a published release = you forgot to bump -> fail
+      # loudly with the fix. Updating a still-open DRAFT is fine (that's
+      # the iterate flow: keep pushing to vX.Y.Z until you publish it).
+      - name: refuse to overwrite a published release
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VER=$(node -p "require('./src-tauri/tauri.conf.json').version")
+          echo "release version: v$VER"
+          CODE=$(curl -s -o /tmp/rel.json -w "%{http_code}" \
+            -H "Authorization: Bearer $GITHUB_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${{ github.repository }}/releases/tags/v$VER")
+          if [ "$CODE" = "200" ]; then
+            DRAFT=$(node -p "JSON.parse(require('fs').readFileSync('/tmp/rel.json','utf8')).draft")
+            echo "release v$VER exists (draft=$DRAFT)"
+            if [ "$DRAFT" = "false" ]; then
+              echo "::error::v$VER is already published. Bump the version first: node tools/bump.mjs <next-version> — then commit and push."
+              exit 1
+            fi
+            echo "draft v$VER exists — its assets will be refreshed in place. Publish it when you're happy with this build."
+          else
+            echo "no release v$VER yet — tauri-action will create a new draft."
+          fi
+
       - name: build + upload to draft release
         uses: tauri-apps/tauri-action@v1
         env:

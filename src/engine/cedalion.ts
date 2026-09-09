@@ -847,6 +847,79 @@ const RULES: Rule[] = [
     }),
   },
 
+
+  { id: "biggest", keys: ["biggest problem", "worst problem", "main issue", "most important", "what should i fix first", "prioritize", "priority", "start with"], weight: 1.7, answer: (ctx) => {
+    const p = ctx.palette;
+    if (!p) return { text: "Show me a palette (forge one or open one from your library) and I'll rank what's actually wrong — by how much it hurts a real user.", suggestions: ["Score my palette"] };
+    const a = auditPalette(p, ctx.purposeId);
+    const bad = a.findings.filter((f) => f.severity === "critical" || f.severity === "warning").slice(0, 3);
+    if (bad.length === 0) return { text: "Honestly? Nothing critical. " + p.name + " is at " + a.score + "/100 (" + a.grade + ") — the remaining points are polish, not problems.", bullets: a.categories.map((c) => c.score < 85 ? c.label + ": " + c.score + " — tighten this next" : c.label + ": " + c.score + " — good").slice(0, 4) };
+    return {
+      text: "Ranked by how much they hurt a real visitor:",
+      bullets: bad.map((f, i) => (i + 1) + " · " + f.title + (f.fix ? " — fixable in one click" : "")),
+      refs: ["score " + a.score + "/100 · " + a.grade],
+      suggestions: ["fix the worst one", "score my palette"],
+    };
+  } },
+  { id: "explain-concepts", keys: ["what is oklch", "what does oklch", "oklab vs", "oklch vs", "colour space", "delta e", "deltae", "what is gamut", "gamut", "luminance", "relative luminance", "what is contrast ratio", "what is wcag", "explain wcag"], weight: 1.6, answer: (_ctx: CedalionContext) => {
+    return {
+      text: "Quick version, no jargon:",
+      bullets: [
+        "OKLCH — a colour space built to match how eyes actually judge colour. L is perceived lightness, C is chroma (how colourful), H is hue. The killer feature: the same C and H read the same on any screen. Your palette is generated and mixed here, so lightening a colour never drains its soul.",
+        "ΔE — perceptual distance between two colours in OKLab. 1.0 is roughly the smallest difference a trained eye can see; under 0.06-0.08 two roles look identical (I flag those as duplicates).",
+        "Gamut — the range of colours a screen can show. sRGB is the web standard. Some OKLCH colours (high C at some L) live outside it; Hephaestus maps them back in by reducing chroma, which is why a vivid hue never turns grey.",
+        "Contrast ratio / WCAG — relative luminance of two colours compared. 4.5:1 = AA for body text, 7:1 = AAA, 3:1 = AA for large text & UI. I always show the measured ratio next to a claim so it's checkable.",
+      ],
+      suggestions: ["what's a bento grid?", "how do I make this pop?"],
+    };
+  } },
+  { id: "palette-for-purpose", keys: ["best palette for", "good palette for", "palette for a", "colours for a", "color for a", "suit a", "recommend colours", "what palette", "which palette", "for my fintech", "for a fintech", "for an ecommerce", "for a portfolio", "for my saas"], weight: 2.2, answer: (ctx) => {
+    const p = ctx.palette;
+    const aud = p ? auditPalette(p, ctx.purposeId) : null;
+    const lines = [
+      "The rules are stable across sectors: one loud accent max, neutrals with a whisper of brand hue, text that clears the purpose's floor.",
+    ];
+    if (ctx.purposeId) {
+      const t = getPurpose(ctx.purposeId);
+      if (t) lines.unshift("For " + t.label + ": " + t.brief);
+    }
+    if (aud && aud.score < 85) lines.push("Your current palette (" + p!.name + ") scores " + aud.score + "/100 — " + aud.headline.toLowerCase());
+    return { text: "Here's the honest version:", bullets: lines, suggestions: ["score my palette", "what should I fix first?"] };
+  } },
+  { id: "how-many-colours", keys: ["how many colours", "how many colors", "too many colours", "colour count", "color count", "more colours", "more colors", "add colour", "new colour"], weight: 1.8, answer: () => ({
+    text: "Fewer than people expect. A shipped interface rarely needs more than five voices: a background, a surface, body text, one action colour, one accent moment.",
+    bullets: [
+      "background + surface + text + muted = the everyday 4",
+      "primary is your main action colour (buttons, links, active states)",
+      "accent is the single loud colour for the moment you want noticed — one per screen, used sparingly",
+      "secondary exists for charts and illustration, not for chrome",
+      "anything else should be derived from these, not invented",
+    ],
+    refs: ["rule of thumb: if two colours never touch real content, delete one"],
+    suggestions: ["score my palette", "how do I make this pop?"],
+  }) },
+  { id: "dark-mode", keys: ["dark mode", "light mode", "which mode", "dark theme", "light theme"], weight: 1.5, answer: (ctx: CedalionContext) => ({
+    text: "Both can be right — it depends on the job and the audience.",
+    bullets: [
+      ctx.purposeId === "investing" || ctx.purposeId === "media" || ctx.purposeId === "gaming" || ctx.purposeId === "devtool" ? "Your purpose (data-heavy, media or developer tooling) usually ships dark first — long sessions, low-glare surfaces. Offer light as an option and test both at 7:1." : "Light first is the safer default for mainstream product pages; dark is a design choice when the audience stares at the screen for hours or the brand is nocturnal.",
+      "Never invert blindly — dark mode is its own system: softer chroma, raised surfaces carry the depth, borders get lighter (they sit above the background), not darker.",
+      "Text on dark should sit around 90-98% lightness; pure white (#FFF) at 100% can glare — many designers prefer #E6E6E6-ish tinted slightly toward the brand hue.",
+    ],
+    suggestions: ["what should I fix first?", "score my palette"],
+  }) },
+  { id: "fix-worst", keys: ["fix the worst", "apply the fix", "fix it for me", "fix everything", "make it accessible", "auto fix", "autofix"], weight: 1.7, answer: (ctx) => {
+    const p = ctx.palette;
+    if (!p) return { text: "I need a palette on screen to fix. Forge one first, or open one from your library.", suggestions: ["score my palette"] };
+    const a = auditPalette(p, ctx.purposeId);
+    const fixes = a.findings.filter((f) => f.fix).slice(0, 4);
+    if (fixes.length === 0) return { text: "Nothing to auto-fix — every finding I raised either already has a compliant value or needs a human judgement call. Score: " + a.score + "/100 (" + a.grade + ")." };
+    return {
+      text: "I can compute the corrected value for each of these — apply them one by one (each is a measured fix, not a guess):",
+      bullets: fixes.map((f) => f.title + " → " + f.fix!.label + " (" + f.fix!.hex + ")"),
+      refs: ["apply each from the palette card that carries it; locked swatches stay untouched"],
+      suggestions: ["score my palette"],
+    };
+  } },
   { id: "cheer", keys: ["thanks", "thank you", "thx", "ty", "awesome", "nice", "cool", "love it", "great work", "well done", "good job", "perfect"], weight: 1.6, answer: cheer },
   { id: "smalltalk", keys: ["how are you", "how's it going", "what's up", "you ok", "bored"], weight: 1.5, answer: smalltalkAnswer },
   { id: "joke", keys: ["joke", "funny", "laugh", "haha", "lol", "make me smile"], weight: 2.2, answer: jokeAnswer },

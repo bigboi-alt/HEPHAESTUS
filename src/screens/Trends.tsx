@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { TRENDS, TRENDS_UPDATED, TRENDS_VERSION, type Trend, type TrendStatus } from "../data/trends";
 import { useApp } from "../store";
 import { matchTrends } from "../engine/cedalion";
+import TrendExample from "../components/TrendExample";
 
 const STATUS_COLOR: Record<TrendStatus, string> = {
   core: "var(--ok)",
@@ -137,7 +138,13 @@ function TrendRow({ t, open, matched, onToggle }: { t: Trend; open: boolean; mat
       </button>
 
       {open && (
-        <div className="fade-in" style={{ padding: "0 16px 16px 32px", display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(240px,1fr))", gap: 18 }}>
+        <div className="fade-in" style={{ padding: "0 16px 16px 32px" }}>
+          <div className="row" style={{ alignItems: "flex-start", gap: 16, flexWrap: "wrap", marginBottom: 16 }}>
+            <div style={{ width: 300, maxWidth: "100%", flexShrink: 0 }}>
+              <div className="label" style={{ marginBottom: 6 }}>example</div>
+              <TrendExample t={t} />
+            </div>
+            <div style={{ flex: "1 1 300px", display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))", gap: 18 }}>
           <Block title="visual signals" items={t.signals} />
           <Block title="use when" items={t.useWhen} />
           {t.avoidWhen.length > 0 && <Block title="avoid when" items={t.avoidWhen} />}
@@ -153,6 +160,8 @@ function TrendRow({ t, open, matched, onToggle }: { t: Trend; open: boolean; mat
             {t.rules.modeBias && t.rules.modeBias !== "either" && (
               <div className="faint mono-sm">{t.rules.modeBias} mode first</div>
             )}
+          </div>
+            </div>
           </div>
         </div>
       )}

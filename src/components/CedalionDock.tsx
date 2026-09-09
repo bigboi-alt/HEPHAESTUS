@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useApp } from "../store";
 import { ask, auditPalette, CEDALION_STARTERS } from "../engine/cedalion";
-import CedalionBuddy, { type BuddyMode } from "./CedalionBuddy";
 
 export function CedalionChat({ compact = false }: { compact?: boolean }) {
   const { chat, pushChat, clearChat, current, purposeId, screen, buildMeta } = useApp();
@@ -77,7 +76,7 @@ export function CedalionChat({ compact = false }: { compact?: boolean }) {
 
         {chat.map((t) => (
           <div key={t.id} className="fade-in">
-            <div className="label" style={{ marginBottom: 5, color: t.role === "you" ? "var(--fg-faint)" : "var(--acc-s, #c4562a)" }}>
+            <div className="label" style={{ marginBottom: 5, color: t.role === "you" ? "var(--fg-faint)" : "var(--accent)" }}>
               {t.role === "cedalion" ? "cedalion" : "you"}
             </div>
             <div style={{ fontSize: 12, color: t.role === "you" ? "var(--fg-dim)" : "var(--fg)", lineHeight: 1.6 }}>
@@ -132,63 +131,25 @@ export function CedalionChat({ compact = false }: { compact?: boolean }) {
   );
 }
 
-/**
- * The dock: a chat window with the buddy sitting on its roof.
- * Choreography — open: buddy gets bumped into the air, lands, sits.
- * Close: he drops and settles on the closed pill.
- */
+/** The dock: a chat window pinned bottom-right. Simple, no mascot. */
 export default function CedalionDock() {
   const { cedalionOpen, setCedalionOpen, current, purposeId, settings } = useApp();
-  const [closing, setClosing] = useState(false);
-  const [mode, setMode] = useState<BuddyMode>("hop");
-  const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
   const audit = current && settings.cedalionAutoAudit ? auditPalette(current, purposeId ?? undefined) : null;
 
-  const later = (fn: () => void, ms: number) => {
-    timers.current.push(setTimeout(fn, ms));
-  };
-
-  useEffect(() => () => timers.current.forEach(clearTimeout), []);
-
-  // when the chat appears, the buddy gets bumped up, lands and settles into idle bob
-  useEffect(() => {
-    if (cedalionOpen) {
-      setMode("hop");
-      later(() => setMode("idle"), 700);
-    }
-  }, [cedalionOpen]);
-
-  function close() {
-    setClosing(true);
-    setMode("fall");
-    later(() => {
-      setClosing(false);
-      setCedalionOpen(false);
-    }, 500);
-  }
-
-  // closed: the pill with the buddy sitting on top
   if (!cedalionOpen) {
     return (
       <button
         onClick={() => setCedalionOpen(true)}
         className="row gap-2"
         style={{
-          position: "fixed", right: 18, bottom: 14, zIndex: 50,
+          position: "fixed", right: 18, bottom: 16, zIndex: 50,
           border: "1px solid var(--line)", background: "var(--surface)",
-          padding: "6px 14px 8px",
+          padding: "8px 14px",
         }}
         title="Open Cedalion"
       >
-        <span className="row gap-2" style={{ position: "relative" }}>
-          <span
-            style={{ position: "absolute", bottom: "100%", right: "50%", transform: "translateX(50%)", marginBottom: 2 }}
-          >
-            <CedalionBuddy mode="idle" size={40} />
-          </span>
-          <span style={{ width: 7, height: 7, borderRadius: "50%", background: "var(--accent)" }} />
-          <span style={{ fontSize: 11, letterSpacing: "0.1em" }}>cedalion</span>
-        </span>
+        <span style={{ width: 7, height: 7, borderRadius: "50%", background: "var(--accent)" }} />
+        <span style={{ fontSize: 11, letterSpacing: "0.1em" }}>cedalion</span>
         {audit && (
           <span className="faint mono-sm" style={{ borderLeft: "1px solid var(--line)", paddingLeft: 9 }}>
             {audit.score}
@@ -199,41 +160,32 @@ export default function CedalionDock() {
   }
 
   return (
-    <div
+    <aside
       className="fade-in"
-      style={{ position: "fixed", right: 18, bottom: 14, zIndex: 50, width: 384 }}
+      style={{
+        position: "fixed", right: 18, bottom: 16, zIndex: 50,
+        width: 384, height: "min(560px, calc(100vh - 96px))",
+        border: "1px solid var(--line)", background: "var(--surface)",
+        display: "flex", flexDirection: "column",
+      }}
     >
-      {/* the buddy on the roof */}
-      <div style={{ display: "flex", justifyContent: "flex-end", paddingRight: 10, height: 52 }}>
-        <CedalionBuddy mode={closing ? "fall" : mode} size={54} />
-      </div>
-      <aside
-        className={closing ? "" : "fade-in"}
-        style={{
-          width: 384, height: "min(540px, calc(100vh - 130px))",
-          border: "1px solid var(--line)", background: "var(--surface)",
-          display: "flex", flexDirection: "column",
-          marginTop: -6,
-        }}
+      <div
+        className="row"
+        style={{ justifyContent: "space-between", padding: "9px 14px", borderBottom: "1px solid var(--line)" }}
       >
-        <div
-          className="row"
-          style={{ justifyContent: "space-between", padding: "9px 14px", borderBottom: "1px solid var(--line)" }}
-        >
-          <div className="row gap-2">
-            <span style={{ fontSize: 12, letterSpacing: "0.12em" }}>CEDALION</span>
-            {audit && (
-              <span className="faint mono-sm">
-                {audit.score}/100 · {audit.grade}
-              </span>
-            )}
-          </div>
-          <button className="faint" style={{ fontSize: 14 }} onClick={close} title="Close">
-            ×
-          </button>
+        <div className="row gap-2">
+          <span style={{ fontSize: 12, letterSpacing: "0.12em" }}>CEDALION</span>
+          {audit && (
+            <span className="faint mono-sm">
+              {audit.score}/100 · {audit.grade}
+            </span>
+          )}
         </div>
-        <CedalionChat compact />
-      </aside>
-    </div>
+        <button className="faint" style={{ fontSize: 14 }} onClick={() => setCedalionOpen(false)} title="Close">
+          ×
+        </button>
+      </div>
+      <CedalionChat compact />
+    </aside>
   );
 }

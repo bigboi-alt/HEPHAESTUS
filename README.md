@@ -166,12 +166,28 @@ node tools/bump.mjs 0.2.0
 
 ### To ship a release
 
-1. `node tools/bump.mjs 0.1.1`, commit, push. Actions builds the draft `v0.1.1` release.
+1. `node tools/bump.mjs 0.2.0`, commit, push. Actions builds the draft `v0.2.0` release.
 2. When the run is green, open **Releases → Drafts** on github.com and click **Publish release**.
 3. The download page (`site/index.html`, deployed to Cloudflare Pages) reads the latest
    release from the GitHub API — once the repo is public, the buttons fill themselves in.
    While the repo is private the page says releases are unreachable, which is GitHub
    enforcing privacy, not a bug.
+
+### The release ritual (one version at a time)
+
+A push does NOT always create a new release — it creates **or updates** the draft for the
+version that is currently set. That is deliberate: you keep pushing refinements to the same
+draft until you're happy, then you publish it once. The moment something is **published**,
+the workflow refuses to touch it again and tells you to bump:
+
+| You want to… | Do |
+|---|---|
+| iterate on the current draft (not yet published) | just push — same draft refreshes |
+| ship a new version (current one is published, or you want a clean draft) | `node tools/bump.mjs 0.2.0`, commit, push — a **new** draft appears; the old release stays untouched |
+| change only docs / site / workflows | commit with `[skip ci]` to avoid the 4-OS rebuild |
+
+You can tell which build a draft holds by its run time: a run that finishes in ~4 minutes
+(caches warm) still uploaded fresh installers — always re-download before testing.
 
 ### Secrets — what lives where
 

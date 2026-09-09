@@ -4,9 +4,16 @@ import { PURPOSES, PURPOSE_GROUPS, getPurpose } from "../data/trends";
 import { generateDirections, type Direction } from "../engine/directions";
 import { generatePalette, type Palette, type Role } from "../engine/akmon";
 import { auditPalette } from "../engine/cedalion";
-import { buildSiteHtml, defaultSections, SITE_SECTIONS, type SiteKnobs, type SiteSection } from "../engine/sites";
+import { buildSiteHtml, defaultSections, SITE_SECTIONS, type SiteSection } from "../engine/sites";
 import { download } from "../lib/storage";
 import { PaletteStrip } from "../components/PaletteCard";
+
+const FONTS = [
+  { id: "sans", label: "sans", stack: "'Inter Tight', system-ui, -apple-system, 'Helvetica Neue', sans-serif" },
+  { id: "serif", label: "serif", stack: "'Instrument Serif', Georgia, 'Times New Roman', serif" },
+  { id: "mono", label: "mono", stack: "ui-monospace, 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace" },
+];
+const CORNERS = [0, 6, 14, 24];
 
 type Spec = {
   purposeId: string;
@@ -14,457 +21,472 @@ type Spec = {
   direction: Direction;
   sections: SiteSection[];
   seed: number;
-  mode: "auto" | "myself";
-  knobs: SiteKnobs;
+  empty: boolean; // true = hand-picked minimal start
 };
 
-const FONT_OVERRIDES: { id: string; label: string; stack: string }[] = [
-  { id: "sans", label: "sans", stack: "'Inter Tight', system-ui, -apple-system, 'Helvetica Neue', sans-serif" },
-  { id: "serif", label: "serif", stack: "'Instrument Serif', Georgia, 'Times New Roman', serif" },
-  { id: "mono", label: "mono", stack: "ui-monospace, 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace" },
-];
-
 export default function Build() {
-  const { purposeId, setPurpose, go, say, palettes, setBuildMeta, setCedalionOpen, purposeId: globalPurpose } = useApp();
+  const { setPurpose, go, say, palettes, setBuildMeta, setCedalionOpen, purposeId: storedPurpose } = useApp();
+
+  const [purposeId, setPurposeIdLocal] = useState<string | null>(
+    storedPurpose && PURPOSES.some((p) => p.id === storedPurpose) ? storedPurpose : null
+  );
   const [spec, setSpec] = useState<Spec | null>(null);
-  const [purpose, setPurposeLocal] = useState<string | null>(purposeId ?? globalPurpose ?? null);
-  const [dirSeed, setDirSeed] = useState(3);
-  const [palSeed, setPalSeed] = useState(7);
-  const [tab, setTab] = useState<"palette" | "sections" | "style">("sections");
-  const [pickedDir, setPickedDir] = useState<Direction | null>(null);
 
-  const p = purpose ? getPurpose(purpose) : undefined;
+  // idea cycles — every click on these gives a whole new set (the infinite dial)
+  const [palCycle, setPalCycle] = useState(0);
+  const [dirCycle, setDirCycle] = useState(0);
+  const [chosenPalette, setChosenPalette] = useState<Palette | null>(null);
+  const [chosenDir, setChosenDir] = useState<Direction | null>(null);
 
-  /* directions for the picker (candidate list is cached with the purpose) */
-  const candidates = useMemo(() => {
-    if (!p) return [];
-    return generateDirections(p.id, undefined, dirSeed, 4);
-  }, [p, dirSeed]);
+  const purpose = purposeId ? getPurpose(purposeId) : undefined;
 
-  const forged = useMemo(
-    () => (p ? generatePalette({ prompt: `${p.label} ${p.moodId ?? ""} site design`, seed: palSeed }) : null),
-    [p, palSeed]
-  );
-
-  /* one forge to rule them all: purpose ⇄ palette always available */
-  const activePalette = spec?.palette ?? forged;
-
-  const audit = useMemo(
-    () => (activePalette && p ? auditPalette(activePalette, p.id) : null),
-    [activePalette, p]
-  );
-
-  /* ---------- build actions ---------- */
-  function build(mode: "auto" | "myself") {
-    if (!p) return;
-    const dir = pickedDir ?? candidates[0];
-    if (!dir || !forged) return;
-    const sections = mode === "auto" ? defaultSections(p) : (["nav", "hero", "footer"] as SiteSection[]);
-    setSpec({
-      purposeId: p.id,
-      palette: forged,
-      direction: dir,
-      sections,
-      seed: Math.floor(Math.random() * 99999) + 1,
-      mode,
-      knobs: { ...dir.spec },
-    });
-    if (purposeId !== p.id) setPurpose(p.id);
-  }
-
-  function patchSpec(mut: Partial<Spec>) {
-    setSpec((s) => (s ? { ...s, ...mut } : s));
-  }
-
-  function patchPalette(role: Role, hex: string) {
-    setSpec((s) =>
-      s
-        ? {
-            ...s,
-            palette: {
-              ...s.palette,
-              swatches: s.palette.swatches.map((sw) => (sw.role === role ? { ...sw, hex } : sw)),
-            },
-          }
-        : s
+  /* palettes for the purpose — four options per cycle, endless cycles */
+  const candidates4 = useMemo(() => {
+    if (!purpose) return [];
+    const base = 7 + palCycle * 4;
+    return [0, 1, 2, 3].map((i) =>
+      generatePalette({ prompt: `${purpose.label} ${purpose.moodId ?? ""} site`, seed: base + i })
     );
-  }
+  }, [purpose, palCycle]);
 
-  function toggleSection(id: SiteSection) {
-    setSpec((s) => {
-      if (!s) return s;
-      const on = s.sections.includes(id);
-      const sections = on ? s.sections.filter((x) => x !== id) : [...s.sections, id].sort((a, b) => orderOf(a) - orderOf(b));
-      return { ...s, sections };
+  /* looks for the purpose — six per cycle, endless cycles */
+  const looks = useMemo(() => {
+    if (!purpose) return [];
+    return generateDirections(purpose.id, undefined, 3 + dirCycle * 11, 6);
+  }, [purpose, dirCycle]);
+
+  const activePalette = spec?.palette ?? chosenPalette ?? candidates4[0] ?? null;
+  const activeLook = spec?.direction ?? chosenDir ?? looks[0] ?? null;
+  const audit = useMemo(
+    () => (purpose && activePalette ? auditPalette(activePalette, purpose.id) : null),
+    [purpose, activePalette]
+  );
+
+  const pickPurpose = (id: string | null) => {
+    setPurposeIdLocal(id);
+    setSpec(null);
+    setChosenDir(null);
+    if (id) setPurpose(id);
+  };
+
+  /** build with whatever ingredients are on screen */
+  const buildSite = (empty: boolean, palIn?: Palette | null, dirIn?: Direction | null, pidIn?: string | null) => {
+    const pur = pidIn ? getPurpose(pidIn) : purpose;
+    if (!pur) return;
+    const dir = dirIn ?? activeLook ?? looks[0];
+    const pal = palIn ?? activePalette ?? candidates4[0];
+    if (!dir || !pal) return;
+    setSpec({
+      purposeId: pur.id,
+      palette: pal,
+      direction: dir,
+      sections: empty ? (["nav", "hero", "footer"] as SiteSection[]) : defaultSections(pur),
+      seed: Math.floor(Math.random() * 99999) + 1,
+      empty,
     });
-  }
-  function orderOf(id: SiteSection) {
-    return SITE_SECTIONS.findIndex((x) => x.id === id);
-  }
+    if (pidIn) { setPurposeIdLocal(pidIn); setPurpose(pidIn); }
+    window.scrollTo(0, 0);
+  };
 
+  /** surprise: jump to a (possibly random) purpose with fresh ingredients and build */
+  const surprise = () => {
+    const pid = purpose?.id ?? PURPOSES[Math.floor(Math.random() * PURPOSES.length)].id;
+    const pur = getPurpose(pid);
+    if (!pur) return;
+    const pal = generatePalette({ prompt: `${pur.label} ${pur.moodId ?? ""} site`, seed: 7 + (palCycle + 1) * 4 + 2 });
+    const dir = generateDirections(pid, undefined, 3 + (dirCycle + 1) * 11, 6)[0];
+    setPalCycle((c) => c + 1);
+    setDirCycle((c) => c + 1);
+    setChosenPalette(pal);
+    setChosenDir(dir);
+    setTimeout(() => buildSite(false, pal, dir, pid), 60);
+  };
+
+  /* ---------- live html for the workspace ---------- */
   const html = useMemo(() => {
-    if (!spec || !getPurpose(spec.purposeId)) return null;
+    if (!spec) return null;
+    const p = getPurpose(spec.purposeId);
+    if (!p) return null;
     return buildSiteHtml({
-      purpose: getPurpose(spec.purposeId)!,
+      purpose: p,
       palette: spec.palette,
-      knobs: spec.knobs,
+      knobs: spec.direction.spec,
       atoms: spec.direction.atoms,
       sections: spec.sections,
       seed: spec.seed,
     }).html;
   }, [spec]);
 
-  /* tell cedalion what we're building, live */
   useEffect(() => {
-    if (!spec) { setBuildMeta(null); return; }
+    if (!spec || !html) { setBuildMeta(null); return; }
     const names = spec.sections.filter((x) => x !== "nav" && x !== "footer");
     setBuildMeta({
       purposeLabel: getPurpose(spec.purposeId)?.label ?? "",
       sectionsOn: names.length,
       sectionNames: names.map((n) => SITE_SECTIONS.find((x) => x.id === n)?.label ?? n),
     });
-  }, [spec, setBuildMeta]);
-
+  }, [spec, html, setBuildMeta]);
   useEffect(() => () => setBuildMeta(null), [setBuildMeta]);
 
-  const setPurposeAndReset = (id: string | null) => {
-    setPurposeLocal(id);
-    setPickedDir(null);
-  };
+  /* ================================================================
+   * WORKSPACE
+   * ================================================================ */
+  if (spec && purpose && html) {
+    const sectionOn = (id: SiteSection) => spec.sections.includes(id);
+    const grade = audit ? audit.score : null;
+    const toggle = (id: SiteSection) =>
+      setSpec((s) => {
+        if (!s) return s;
+        const on = s.sections.includes(id);
+        const order = SITE_SECTIONS.map((x) => x.id);
+        const sections = on
+          ? s.sections.filter((x) => x !== id)
+          : [...s.sections, id].sort((a, b) => order.indexOf(a) - order.indexOf(b));
+        return { ...s, sections };
+      });
+    const setPal = (p: Palette) => setSpec((s) => (s ? { ...s, palette: p, seed: s.seed } : s));
+    const applyLook = (d: Direction) => setSpec((s) => (s ? { ...s, direction: d, seed: s.seed } : s));
+    const exportHtml = () => {
+      download(`hephaestus-${purpose.id}-${spec.seed}.html`, html, "text/html");
+      say("site saved — open it in any browser");
+    };
 
-  /* ================= pick phase ================= */
-  if (!spec || !p || !html) {
     return (
-      <div style={{ padding: "26px 22px 110px", maxWidth: 1180, margin: "0 auto" }}>
-        <div className="label">build</div>
-        <h1 style={{ fontSize: 26, fontWeight: 400, margin: "6px 0 6px" }}>What are you making?</h1>
-        <p className="dim" style={{ fontSize: 12, margin: "0 0 24px", maxWidth: 640 }}>
-          pick a purpose — then press build and a real, live website comes out. scroll it, click it, restyle it.
-          {!p && " (start by picking one)"}
-        </p>
+      <div style={{ display: "flex", flexDirection: "column", height: "calc(100vh - 58px)", minHeight: 470 }}>
+        {/* toolbar */}
+        <div className="row" style={{ justifyContent: "space-between", gap: 12, padding: "7px 14px", borderBottom: "1px solid var(--line)", flexWrap: "wrap" }}>
+          <div className="row gap-2" style={{ flexWrap: "wrap" }}>
+            <button className="btn" style={{ fontSize: 10 }} onClick={() => { setSpec(null); setBuildMeta(null); }}>← change</button>
+            <span style={{ fontSize: 13 }}>{purpose.label}</span>
+            {grade !== null && (
+              <span className="mono-sm" style={{ color: grade >= 82 ? "var(--ok)" : grade >= 70 ? "var(--warn)" : "var(--bad)" }}>
+                palette {grade}/100
+              </span>
+            )}
+            <span className="faint mono-sm">{spec.empty ? "hand-picked start" : "auto-composed"}</span>
+            <button className="btn" style={{ fontSize: 10 }} onClick={() => setCedalionOpen(true)}>ask cedalion</button>
+          </div>
+          <div className="row gap-1">
+            <button className="btn" style={{ fontSize: 10 }} onClick={() => setSpec({ ...spec, seed: spec.seed + 1 })}>↻ new copy</button>
+            <button className="btn btn-primary" style={{ fontSize: 10 }} onClick={exportHtml}>export .html</button>
+          </div>
+        </div>
 
-        {PURPOSE_GROUPS.map((g) => {
-          const items = PURPOSES.filter((x) => x.group === g);
-          return (
-            <div key={g} style={{ marginBottom: 14 }}>
-              <div className="faint mono-sm" style={{ marginBottom: 6, letterSpacing: "0.14em", textTransform: "uppercase" }}>{g}</div>
-              <div className="row gap-1" style={{ flexWrap: "wrap" }}>
-                {items.map((x) => (
-                  <button
-                    key={x.id}
-                    className="btn"
-                    data-active={purpose === x.id}
-                    style={{ textTransform: "none", fontSize: 11 }}
-                    onClick={() => setPurposeAndReset(x.id)}
-                  >
-                    {x.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-          );
-        })}
+        <div className="ws">
+          <div className="ws-stage">
+            <iframe title="your live site" className="ws-frame" sandbox="allow-scripts" srcDoc={html} />
+          </div>
 
-        {p && (
-          <div className="fade-in" style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 18 }}>
-            {/* palette preview + style candidates */}
-            <div className="panel" style={{ padding: 16 }}>
-              <div className="row" style={{ justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
-                <div>
-                  <div style={{ fontSize: 13, marginBottom: 6 }}>{p.label}</div>
-                  <div className="faint mono-sm" style={{ maxWidth: 560, lineHeight: 1.5 }}>{p.brief}</div>
-                </div>
-                <span className="dim mono-sm">{p.priorities[0]}</span>
+          {/* right: the smart panel */}
+          <div className="ws-panel" style={{ width: 330, minWidth: 280, maxWidth: "42vw" }}>
+            <div style={{ flex: 1, overflowY: "auto", padding: 12, display: "flex", flexDirection: "column", gap: 16 }}>
+              <div className="faint mono-sm" style={{ lineHeight: 1.6, borderLeft: "2px solid var(--accent)", paddingLeft: 8 }}>
+                this is a real site — scroll it, click it, and change anything from here.
               </div>
-              {forged && (
-                <div className="row gap-2" style={{ marginTop: 12, flexWrap: "wrap" }}>
-                  <div style={{ width: 220, border: "1px solid var(--line)" }}>
-                    <PaletteStrip p={forged} height={24} />
-                  </div>
-                  <button className="btn" style={{ fontSize: 10 }} onClick={() => setPalSeed((s) => s + 1)}>↻ forge palette</button>
-                  {audit && <span className={`mono-sm ${audit.score >= 82 ? "" : "faint"}`} style={{ color: audit.score >= 82 ? "var(--ok)" : "var(--warn)" }}>{audit.score}/100</span>}
-                  <span className="faint mono-sm">uses {forged.mode === "dark" ? "dark" : "light"} colours</span>
-                </div>
-              )}
-              {candidates.length > 0 && (
-                <div className="row gap-1" style={{ marginTop: 14, flexWrap: "wrap" }}>
-                  <span className="label" style={{ marginRight: 6 }}>style</span>
-                  {candidates.map((d) => (
+
+              {/* sections */}
+              <div>
+                <div className="label" style={{ marginBottom: 6 }}>sections</div>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 4 }}>
+                  {SITE_SECTIONS.map((s) => (
                     <button
-                      key={d.id}
-                      className="btn"
-                      data-active={(pickedDir?.id ?? candidates[0]?.id) === d.id}
-                      style={{ fontSize: 10, textTransform: "none" }}
-                      onClick={() => setPickedDir(d)}
+                      key={s.id}
+                      className="ws-chip"
+                      data-on={sectionOn(s.id)}
+                      style={{ textAlign: "left", display: "flex", justifyContent: "space-between", fontSize: 9 }}
+                      onClick={() => toggle(s.id)}
                     >
-                      {d.name} · {d.fit}
+                      <span>{s.label}</span>
+                      <span style={{ opacity: 0.55, fontSize: 8 }}>{sectionOn(s.id) ? "✓" : "·"}</span>
                     </button>
                   ))}
-                  <button className="btn" style={{ fontSize: 10 }} onClick={() => setDirSeed((s) => s + 1)}>↻ styles</button>
                 </div>
-              )}
+              </div>
+
+              {/* colours */}
+              <div>
+                <div className="row" style={{ justifyContent: "space-between", marginBottom: 6 }}>
+                  <span className="label">colours</span>
+                  <button
+                    className="btn"
+                    style={{ fontSize: 9, padding: "2px 7px" }}
+                    onClick={() => {
+                      const fresh = generatePalette({ prompt: `${purpose.label} ${purpose.moodId ?? ""} site`, seed: Math.floor(Math.random() * 1e6) + 1 });
+                      setPal(fresh);
+                      say("re-forged");
+                    }}
+                  >
+                    ↻ re-forge all
+                  </button>
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+                  {spec.palette.swatches.map((sw) => (
+                    <div key={sw.role} className="row" style={{ gap: 7, border: "1px solid var(--line-soft)", padding: "3px 7px" }}>
+                      <input
+                        type="color"
+                        value={sw.hex}
+                        onChange={(e) => {
+                          const role = sw.role as Role;
+                          setSpec((s) => (s ? { ...s, palette: { ...s.palette, swatches: s.palette.swatches.map((x) => (x.role === role ? { ...x, hex: e.target.value } : x)) } } : s));
+                        }}
+                        style={{ width: 24, height: 20, padding: 0, border: "1px solid var(--line)", cursor: "pointer" }}
+                      />
+                      <span className="mono-sm" style={{ width: 64, fontSize: 9, textTransform: "lowercase" }}>{sw.role}</span>
+                      <span className="faint mono-sm" style={{ fontSize: 9 }}>{sw.hex}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* look */}
+              <div>
+                <div className="row" style={{ justifyContent: "space-between", marginBottom: 6 }}>
+                  <span className="label">look</span>
+                  <button className="btn" style={{ fontSize: 9, padding: "2px 7px" }} onClick={() => { setDirCycle((c) => c + 1); }}>more looks</button>
+                </div>
+                <div style={{ fontSize: 11, marginBottom: 4 }}>
+                  {spec.direction.name} <span className="faint mono-sm">· {spec.direction.fit} fit</span>
+                </div>
+                <div className="faint mono-sm" style={{ fontSize: 9, lineHeight: 1.5, marginBottom: 8 }}>
+                  {Object.values(spec.direction.atoms).map((a) => a.label).slice(0, 4).join(" · ")}
+                </div>
+                <div className="row gap-1" style={{ marginBottom: 4 }}>
+                  <button className="btn" style={{ fontSize: 9, padding: "2px 7px" }} onClick={() => { const i = looks.findIndex((d) => d.id === spec.direction.id); applyLook(looks[(i + 1) % looks.length] ?? spec.direction); }}>← prev</button>
+                  <button className="btn" style={{ fontSize: 9, padding: "2px 7px" }} onClick={() => { const i = looks.findIndex((d) => d.id === spec.direction.id); applyLook(looks[(i + looks.length - 1) % looks.length] ?? spec.direction); }}>next →</button>
+                  <button className="btn" style={{ fontSize: 9, padding: "2px 7px" }} onClick={() => setSpec((s) => (s ? { ...s, seed: s.seed + 1 } : s))}>↻ shuffle copy</button>
+                </div>
+                <div className="row gap-1" style={{ marginTop: 7, flexWrap: "wrap" }}>
+                  {looks.slice(0, 6).map((d) => (
+                    <button key={d.id} className="ws-chip" data-on={spec.direction.id === d.id} style={{ fontSize: 8, padding: "2px 6px" }} onClick={() => applyLook(d)}>
+                      {d.name}
+                    </button>
+                  ))}
+                </div>
+                <div className="row gap-1" style={{ marginTop: 9, flexWrap: "wrap" }}>
+                  <span className="faint mono-sm" style={{ fontSize: 8, alignSelf: "center" }}>corners</span>
+                  {CORNERS.map((c) => (
+                    <button key={c} className="ws-chip" data-on={spec.direction.spec.radius === c} style={{ fontSize: 8, padding: "2px 6px" }} onClick={() => applyLook({ ...spec.direction, spec: { ...spec.direction.spec, radius: c } })}>
+                      {c === 0 ? "sharp" : `${c}px`}
+                    </button>
+                  ))}
+                </div>
+                <div className="row gap-1" style={{ marginTop: 6, flexWrap: "wrap" }}>
+                  <span className="faint mono-sm" style={{ fontSize: 8, alignSelf: "center" }}>font</span>
+                  {FONTS.map((f) => (
+                    <button key={f.id} className="ws-chip" data-on={spec.direction.spec.fontStack === f.stack} style={{ fontSize: 8, padding: "2px 6px" }} onClick={() => applyLook({ ...spec.direction, spec: { ...spec.direction.spec, fontStack: f.stack } })}>
+                      {f.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
             </div>
 
-            {/* go buttons */}
-            <div className="row gap-2" style={{ flexWrap: "wrap" }}>
-              <button
-                className="btn btn-primary"
-                style={{ padding: "12px 30px", fontSize: 13 }}
-                onClick={() => build("auto")}
-              >
-                build the site →
-              </button>
-              <button
-                className="btn"
-                style={{ padding: "12px 22px", fontSize: 13 }}
-                onClick={() => build("myself")}
-              >
-                build myself — I'll pick the sections
-              </button>
-              <span className="faint mono-sm">free-form canvas is the next milestone — for now you build from real sections, live.</span>
+            {/* footer actions */}
+            <div style={{ borderTop: "1px solid var(--line)", padding: 9, display: "flex", flexDirection: "column", gap: 7 }}>
+              <button className="btn btn-primary" style={{ width: "100%", fontSize: 11 }} onClick={exportHtml}>export this site (.html)</button>
+              <div className="row gap-1">
+                <button className="btn" style={{ flex: 1, fontSize: 9 }} onClick={() => { setSpec(null); setBuildMeta(null); }}>start over</button>
+                <button className="btn" style={{ flex: 1, fontSize: 9 }} onClick={() => go("library")}>library</button>
+              </div>
             </div>
           </div>
-        )}
+        </div>
       </div>
     );
   }
 
-  /* ================= workspace phase ================= */
-  const dirs = generateDirections(spec.purposeId, spec.palette, dirSeed, 4);
-  const sectionList = SITE_SECTIONS;
-  const on = (id: SiteSection) => spec.sections.includes(id);
-
-  const exportHtml = () => {
-    const slug = (getPurpose(spec.purposeId)?.id ?? "site").toLowerCase();
-    download(`hephaestus-${slug}-${spec.seed}.html`, html, "text/html");
-    say("site exported — open it in any browser");
-  };
-
+  /* ================================================================
+   * STAGE — choose + build
+   * ================================================================ */
   return (
-    <div style={{ display: "flex", flexDirection: "column", height: "calc(100vh - 58px)", minHeight: 480 }}>
-      {/* workspace header */}
-      <div
-        className="row"
-        style={{
-          justifyContent: "space-between", gap: 14, flexWrap: "wrap",
-          padding: "8px 16px", borderBottom: "1px solid var(--line)", background: "var(--bg)",
-        }}
-      >
-        <div className="row gap-2" style={{ minWidth: 0, flexWrap: "wrap" }}>
-          <button className="btn" style={{ fontSize: 10 }} onClick={() => { setSpec(null); setBuildMeta(null); }}>
-            ← change
+    <div style={{ padding: "22px 22px 110px", maxWidth: 1180, margin: "0 auto" }}>
+      <div className="label">build</div>
+      <h1 style={{ fontSize: 30, fontWeight: 400, margin: "6px 0 2px", letterSpacing: "-0.01em" }}>
+        {purpose ? `Build a ${purpose.label.toLowerCase()}.` : "What are you building?"}
+      </h1>
+      <p className="dim" style={{ fontSize: 12, margin: "0 0 22px", maxWidth: 560 }}>
+        {purpose
+          ? "Pick a palette and a look — or hit surprise and watch it compose itself. Then live-edit anything."
+          : "Pick the thing you're making and we'll compose a real site around it."}
+      </p>
+
+      {/* ---- step 1: purpose ---- */}
+      {!purpose && (
+        <>
+          <button className="btn btn-primary" style={{ padding: "10px 18px", marginBottom: 22, fontSize: 11 }} onClick={() => surprise()}>
+            ✨ I can't decide — surprise me
           </button>
-          <span style={{ fontSize: 13 }}>{p.label}</span>
-          <span className="faint mono-sm">{spec.mode === "auto" ? "auto-composed" : "hand-picked"}</span>
-          {audit && (
-            <span className="mono-sm" style={{ color: audit.score >= 82 ? "var(--ok)" : "var(--warn)" }}>palette {audit.score}</span>
-          )}
-          <button className="btn" style={{ fontSize: 10 }} onClick={() => setCedalionOpen(true)}>ask cedalion</button>
-        </div>
-        <div className="row gap-1">
-          <button className="btn" style={{ fontSize: 10 }} onClick={() => patchSpec({ seed: spec.seed + 1 })} title="new copy & art">↻ shuffle</button>
-          <button className="btn" style={{ fontSize: 10 }} onClick={exportHtml}>export .html</button>
-        </div>
-      </div>
-
-      <div className="ws">
-        {/* live site */}
-        <div className="ws-stage">
-          <iframe
-            title="live site preview"
-            className="ws-frame"
-            sandbox="allow-scripts"
-            srcDoc={html}
-          />
-        </div>
-
-        {/* smart workspace panel */}
-        <div className="ws-panel">
-          <div className="row gap-1" style={{ padding: 10, borderBottom: "1px solid var(--line)", flexWrap: "wrap" }}>
-            {(["sections", "palette", "style"] as const).map((t) => (
-              <button key={t} className="ws-tab" data-active={tab === t} onClick={() => setTab(t)}>{t}</button>
-            ))}
-            <span style={{ flex: 1 }} />
-            <button className="faint mono-sm" style={{ fontSize: 10 }} onClick={() => patchSpec({ seed: spec.seed + 1 })}>surprise me</button>
-          </div>
-
-          <div style={{ flex: 1, overflowY: "auto", padding: 12, minHeight: 0 }}>
-            {/* ---------- sections ---------- */}
-            {tab === "sections" && (
-              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                <div className="faint mono-sm" style={{ lineHeight: 1.5, marginBottom: 4 }}>
-                  {spec.mode === "auto"
-                    ? "auto-composed for this purpose. uncheck to take control."
-                    : "your page, your call. build up from essentials."}
+          <div style={{ display: "flex", flexDirection: "column", gap: 22 }}>
+            {PURPOSE_GROUPS.map((g) => (
+              <div key={g}>
+                <div className="faint mono-sm" style={{ marginBottom: 8, letterSpacing: "0.16em", textTransform: "uppercase", fontSize: 10 }}>{g}</div>
+                <div className="row gap-1" style={{ flexWrap: "wrap" }}>
+                  {PURPOSES.filter((x) => x.group === g).map((x) => (
+                    <button key={x.id} onClick={() => pickPurpose(x.id)} className="btn" style={{ padding: "10px 16px", fontSize: 12, textTransform: "none", flexDirection: "column", alignItems: "flex-start", gap: 2, height: "auto" }}>
+                      {x.label}
+                      <span className="faint" style={{ fontSize: 9, fontWeight: 400 }}>{x.priorities[0]}</span>
+                    </button>
+                  ))}
                 </div>
-                {sectionList.map((s) => (
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+
+      {/* ---- steps 2+3: palette, look, build ---- */}
+      {purpose && (
+        <div className="fade-in" style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+          {/* palette */}
+          <div>
+            <div className="row" style={{ justifyContent: "space-between", marginBottom: 8, flexWrap: "wrap", gap: 8 }}>
+              <span className="label">1 · colours</span>
+              <div className="row gap-1">
+                <button className="btn" style={{ fontSize: 10 }} onClick={() => setPalCycle((c) => c + 1)}>↻ more palettes</button>
+              </div>
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 8 }}>
+              {candidates4.map((p, i) => (
+                <PaletteOption
+                  key={`${p.id}-${palCycle}`}
+                  p={p}
+                  active={activePalette?.id === p.id}
+                  big={i === 0}
+                  onClick={() => setChosenPalette(p)}
+                />
+              ))}
+            </div>
+            {palettes.length > 0 && (
+              <div className="row gap-1" style={{ marginTop: 8, flexWrap: "wrap", alignItems: "center" }}>
+                <span className="faint mono-sm" style={{ fontSize: 9 }}>or from your library:</span>
+                {palettes.slice(0, 5).map((pl) => (
                   <button
-                    key={s.id}
-                    className="ws-chip"
-                    data-on={on(s.id)}
-                    style={{ textAlign: "left", display: "flex", justifyContent: "space-between", alignItems: "center" }}
-                    onClick={() => toggleSection(s.id)}
+                    key={pl.id}
+                    className="row gap-1"
+                    style={{ border: "1px solid var(--line)", padding: 2, cursor: "pointer" }}
+                    title={pl.name}
+                    onClick={() => setChosenPalette(pl)}
                   >
-                    <span>{s.label}</span>
-                    <span style={{ opacity: 0.6 }}>{on(s.id) ? "on" : "off"}</span>
+                    <span style={{ width: 60 }}><PaletteStrip p={pl} height={12} /></span>
+                    <span className="faint mono-sm" style={{ fontSize: 8, paddingRight: 5 }}>{pl.name.slice(0, 12)}</span>
                   </button>
                 ))}
-                <div className="faint mono-sm" style={{ marginTop: 10, lineHeight: 1.5 }}>
-                  every section is real: real copy, real links, mobile menu, working pricing toggle. click anything in the preview.
-                </div>
-              </div>
-            )}
-
-            {/* ---------- palette ---------- */}
-            {tab === "palette" && (
-              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                <div className="row" style={{ justifyContent: "space-between", marginBottom: 4 }}>
-                  <span className="mono-sm dim">{spec.palette.name}</span>
-                  <button className="btn" style={{ fontSize: 10 }} onClick={() => patchSpec({ palette: generatePalette({ prompt: `${p.label} ${p.moodId ?? ""} site design`, seed: palSeed + Math.floor(Math.random() * 9000) }) })}>↻ re-forge</button>
-                </div>
-                {spec.palette.swatches.map((sw) => (
-                  <div key={sw.role} className="row" style={{ gap: 10, justifyContent: "space-between", border: "1px solid var(--line-soft)", padding: "5px 8px" }}>
-                    <span className="mono-sm" style={{ width: 86, textTransform: "lowercase" }}>{sw.role}</span>
-                    <input
-                      type="color"
-                      value={sw.hex}
-                      onChange={(e) => patchPalette(sw.role as Role, e.target.value)}
-                      style={{ width: 26, height: 22, border: "1px solid var(--line)", background: sw.hex, padding: 0, cursor: "pointer" }}
-                      title="click to change"
-                    />
-                    <span className="faint mono-sm">{sw.hex}</span>
-                  </div>
-                ))}
-                {audit && (
-                  <div style={{ marginTop: 8, border: "1px solid var(--line)", padding: 10 }}>
-                    <div className="row" style={{ justifyContent: "space-between", marginBottom: 4 }}>
-                      <span className="label">cedalion</span>
-                      <span className="mono-sm" style={{ color: audit.score >= 82 ? "var(--ok)" : "var(--warn)" }}>{audit.score}/100 {audit.grade}</span>
-                    </div>
-                    <div className="dim mono-sm" style={{ fontSize: 11, lineHeight: 1.55 }}>{audit.headline}</div>
-                    <button className="btn" style={{ fontSize: 10, marginTop: 8 }} onClick={() => setCedalionOpen(true)}>talk it through</button>
-                  </div>
-                )}
-                {palettes.length > 0 && (
-                  <>
-                    <div className="label" style={{ marginTop: 12, marginBottom: 6 }}>from your library</div>
-                    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                      {palettes.slice(0, 6).map((pl) => (
-                        <button
-                          key={pl.id}
-                          className="row gap-1"
-                          style={{ border: "1px solid var(--line-soft)", padding: 3, textAlign: "left" }}
-                          onClick={() => patchSpec({ palette: pl })}
-                          title={pl.name}
-                        >
-                          <div style={{ flex: 1, minWidth: 0 }}>
-                            <PaletteStrip p={pl} height={14} />
-                          </div>
-                          <span className="faint mono-sm" style={{ padding: "0 6px" }}>{pl.name.slice(0, 16)}</span>
-                        </button>
-                      ))}
-                    </div>
-                  </>
-                )}
-              </div>
-            )}
-
-            {/* ---------- style ---------- */}
-            {tab === "style" && (
-              <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-                <div>
-                  <div className="label" style={{ marginBottom: 6 }}>directions</div>
-                  <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                    {dirs.map((d) => (
-                      <button
-                        key={d.id}
-                        className="ws-chip"
-                        data-on={spec.direction.id === d.id && spec.knobs.radius === d.spec.radius && spec.knobs.fontStack === d.spec.fontStack}
-                        style={{ textAlign: "left", lineHeight: 1.4 }}
-                        onClick={() => patchSpec({ direction: d, knobs: { ...d.spec }, seed: spec.seed })}
-                      >
-                        <span style={{ display: "block" }}>{d.name} <span className="faint">· {d.fit} fit</span></span>
-                        <span className="faint" style={{ fontSize: 10 }}>{Object.values(d.atoms).map((a) => a.label).slice(0, 4).join(" · ")}</span>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-                <div>
-                  <div className="label" style={{ marginBottom: 6 }}>font</div>
-                  <div className="row gap-1" style={{ flexWrap: "wrap" }}>
-                    {FONT_OVERRIDES.map((f) => (
-                      <button
-                        key={f.id}
-                        className="ws-chip"
-                        data-on={spec.knobs.fontStack === f.stack}
-                        onClick={() => patchSpec({ knobs: { ...spec.knobs, fontStack: f.stack } })}
-                      >
-                        {f.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-                <div>
-                  <div className="label" style={{ marginBottom: 6 }}>corners</div>
-                  <div className="row gap-1">
-                    {[0, 4, 12, 24].map((r) => (
-                      <button
-                        key={r}
-                        className="ws-chip"
-                        data-on={spec.knobs.radius === r}
-                        onClick={() => patchSpec({ knobs: { ...spec.knobs, radius: r } })}
-                      >
-                        {r}px
-                      </button>
-                    ))}
-                  </div>
-                </div>
-                <div>
-                  <div className="label" style={{ marginBottom: 6 }}>borders</div>
-                  <div className="row gap-1">
-                    {[0, 1, 2, 3].map((b) => (
-                      <button
-                        key={b}
-                        className="ws-chip"
-                        data-on={spec.knobs.borderWidth === b}
-                        onClick={() => patchSpec({ knobs: { ...spec.knobs, borderWidth: b } })}
-                      >
-                        {b === 0 ? "none" : `${b}px`}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-                <div className="faint mono-sm" style={{ lineHeight: 1.5 }}>
-                  changing any of these restyles the live site instantly — it's the site's real css, not a mockup.
-                </div>
               </div>
             )}
           </div>
 
-          <div style={{ borderTop: "1px solid var(--line)", padding: "8px 12px" }}>
-            <div className="row gap-1" style={{ flexWrap: "wrap" }}>
-              <select
-                className="input"
-                style={{ fontSize: 11, padding: "6px 8px", flex: 1, minWidth: 140 }}
-                value={spec.purposeId}
-                onChange={(e) => {
-                  const id = e.target.value;
-                  const np = getPurpose(id);
-                  if (!np) return;
-                  const sections = spec.mode === "auto" ? defaultSections(np) : spec.sections;
-                  patchSpec({ purposeId: id, sections });
-                  setPurpose(id);
-                }}
-              >
-                {PURPOSES.map((x) => (
-                  <option key={x.id} value={x.id}>{x.label}</option>
-                ))}
-              </select>
-              <button className="btn" style={{ fontSize: 10 }} onClick={() => go("akmon")}>forge in akmon</button>
+          {/* look */}
+          <div>
+            <div className="row" style={{ justifyContent: "space-between", marginBottom: 8 }}>
+              <span className="label">2 · look</span>
+              <button className="btn" style={{ fontSize: 10 }} onClick={() => setDirCycle((c) => c + 1)}>↻ more looks</button>
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: 8 }}>
+              {looks.map((d) => (
+                <LookCard
+                  key={`${d.id}-${dirCycle}`}
+                  d={d}
+                  palette={activePalette}
+                  active={activeLook?.id === d.id}
+                  onClick={() => setChosenDir(d)}
+                />
+              ))}
             </div>
           </div>
+
+          {/* build CTA */}
+          <div className="panel" style={{ padding: 18, display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap", borderWidth: 2 }}>
+            <div style={{ flex: "1 1 300px", minWidth: 220 }}>
+              <div style={{ fontSize: 14, marginBottom: 2 }}>
+                {audit ? <>palette scores <b style={{ color: gradeColor(audit.score) }}>{audit.score}/100</b> — ready</> : "everything's ready"}
+              </div>
+              <div className="faint mono-sm">a real site with working nav, pricing & copy appears on the right. you can edit everything after.</div>
+            </div>
+            <div className="row gap-1" style={{ flexWrap: "wrap" }}>
+              <button className="btn" style={{ padding: "11px 18px", fontSize: 11 }} onClick={() => setCedalionOpen(true)}>ask cedalion</button>
+              <button className="btn" style={{ padding: "11px 18px", fontSize: 11 }} onClick={() => buildSite(true)}>empty start</button>
+              <button className="btn btn-primary" style={{ padding: "14px 34px", fontSize: 14 }} onClick={() => buildSite(false)}>
+                build my site →
+              </button>
+            </div>
+          </div>
+
+          <button className="faint mono-sm" style={{ alignSelf: "flex-start", fontSize: 10 }} onClick={() => pickPurpose(null)}>← different purpose</button>
+        </div>
+      )}
+    </div>
+  );
+
+  function gradeColor(score: number) {
+    return score >= 82 ? "var(--ok)" : score >= 70 ? "var(--warn)" : "var(--bad)";
+  }
+}
+
+/* ---------- one palette option ---------- */
+function PaletteOption({ p, active, onClick, big }: { p: Palette; active: boolean; onClick: () => void; big?: boolean }) {
+  const audit = auditPalette(p);
+  return (
+    <button
+      onClick={onClick}
+      className="row"
+      style={{
+        border: active ? "2px solid var(--accent)" : "1px solid var(--line)",
+        background: active ? "var(--raise)" : "var(--surface)",
+        padding: 4, gap: 8, textAlign: "left", alignItems: "stretch", height: big ? 64 : 48,
+      }}
+    >
+      <div style={{ width: big ? 26 : 18, display: "flex", flexDirection: "column" }}>
+        {p.swatches.map((s) => (
+          <div key={s.role} style={{ flex: 1, background: s.hex }} />
+        ))}
+      </div>
+      <div style={{ display: "flex", flexDirection: "column", justifyContent: "center", minWidth: 0 }}>
+        <div style={{ fontSize: 11, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{p.name}</div>
+        <div className="faint mono-sm" style={{ fontSize: 9 }}>
+          {audit.score}/100 {audit.grade} · {p.mode}
         </div>
       </div>
-    </div>
+      {active && <span className="faint" style={{ marginLeft: "auto", alignSelf: "center", fontSize: 10 }}>✓</span>}
+    </button>
+  );
+}
+
+/* ---------- one look card ---------- */
+function LookCard({ d, palette, active, onClick }: { d: Direction; palette: Palette | null; active: boolean; onClick: () => void }) {
+  const hex = (r: string) => palette?.swatches.find((s) => s.role === r)?.hex ?? "#888";
+  const r = d.spec.radius;
+  const lineCol = hex("border");
+  return (
+    <button
+      onClick={onClick}
+      style={{
+        border: active ? "2px solid var(--accent)" : "1px solid var(--line)",
+        background: active ? "var(--raise)" : "var(--surface)",
+        padding: 10, textAlign: "left", display: "flex", flexDirection: "column", gap: 8, height: "100%",
+      }}
+    >
+      {/* mini composition made from the palette + the direction's own tokens */}
+      <div style={{ background: hex("background"), border: `1px solid ${lineCol}`, borderRadius: Math.max(2, Math.round(r / 3)), padding: 8, display: "flex", flexDirection: "column", gap: 5, minHeight: 84 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+          <span style={{ width: 8, height: 8, borderRadius: 2, background: hex("accent") }} />
+          <span style={{ width: 30, height: 3, background: hex("text"), opacity: 0.7 }} />
+          <span style={{ marginLeft: "auto", width: 16, height: 6, borderRadius: 2, background: hex("primary") }} />
+        </div>
+        <span style={{ width: "80%", height: 8, background: hex("text"), opacity: 0.85, borderRadius: 1, marginTop: 3 }} />
+        <span style={{ width: "60%", height: 4, background: hex("muted"), borderRadius: 1 }} />
+        <div style={{ display: "flex", gap: 3, marginTop: "auto" }}>
+          {[hex("primary"), hex("secondary"), hex("accent")].map((c) => (
+            <span key={c} style={{ width: 14, height: 10, borderRadius: 2, background: c, flex: 1 }} />
+          ))}
+        </div>
+      </div>
+      <div className="row" style={{ justifyContent: "space-between", gap: 6 }}>
+        <span style={{ fontSize: 11 }}>{d.name}</span>
+        <span className="mono-sm" style={{ fontSize: 9, color: d.fit >= 78 ? "var(--ok)" : d.fit >= 55 ? "var(--warn)" : "var(--bad)" }}>{d.fit} fit</span>
+      </div>
+      <div className="faint mono-sm" style={{ fontSize: 8, lineHeight: 1.4 }}>
+        {Object.values(d.atoms).slice(0, 3).map((a) => a.label).join(" · ")}
+      </div>
+    </button>
   );
 }

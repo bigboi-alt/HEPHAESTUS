@@ -401,22 +401,24 @@ export function generatePalette(opts: GenerateOptions = {}): Palette {
   const muted = oklchToHex(mk(mutedL, Math.min(neutralTint * 2, 0.05), neutralHue));
 
   let primary = oklchToHex(mk(primaryL, baseChroma, baseHue));
-  let secondary = oklchToHex(
-    mk(
-      primaryL + between(rng, -0.06, 0.06),
-      (secondAnchor?.c ?? baseChroma * between(rng, 0.6, 0.9)) * (parsed.wantsMuted ? 0.6 : 1),
-      secondHue
-    )
-  );
-  // An explicitly named accent keeps its own chroma — if you asked for burnt
-  // orange, you get burnt orange, not a tinted echo of the primary.
   let accent = oklchToHex(
     mk(
       dark ? between(rng, 0.7, 0.84) : between(rng, 0.55, 0.68),
       accentAnchor
         ? Math.min(0.34, Math.max(accentAnchor.c, 0.06) * (parsed.wantsVivid ? 1.3 : 1))
-        : Math.min(0.34, baseChroma * between(rng, 1.15, 1.6)),
+        : Math.max(
+            // a palette without a loud accent reads flat — keep one voice bright
+            parsed.wantsMuted || scheme === "monochrome" ? baseChroma * 1.1 : 0.15,
+            Math.min(0.34, baseChroma * between(rng, 1.15, 1.6))
+          ),
       scheme === "monochrome" && !accentAnchor ? baseHue : accentHue
+    )
+  );
+  let secondary = oklchToHex(
+    mk(
+      primaryL + between(rng, -0.06, 0.06),
+      (secondAnchor?.c ?? Math.max(0.09, baseChroma * between(rng, 0.6, 0.9))) * (parsed.wantsMuted ? 0.6 : 1),
+      secondHue
     )
   );
 
@@ -433,6 +435,13 @@ export function generatePalette(opts: GenerateOptions = {}): Palette {
     const s = hexToOklch(secondary);
     secondary = oklchToHex(mk(s.l + (dark ? -0.12 : 0.12), s.c, (s.h + 28) % 360));
   }
+  // ...and accent must not collapse into secondary either
+  if (deltaE(secondary, accent) < 0.06) {
+    const a = hexToOklch(accent);
+    accent = accentAnchor
+      ? oklchToHex(mk(dark ? Math.min(0.9, a.l + 0.1) : Math.max(0.32, a.l - 0.1), Math.min(0.34, a.c * 1.15), a.h))
+      : oklchToHex(mk(a.l, Math.min(0.34, a.c * 1.2), (a.h + 36) % 360));
+  }
   if (deltaE(accent, primary) < 0.09 && scheme !== "monochrome") {
     const a = hexToOklch(accent);
     accent = accentAnchor
@@ -441,6 +450,11 @@ export function generatePalette(opts: GenerateOptions = {}): Palette {
       ? oklchToHex(mk(dark ? Math.min(0.9, a.l + 0.14) : Math.max(0.3, a.l - 0.14), Math.min(0.34, a.c * 1.2), a.h))
       : oklchToHex(mk(a.l, Math.min(0.34, a.c * 1.3), (a.h + 42) % 360));
   }
+  // the separation moves above can push a colour back below its ratio —
+  // re-run the repair pass so every guarantee still holds
+  primary = fixContrast(primary, background, 3) ?? primary;
+  secondary = fixContrast(secondary, background, 3) ?? secondary;
+  accent = fixContrast(accent, background, 3) ?? accent;
 
   const built: Record<Role, string> = {
     background,
