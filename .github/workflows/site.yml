@@ -13,6 +13,11 @@
 #
 #   3. Re-run this workflow manually ("Run workflow") or push a change
 #      under site/.
+#
+# NOTE: GitHub refuses `secrets` inside `if:` conditions at BOTH job and
+# step level ("Unrecognized named-value: 'secrets'"). So there is no `if:`
+# here — the secrets are copied into plain env vars (which IS allowed) and
+# a shell check decides whether to deploy or to warn + skip.
 
 name: site
 
@@ -28,18 +33,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # GitHub does not allow `secrets` in a job-level `if:` — only in
-      # step-level expressions. So the guard lives on the deploy step.
-      - name: cloudflare secrets not configured yet
-        if: ${{ secrets.CLOUDFLARE_API_TOKEN == '' || secrets.CLOUDFLARE_ACCOUNT_ID == '' }}
-        run: echo "::warning::site deploy skipped — add CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID repo secrets (see README, 'Secrets — what lives where') and re-run this workflow"
-
-      - name: deploy to cloudflare pages
-        if: ${{ secrets.CLOUDFLARE_API_TOKEN != '' && secrets.CLOUDFLARE_ACCOUNT_ID != '' }}
+      - name: deploy to cloudflare pages (or warn and skip)
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: |
+          if [ -z "$CLOUDFLARE_API_TOKEN" ] || [ -z "$CLOUDFLARE_ACCOUNT_ID" ]; then
+            echo "::warning::site deploy skipped - add CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID under repo Settings > Secrets and variables > Actions, then re-run this workflow"
+            exit 0
+          fi
           npx --yes wrangler@latest pages deploy site \
             --project-name hephaestus-downloads \
             --branch main
