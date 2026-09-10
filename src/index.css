@@ -201,3 +201,21 @@ a { color: inherit; }
 @keyframes cvSlide { from { opacity: 0; transform: translateX(46px); } to { opacity: 1; transform: none; } }
 .cv-pg.cv-scale { animation: cvScale 400ms cubic-bezier(.2,.75,.25,1); }
 @keyframes cvScale { from { opacity: 0; transform: scale(.985); } to { opacity: 1; transform: none; } }
+
+/* ---------- studio v3 ---------- */
+.cv-blk:hover { outline: 1px dashed color-mix(in srgb, var(--accent) 55%, transparent); outline-offset: 1px; }
+.cv-blk[data-kind="nav"]:hover, .cv-blk[data-kind="footer"]:hover { outline: none; }
+.cv-pg.cv-fade { animation: cvFade 320ms ease; }
+.cv-pg.cv-slide { animation: cvSlide 420ms cubic-bezier(.2,.75,.25,1); }
+.cv-pg.cv-scale { animation: cvScale 380ms cubic-bezier(.2,.75,.25,1); }
+
+/* ---------- emblem ---------- */
+/* Transparent mark, two inks: marble for dark themes, brown for the light ones.
+   No tile, no border, no black plate behind the face. */
+.emblem { display: block; position: relative; line-height: 0; }
+.emblem img { display: block; width: 100%; height: 100%; object-fit: contain; user-select: none; }
+.emblem .emblem-ink { display: none; }
+[data-theme="paper"] .emblem .emblem-marble,
+[data-theme="claude"] .emblem .emblem-marble { display: none; }
+[data-theme="paper"] .emblem .emblem-ink,
+[data-theme="claude"] .emblem .emblem-ink { display: block; }

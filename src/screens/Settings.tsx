@@ -4,6 +4,8 @@ import { DEFAULT_SETTINGS, download, type ThemeId } from "../lib/storage";
 import { TRENDS, TRENDS_UPDATED, TRENDS_VERSION } from "../data/trends";
 import { SPACE_SIZE } from "../engine/akmon";
 
+import Emblem from "../components/Emblem";
+
 type Section = "general" | "profile" | "appearance" | "data" | "about";
 
 const SECTIONS: { id: Section; label: string }[] = [
@@ -206,7 +208,14 @@ export default function Settings() {
 
         {section === "about" && (
           <Panel title="About HEPHAESTUS.">
-            <Meta k="version" v="0.1.0 — Akmon milestone" />
+            <div className="row gap-2" style={{ margin: "2px 0 14px", alignItems: "center" }}>
+              <Emblem size={78} alt="Hephaestus emblem" />
+              <div>
+                <div style={{ fontSize: 13, letterSpacing: ".2em", fontWeight: 500 }}>HEPHAESTUS</div>
+                <div className="faint mono-sm" style={{ fontSize: 9, marginTop: 3 }}>design forge · the bust, on transparency</div>
+              </div>
+            </div>
+            <Meta k="version" v="0.3.0 — the forge rework" />
             <Meta k="current release" v="palette engine · trend library · direction engine · Cedalion" />
             <Meta k="next" v="Akmon canvas · live composition scoring" />
             <Meta k="trend library" v={`v${TRENDS_VERSION} · ${TRENDS_UPDATED} · ${TRENDS.length} entries`} />

@@ -156,7 +156,23 @@ then `npx tauri icon src-tauri/icons/app-icon.png`).
 | Workflow | When | What it does |
 |---|---|---|
 | `release.yml` | every push to `main`/`master` | builds Windows (x64), macOS (aarch64 + x86_64), Linux (deb + AppImage) and uploads everything to a **draft** GitHub Release tagged `v<version>` |
-| `site.yml` | push touching `site/`, or manual | deploys `site/` (the downloads page) to Cloudflare Pages — only runs once the `CLOUDFLARE_API_TOKEN` / `CLOUDFLARE_ACCOUNT_ID` secrets exist |
+| `site.yml` | push touching `site/`, or manual | deploys `site/` (the landing + downloads site) to Cloudflare Pages — only runs once the `CLOUDFLARE_API_TOKEN` / `CLOUDFLARE_ACCOUNT_ID` secrets exist |
+
+**The site** lives in `site/` — one static page, no build step, wearing the emblem on a
+coffee-and-cream palette taken off the mark itself. Connect it in one command:
+
+```bash
+node tools/connect.mjs <your-github-username>   # writes site/config.js + the release links
+```
+
+It fills its download buttons from the newest published GitHub release on every page load,
+so **publishing a release updates the site without a redeploy**. `node tools/site-preview.mjs`
+builds a single-file offline copy for viewing where network calls are blocked. Full notes,
+including the two ways to wire up Cloudflare Pages: [`site/README.md`](site/README.md).
+
+The emblem is transparent-backed in two inks — light marble for dark themes, brown for light
+ones — chosen by CSS from `[data-theme]`, so it never sits on a black plate and never
+disappears on a pale background.
 
 **Version bumps** — the version lives in three places; this keeps them in sync:
 
@@ -206,12 +222,13 @@ You can tell which build a draft holds by its run time: a run that finishes in ~
    - Account resources: **Include → your account**
    - Create → **copy the token now** (Cloudflare shows it only once)
 2. **Account ID**: dash.cloudflare.com home page → right column → copy the long hex ID.
-3. Optional but recommended: Workers & Pages → **Create → Pages → Upload assets** → project name `hephaestus-downloads` (first deploy also auto-creates it, this just makes it visible first).
+3. Nothing to create in Cloudflare. The workflow makes the project itself — `pages project create hephaestus --production-branch main`, tolerating "already exists" after the first run — so the site lands on **https://hephaestus.pages.dev**, not a branch alias. If you'd rather do it by eye instead: Workers & Pages → Create → Pages → Upload assets → project name `hephaestus`, then delete that test upload and let the workflow take over.
 4. github.com repo → **Settings → Secrets and variables → Actions → New repository secret**, twice:
    - name `CLOUDFLARE_API_TOKEN`, value = token from step 1
    - name `CLOUDFLARE_ACCOUNT_ID`, value = ID from step 2
    Names must match **exactly** — a typo is a silent skip, not an error.
-5. Run the **site** workflow manually once (repo → Actions → site → Run workflow), then open `https://hephaestus-downloads.pages.dev`. Buttons stay disabled until the repo is public — GitHub refuses anonymous reads of private releases, which is correct behaviour.
+5. Run the **site** workflow manually once (repo → Actions → site → Run workflow), then open **https://hephaestus.pages.dev**. Buttons stay disabled until the repo is public — GitHub refuses anonymous reads of private releases, which is correct behaviour.
+6. Point the site at your repo so the buttons can fill themselves: `node tools/connect.mjs <your-github-username>`, commit, push. Without this the page says it isn't connected yet (deliberate — no broken buttons, no guessing).
 
 Actions billing note: builds on **public** repos are unlimited/free; on **private** repos they burn the 2,000 free minutes/month. Since a public download site is the endgame anyway, flip the repo public when you start iterating releases.
 

@@ -17,7 +17,8 @@ import { contrastRatio, fixContrast } from "./color";
 
 export type CvKind =
   | "nav" | "heading" | "text" | "button" | "image"
-  | "card" | "stat" | "chip" | "spacer" | "footer";
+  | "card" | "stat" | "chip" | "spacer" | "footer"
+  | "divider" | "quote" | "list";
 
 export type NavStyle = "minimal" | "centered" | "pill" | "glass" | "bold";
 export type CvTransition = "none" | "fade" | "slide" | "scale";
@@ -44,13 +45,24 @@ export type CvPage = {
   name: string;
   blocks: CvBlock[];
   bg?: string;
+  /** explicit page length (px) — the canvas can be extended past its content */
+  minH?: number;
 };
 
 export type CvDoc = {
   pages: CvPage[];
   transition: CvTransition;
   brand: string;
+  /** single = one long scrollable page · multi = separate pages */
+  mode?: "single" | "multi";
+  /** pages parked while in single-page mode (restored on switch back) */
+  parked?: CvPage[];
 };
+
+/** pages that are live for the current mode */
+export function activePages(doc: CvDoc): CvPage[] {
+  return doc.mode === "single" ? [doc.pages[0]] : doc.pages;
+}
 
 export const FRAME_W = 1200;
 
@@ -81,6 +93,9 @@ export function emptyBlock(kind: CvKind, x: number, y: number): CvBlock {
     case "stat": { b.w = 220; b.h = 120; b.text = "4.9/5"; b.sub = "average rating"; b.size = 42; return b; }
     case "chip": { b.w = 150; b.h = 44; b.text = "new · 2026"; b.size = 13; return b; }
     case "spacer": { b.w = FRAME_W; b.h = 36; return b; }
+    case "divider": { b.w = FRAME_W - 120; b.h = 6; b.variant = "soft"; b.x = 60; b.y = 60; return b; }
+    case "quote": { b.w = 760; b.h = 150; b.text = "Design is intelligence made visible."; b.sub = "— a maker who ships"; b.size = 30; return b; }
+    case "list": { b.w = 640; b.h = 140; b.text = "One clear benefit\nA second real outcome\nA third thing worth saying"; b.size = 18; return b; }
     case "footer": { b.w = FRAME_W; b.h = 90; b.text = "© hephaestus — forged, not generated."; b.size = 13; return b; }
   }
   return b;
@@ -111,12 +126,13 @@ export function roleHex(p: Palette, role: string, override?: string): string {
 export const KIND_FG: Record<CvKind, string> = {
   nav: "text", heading: "text", text: "muted", button: "accent",
   image: "accent", card: "text", stat: "accent", chip: "text",
-  spacer: "text", footer: "muted",
+  spacer: "text", footer: "muted", divider: "border", quote: "text", list: "text",
 };
 export const KIND_BG: Record<CvKind, string> = {
   nav: "surface", heading: "background", text: "background", button: "accent",
   image: "primary", card: "surface", stat: "surface", chip: "accent",
-  spacer: "background", footer: "surface",
+  spacer: "background", footer: "surface", divider: "background",
+  quote: "background", list: "background",
 };
 
 /** what the block looks like: resolved hexes */
@@ -145,7 +161,7 @@ export function readableOn(bg: string, preferred: string): string {
 export function pageHeight(pg: CvPage): number {
   let max = 0;
   for (const b of pg.blocks) max = Math.max(max, b.y + b.h);
-  return Math.max(720, max + 120);
+  return Math.max(pg.minH ?? 720, max + 120);
 }
 
 export function blockRect(b: CvBlock) {
@@ -156,7 +172,7 @@ export function overlaps(a: CvBlock, b: CvBlock): boolean {
   const r1 = blockRect(a), r2 = blockRect(b);
   // nav & footer are full-width bands — ignore with the blocks they frame
   if (a.kind === "nav" || a.kind === "footer" || b.kind === "nav" || b.kind === "footer") return false;
-  if (a.kind === "spacer" || b.kind === "spacer") return false;
+  if (a.kind === "spacer" || b.kind === "spacer" || a.kind === "divider" || b.kind === "divider") return false;
   return r1.x < r2.right && r2.x < r1.right && r1.y < r2.bottom && r2.y < r1.bottom;
 }
 
@@ -167,7 +183,7 @@ export type CvIssue = { sev: "critical" | "warning" | "note"; what: string; fix?
 export function auditCanvas(pg: CvPage, p: Palette): { score: number; issues: CvIssue[] } {
   const issues: CvIssue[] = [];
   let score = 100;
-  const cols: CvBlock[] = pg.blocks.filter((b) => !["spacer", "nav", "footer"].includes(b.kind));
+  const cols: CvBlock[] = pg.blocks.filter((b) => !["spacer", "nav", "footer", "divider"].includes(b.kind));
 
   // text contrast vs the colour they sit on
   for (const b of cols) {
@@ -240,7 +256,7 @@ export function merkhet(pg: CvPage, p: Palette, mode: MerkhetMode): { page: CvPa
     const col = FRAME_W / 12;
     let moved = 0;
     for (const b of blocks) {
-      if (b.kind === "nav" || b.kind === "footer" || b.kind === "spacer") continue;
+      if (b.kind === "nav" || b.kind === "footer" || b.kind === "spacer" || b.kind === "divider") continue;
       const nx = Math.round(b.x / col) * col;
       const nw = Math.max(col, Math.round(b.w / col) * col);
       const ny = Math.round(b.y / 8) * 8;
@@ -249,7 +265,7 @@ export function merkhet(pg: CvPage, p: Palette, mode: MerkhetMode): { page: CvPa
     // resolve overlaps by pushing the lower block down
     for (let i = 0; i < blocks.length; i++)
       for (let j = 0; j < blocks.length; j++) {
-        if (i === j || blocks[i].kind === "spacer" || blocks[j].kind === "spacer") continue;
+        if (i === j || ["spacer", "divider"].includes(blocks[i].kind) || ["spacer", "divider"].includes(blocks[j].kind)) continue;
         if (overlaps(blocks[i], blocks[j])) {
           const a = blocks[i], b2 = blocks[j];
           // push the lower block below, then land it on the 8px rhythm
@@ -265,7 +281,7 @@ export function merkhet(pg: CvPage, p: Palette, mode: MerkhetMode): { page: CvPa
   if (mode === "rhythm") {
     let moves = 0;
     const row: Record<string, CvBlock[]> = {};
-    for (const b of blocks) if (b.kind !== "spacer") {
+    for (const b of blocks) if (b.kind !== "spacer" && b.kind !== "divider") {
       const key = String(Math.round(b.y / 32));
       (row[key] ??= []).push(b);
     }
@@ -291,91 +307,132 @@ export function merkhet(pg: CvPage, p: Palette, mode: MerkhetMode): { page: CvPa
 
 /* ---------------- static export ---------------- */
 
+/** WYSIWYG export: every block sits exactly where it does on the canvas. */
 export function canvasToHtml(doc: CvDoc, p: Palette): string {
-  const bg = roleHex(p, "background");
+  const bg0 = roleHex(p, "background");
   const surf = roleHex(p, "surface");
   const tx = roleHex(p, "text");
   const mut = roleHex(p, "muted");
   const line = roleHex(p, "border");
   const acc = roleHex(p, "accent");
+  const prim = roleHex(p, "primary");
+  const sec = roleHex(p, "secondary");
   const bodyFont = "'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif";
-
-  const esc = (s: string) => (s || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
-
-  const styleFor = (b: CvBlock) => {
-    const s: string[] = [
-      `left:${b.x}px`, `top:${b.y}px`, `width:${b.w}px`, `height:${b.h}px`,
-      b.radius !== undefined ? `border-radius:${b.radius}px` : "",
-    ];
-    return s.filter(Boolean).join(";");
-  };
+  const pages = activePages(doc);
+  const esc = (x: unknown) => String(x ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 
   const kindHtml = (b: CvBlock): string => {
-    const fg = b.fg ?? (b.kind === "button" || b.kind === "chip" ? (contrastRatio(tx, acc) >= 4.5 ? tx : "#fff") : b.kind === "text" ? mut : tx);
+    const fg = b.fg ?? (b.kind === "button" || b.kind === "chip" ? (contrastRatio(tx, acc) >= 4.5 ? tx : "#ffffff") : b.kind === "text" ? mut : tx);
     switch (b.kind) {
       case "heading":
-        return `<div style="font-weight:${b.weight ?? 800};font-size:${b.size ?? 52}px;line-height:1.08;letter-spacing:-.02em;color:${fg};text-align:${b.align ?? "left"}">${esc(b.text ?? "")}</div>`;
+        return `<div style="font-weight:${b.weight ?? 800};font-size:${b.size ?? 52}px;line-height:1.08;letter-spacing:-.02em;color:${fg};text-align:${b.align ?? "left"}">${esc(b.text)}</div>`;
       case "text":
-        return `<div style="font-size:${b.size ?? 18}px;line-height:1.6;color:${fg};text-align:${b.align ?? "left"}">${esc(b.text ?? "")}</div>`;
+        return `<div style="font-size:${b.size ?? 18}px;line-height:1.65;color:${fg};text-align:${b.align ?? "left"}">${esc(b.text)}</div>`;
+      case "quote":
+        return `<div style="padding:6px 0 6px 34px;border-left:3px solid ${acc}"><div style="font-size:${b.size ?? 28}px;line-height:1.4;font-weight:600;letter-spacing:-.01em;color:${fg}">${esc(b.text)}</div><div style="margin-top:12px;color:${mut};font-size:14px">${esc(b.sub)}</div></div>`;
+      case "list": {
+        const items = String(b.text ?? "").split("\n").map((t) => t.replace(/^[•▪◦–—-]\s*/, "")).filter(Boolean);
+        return `<ul class="cv-list" style="font-size:${b.size ?? 18}px;line-height:1.9;color:${fg};list-style:none;padding:0;margin:0;text-align:${b.align ?? "left"}">${items.map((t) => `<li style="padding-left:26px;position:relative">${esc(t)}</li>`).join("")}</ul>`;
+      }
       case "button": {
-        const solid = b.variant !== "outline" && b.variant !== "ghost";
+        const solid = (b.variant ?? "solid") !== "outline" && (b.variant ?? "solid") !== "ghost";
         const bb = solid ? (b.bg ?? acc) : "transparent";
-        const bfg = solid ? fg : tx;
-        return `<a href="${b.link ? "#pg-" + esc(b.link) : "#"}" data-page="${esc(b.link ?? "")}" style="display:inline-flex;align-items:center;justify-content:center;height:100%;width:100%;background:${bb};color:${bfg};border:${b.variant === "outline" ? "2px solid " + (b.line ?? tx) : "2px solid transparent"};border-radius:${b.radius ?? 10}px;font-weight:${b.weight ?? 700};font-size:${b.size ?? 17}px;text-decoration:none">${esc(b.text ?? "")}</a>`;
+        const bfg = solid ? (contrastRatio(tx, bb) >= 4.5 ? tx : "#ffffff") : fg;
+        const align = b.align === "center" ? "justify-content:center" : b.align === "right" ? "justify-content:flex-end" : "justify-content:flex-start";
+        return `<div style="display:flex;align-items:center;height:100%;width:100%;${align}"><a href="${b.link ? "#pg-" + esc(b.link) : "#"}" data-page="${esc(b.link ?? "")}" style="display:inline-flex;align-items:center;justify-content:center;padding:0 24px;height:100%;background:${bb};color:${bfg};border:${(b.variant ?? "solid") === "outline" ? "2px solid " + (b.line ?? tx) : "2px solid transparent"};border-radius:${b.radius ?? 10}px;font-weight:${b.weight ?? 700};font-size:${b.size ?? 17}px;text-decoration:none;white-space:nowrap;cursor:pointer">${esc(b.text)}</a></div>`;
       }
       case "image":
-        return `<div style="width:100%;height:100%;border-radius:${b.radius ?? 14}px;background:linear-gradient(135deg, ${roleHex(p, "primary")} 0%, ${roleHex(p, "secondary")} 130%);display:flex;align-items:center;justify-content:center;color:rgba(255,255,255,.85);font-size:26px">▣</div>`;
+        return `<div style="width:100%;height:100%;border-radius:${b.radius ?? 14}px;background:linear-gradient(135deg, ${prim} 0%, ${sec} 130%);display:flex;align-items:center;justify-content:center;color:rgba(255,255,255,.85);font-size:26px">▣</div>`;
       case "card":
-        return `<div style="height:100%;background:${surf};border:1px solid ${line};border-radius:${b.radius ?? 16}px;padding:22px;display:flex;flex-direction:column;gap:10px"><div style="font-weight:700;font-size:${(b.size ?? 19) + 3}px;color:${tx}">${esc(b.text ?? "")}</div><div style="font-size:${b.size ?? 15}px;line-height:1.55;color:${mut}">${esc(b.sub ?? "")}</div></div>`;
+        return `<div style="height:100%;background:${b.bg ?? surf};border:1px solid ${b.line ?? line};border-radius:${b.radius ?? 16}px;padding:24px;display:flex;flex-direction:column;gap:10px"><div style="font-weight:700;font-size:${(b.size ?? 17) + 4}px;color:${b.fg ?? tx}">${esc(b.text)}</div><div style="font-size:${b.size ?? 15}px;line-height:1.6;color:${mut}">${esc(b.sub)}</div></div>`;
       case "stat":
-        return `<div style="height:100%;background:${surf};border:1px solid ${line};border-radius:${b.radius ?? 14}px;padding:16px 18px;display:flex;flex-direction:column;justify-content:center;gap:4px"><div style="font-size:${b.size ?? 40}px;font-weight:800;letter-spacing:-.02em;color:${b.fg ?? acc}">${esc(b.text ?? "")}</div><div style="color:${mut};font-size:14px">${esc(b.sub ?? "")}</div></div>`;
+        return `<div style="height:100%;background:${b.bg ?? surf};border:1px solid ${b.line ?? line};border-radius:${b.radius ?? 14}px;padding:16px 20px;display:flex;flex-direction:column;justify-content:center;gap:4px"><div style="font-size:${b.size ?? 40}px;font-weight:800;letter-spacing:-.02em;color:${b.fg ?? acc}">${esc(b.text)}</div><div style="color:${mut};font-size:14px">${esc(b.sub)}</div></div>`;
       case "chip":
-        return `<span style="display:inline-flex;align-items:center;height:100%;padding:0 16px;background:${b.bg ?? acc};color:${fg};font-size:${b.size ?? 13}px;font-weight:700;border-radius:${b.radius ?? 999}px">${esc(b.text ?? "")}</span>`;
+        return `<span style="display:inline-flex;align-items:center;height:100%;padding:0 18px;background:${b.bg ?? acc};color:${fg};font-size:${b.size ?? 13}px;font-weight:700;border-radius:999px;white-space:nowrap">${esc(b.text)}</span>`;
+      case "divider": {
+        const v = (b.variant as string) ?? "soft";
+        const style =
+          v === "gradient" ? `background:linear-gradient(90deg, ${prim}, ${acc}, ${sec})`
+          : v === "solid" ? `background:${line}`
+          : `background:linear-gradient(90deg, transparent, ${line} 18%, ${line} 82%, transparent)`;
+        return `<div style="width:100%;height:100%;border-radius:999px;${style}"></div>`;
+      }
       case "spacer": return "";
       case "footer":
-        return `<div style="display:flex;align-items:center;justify-content:center;height:100%;color:${mut};font-size:${b.size ?? 13}px;border-top:1px solid ${line}">${esc(b.text ?? "")}</div>`;
+        return `<div style="display:flex;align-items:center;justify-content:center;height:100%;color:${mut};font-size:${b.size ?? 13}px;border-top:1px solid ${line}">${esc(b.text)}</div>`;
       default: return "";
     }
   };
 
   const navHtml = (b: CvBlock, others: CvPage[]) => {
     const variant = (b.variant as NavStyle) ?? "minimal";
-    const style: Record<NavStyle, string> = {
-      minimal: "",
-      centered: "justify-content:center",
-      pill: "justify-content:space-between;margin:14px 28px;border-radius:999px;border:1px solid " + line + ";background:" + surf,
-      glass: "justify-content:space-between;backdrop-filter:blur(12px);background:rgba(255,255,255,.06)",
-      bold: "justify-content:space-between;border-bottom:3px solid " + acc,
-    };
+    const brand = `<span style="font-weight:800;font-size:19px;letter-spacing:-.01em;color:${tx}">${esc(doc.brand)}</span>`;
     const links = others.map((p2) => `<a href="#pg-${esc(p2.id)}" data-page="${esc(p2.id)}" style="color:${mut};text-decoration:none;font-weight:600;font-size:15px">${esc(p2.name)}</a>`).join("");
-    return `<div style="display:flex;align-items:center;gap:26px;height:100%;padding:0 30px;${style[variant] ?? ""}"><span style="font-weight:800;font-size:19px;letter-spacing:-.01em">${esc(doc.brand)}</span><div style="display:flex;gap:26px">${links}</div></div>`;
+    const cta = `<a href="#${doc.pages.length > 1 && others.length ? "pg-" + esc(others[0].id) : ""}" data-page="${others.length ? esc(others[0].id) : ""}" style="background:${acc};color:${contrastRatio(tx, acc) >= 4.5 ? tx : "#ffffff"};font-size:13px;font-weight:700;padding:9px 18px;border-radius:8px;text-decoration:none">get started</a>`;
+    const right = `<div style="display:flex;gap:24px;align-items:center">${links}${cta}</div>`;
+    if (variant === "centered")
+      return `<div style="height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px">${brand}<div style="display:flex;gap:24px;align-items:center">${others.map((p2) => `<a href="#pg-${esc(p2.id)}" data-page="${esc(p2.id)}" style="color:${mut};text-decoration:none;font-weight:500;font-size:14px">${esc(p2.name)}</a>`).join("")}</div></div>`;
+    if (variant === "pill")
+      return `<div style="height:100%;display:flex;align-items:center;justify-content:center"><div style="display:flex;align-items:center;gap:28px;background:${surf};border:1px solid ${line};border-radius:999px;padding:0 26px;height:56px;box-shadow:0 12px 30px -18px rgba(0,0,0,.35)">${brand}<div style="display:flex;gap:22px">${others.map((p2) => `<a href="#pg-${esc(p2.id)}" data-page="${esc(p2.id)}" style="color:${mut};text-decoration:none;font-weight:500;font-size:14px">${esc(p2.name)}</a>`).join("")}</div></div></div>`;
+    const frame: Record<string, string> = {
+      minimal: "justify-content:space-between",
+      glass: "justify-content:space-between;backdrop-filter:blur(12px);background:rgba(255,255,255,.05);border-bottom:1px solid " + line,
+      bold: "justify-content:space-between;border-bottom:3px solid " + acc + ";text-transform:uppercase",
+    };
+    return `<div style="display:flex;align-items:center;height:100%;padding:0 30px;${frame[variant] ?? frame.minimal}">${brand}${right}</div>`;
   };
 
-  const pages = doc.pages.map((pg, i) => {
-    const nav = pg.blocks.filter((b) => b.kind === "nav");
-    const others = doc.pages.filter((p2) => p2.id !== pg.id);
-    const rest = pg.blocks.filter((b) => b.kind !== "nav");
-    const content = rest.map((b) => b.kind === "nav" ? "" : `<div class="blk" style="${styleFor(b)}">${kindHtml(b)}</div>`).join("");
-    const navs = nav.map((b) => `<div style="position:relative;z-index:5;height:${b.h}px;${b.variant === "pill" ? "padding:0 28px" : ""}">${navHtml(b, others)}</div>`).join("");
-    return `<section class="pg" id="pg-${esc(pg.id)}" style="${i === 0 ? "" : "display:none"};min-height:100vh;background:${pg.bg ?? bg};position:relative;color:${tx}">${navs}<div style="position:absolute;left:0;top:${nav.length ? nav[0].h : 0}px;right:0;bottom:0;overflow:visible">${content}</div></section>`;
+  const sectionHtml = pages.map((pg) => {
+    let contentBottom = 0;
+    for (const b of pg.blocks) contentBottom = Math.max(contentBottom, b.y + b.h);
+    const H = Math.max(700, contentBottom + 120, pg.minH ?? 0);
+    const others = pages.filter((p2) => p2.id !== pg.id);
+    const blocks = pg.blocks
+      .map((b) => {
+        const inner =
+          b.kind === "nav" ? navHtml(b, others)
+          : b.kind === "footer" ? kindHtml(b)
+          : kindHtml(b);
+        const z = b.kind === "nav" ? "z-index:8;" : b.kind === "footer" ? "z-index:7;" : "";
+        return `<div class="blk" style="position:absolute;left:${b.x}px;top:${b.y}px;width:${b.w}px;height:${b.h}px;${z}border-radius:${b.radius ?? 0}px">${inner}</div>`;
+      })
+      .join("");
+    return `<section class="pg${doc.transition === "none" ? " instant" : ""}" id="pg-${esc(pg.id)}" style="background:${pg.bg ?? bg0};color:${tx};height:${H}px;width:1200px;position:relative">${blocks}</section>`;
   }).join("");
 
-  return `<!doctype html><html><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
+  return `<!doctype html><html><head>
+<meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
 <title>${esc(doc.brand)}</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
-body{font-family:${bodyFont};background:${bg}}
-.pg{transition:opacity .28s ease, transform .28s ease}
-.blk{position:absolute}
-.blk a[data-page]{cursor:pointer}
-.pg.swap{opacity:0;transform:translateY(6px)}
+body{font-family:${bodyFont};background:${bg0};color:${tx}}
+.pg{display:none;margin:0 auto}
+.pg.on{display:block}
+.pg.instant{display:none}.pg.instant.on{display:block}
+a[data-page]{cursor:pointer}
+.cv-list li::before{content:"▸";position:absolute;left:2px;color:${acc};font-size:.8em;top:.35em}
+.cv-list li{line-height:1.85}
+@keyframes cvFade{from{opacity:0}to{opacity:1}}
+@keyframes cvSlide{from{opacity:0;transform:translateX(52px)}to{opacity:1;transform:none}}
+@keyframes cvScale{from{opacity:0;transform:scale(.965)}to{opacity:1;transform:none}}
+.pg.anim.anim-fade{animation:cvFade .4s ease}
+.pg.anim.anim-slide{animation:cvSlide .45s cubic-bezier(.2,.75,.25,1)}
+.pg.anim.anim-scale{animation:cvScale .4s cubic-bezier(.2,.75,.25,1)}
 </style></head><body>
-${pages}
+${sectionHtml}
 <script>
 (function(){
-  var links=document.querySelectorAll('a[data-page]');
-  function show(id){var cur=document.querySelector('.pg:not([style*="none"])')||document.querySelector('.pg');var nx=document.getElementById('pg-'+id);if(!nx||nx===cur)return;cur.classList.add('swap');setTimeout(function(){cur.style.display='none';cur.classList.remove('swap');nx.style.display='block';nx.classList.add('swap');requestAnimationFrame(function(){nx.classList.remove('swap')})},150)}
-  links.forEach(function(a){a.addEventListener('click',function(e){e.preventDefault();show(a.getAttribute('data-page'));window.scrollTo(0,0)})});
+  var mode="${esc(doc.transition)}";
+  var cur=document.querySelector('.pg');if(cur)cur.classList.add('on');
+  function go(id){
+    var nx=document.getElementById('pg-'+id);if(!nx)return;
+    if(nx.classList.contains('on'))return;
+    document.querySelectorAll('.pg.on').forEach(function(p){p.classList.remove('on')});
+    nx.classList.add('on');
+    if(mode!=='none'){nx.classList.remove('anim','anim-fade','anim-slide','anim-scale');void nx.offsetWidth;nx.classList.add('anim','anim-'+mode)}
+    window.scrollTo(0,0);
+  }
+  document.querySelectorAll('a[data-page]').forEach(function(a){a.addEventListener('click',function(e){e.preventDefault();var id=a.getAttribute('data-page');if(id)go(id)})});
 })();
 </script>
 </body></html>`;

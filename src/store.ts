@@ -10,7 +10,7 @@ import {
 import { describeColor } from "./engine/akmon";
 import {
   DEFAULT_SETTINGS, LocalStore, SNAPSHOT_VERSION, store as backend,
-  type Settings, type Snapshot,
+  type SavedSite, type Settings, type Snapshot,
 } from "./lib/storage";
 
 export type Screen = "home" | "akmon" | "library" | "trends" | "build" | "settings";
@@ -19,6 +19,23 @@ export type BuildMeta = {
   purposeLabel: string;
   sectionsOn: number;
   sectionNames: string[];
+};
+
+/** live facts about the canvas build — fed to Cedalion while you're in the studio */
+export type CanvasCtx = {
+  mode: "single" | "multi";
+  pageName: string;
+  pageIx: number;
+  pageCount: number;
+  pageHeight: number;
+  blockCount: number;
+  kinds: Record<string, number>;
+  auditScore: number;
+  issues: { sev: string; what: string; fix?: string }[];
+  purposeLabel?: string;
+  transition: string;
+  hasNav: boolean;
+  hasFooter: boolean;
 };
 
 export type ChatTurn = {
@@ -42,6 +59,9 @@ type State = {
   buildMeta: BuildMeta | null;
   cedalionOpen: boolean;
   toast: string | null;
+  sites: SavedSite[];
+  resumeId: string | null;
+  canvasCtx: CanvasCtx | null;
 
   init: () => Promise<void>;
   go: (s: Screen) => void;
@@ -64,6 +84,10 @@ type State = {
   setBuildMeta: (m: BuildMeta | null) => void;
   setCedalionOpen: (v: boolean) => void;
   say: (msg: string) => void;
+  upsertSite: (site: SavedSite) => void;
+  deleteSite: (id: string) => void;
+  setResumeId: (id: string | null) => void;
+  setCanvasCtx: (c: CanvasCtx | null) => void;
 };
 
 let saveTimer: ReturnType<typeof setTimeout> | undefined;
@@ -76,6 +100,7 @@ function persist(get: () => State) {
       palettes: s.palettes,
       settings: s.settings,
       savedAt: Date.now(),
+      sites: s.sites,
     };
     void backend.save(snap);
   }, 400);
@@ -92,6 +117,9 @@ export const useApp = create<State>((set, get) => ({
   buildMeta: null,
   cedalionOpen: false,
   toast: null,
+  sites: [],
+  resumeId: null,
+  canvasCtx: null,
 
   async init() {
     const loaded = (await backend.load()) ?? (await new LocalStore().load());
@@ -100,6 +128,7 @@ export const useApp = create<State>((set, get) => ({
       settings: loaded?.settings ?? DEFAULT_SETTINGS,
       palettes: loaded?.palettes ?? [],
       current: loaded?.palettes?.[0] ?? generatePalette({ prompt: "deep ember on obsidian, technical" }),
+      sites: loaded?.sites ?? [],
     });
   },
 
@@ -205,6 +234,22 @@ export const useApp = create<State>((set, get) => ({
   clearChat: () => set({ chat: [] }),
   setBuildMeta: (buildMeta) => set({ buildMeta }),
   setCedalionOpen: (cedalionOpen) => set({ cedalionOpen }),
+
+  upsertSite: (site) => {
+    const exists = get().sites.some((x) => x.id === site.id);
+    const rest = exists ? get().sites.map((x) => (x.id === site.id ? site : x)) : [site, ...get().sites];
+    const sites = rest.slice(0, 10);
+    set({ sites });
+    persist(get);
+  },
+
+  deleteSite: (id) => {
+    set({ sites: get().sites.filter((x) => x.id !== id) });
+    persist(get);
+  },
+
+  setResumeId: (resumeId) => set({ resumeId }),
+  setCanvasCtx: (canvasCtx) => set({ canvasCtx }),
   say: (toast) => {
     set({ toast });
     setTimeout(() => set({ toast: null }), 1800);

@@ -6,10 +6,11 @@
  */
 import { useEffect, useRef, useState } from "react";
 import { useApp } from "../store";
-import { ask, auditPalette, CEDALION_STARTERS } from "../engine/cedalion";
+import { ask, auditPalette, cedalionStarters } from "../engine/cedalion";
 
 export function CedalionChat({ compact = false }: { compact?: boolean }) {
-  const { chat, pushChat, clearChat, current, purposeId, screen, buildMeta } = useApp();
+  const { chat, pushChat, clearChat, current, purposeId, screen, buildMeta, canvasCtx } = useApp();
+  const starters = cedalionStarters(screen);
   const [draft, setDraft] = useState("");
   const endRef = useRef<HTMLDivElement>(null);
 
@@ -25,6 +26,7 @@ export function CedalionChat({ compact = false }: { compact?: boolean }) {
       palette: current ?? undefined,
       purposeId: purposeId ?? undefined,
       screen,
+      canvas: screen === "build" ? canvasCtx ?? undefined : undefined,
       buildSite: buildMeta
         ? {
             purposeLabel: buildMeta.purposeLabel,
@@ -66,7 +68,7 @@ export function CedalionChat({ compact = false }: { compact?: boolean }) {
               no model, no api key, no network — colour maths and a rule base. ask me anything.
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-              {CEDALION_STARTERS.slice(0, compact ? 4 : 6).map((s) => (
+              {starters.slice(0, compact ? 4 : 6).map((s) => (
                 <button
                   key={s}
                   className="btn"

@@ -1,4 +1,5 @@
 import { useApp, type Screen } from "../store";
+import Emblem from "../components/Emblem";
 
 const NAV: { id: Screen; label: string }[] = [
   { id: "home", label: "home" },
@@ -28,14 +29,7 @@ export default function TopBar() {
     >
       <div className="row gap-3">
         <button className="row gap-2" onClick={() => go("home")} title="Hephaestus">
-          <span
-            style={{
-              width: 26, height: 26, border: "1px solid var(--fg)",
-              display: "grid", placeItems: "center", fontSize: 12, flexShrink: 0,
-            }}
-          >
-            ⚒
-          </span>
+          <Emblem size={30} alt="Hephaestus" />
           <span style={{ textAlign: "left", lineHeight: 1.15 }}>
             <span style={{ fontSize: 13, letterSpacing: "0.22em", fontWeight: 500 }}>
               HEPHAESTUS

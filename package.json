@@ -1,7 +1,7 @@
 {
   "name": "hephaestus",
   "private": true,
-  "version": "0.2.0",
+  "version": "0.3.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -9,7 +9,8 @@
     "preview": "vite preview",
     "lint": "oxlint",
     "typecheck": "tsc -b --noEmit",
-    "tauri": "tauri"
+    "tauri": "tauri",
+    "site:preview": "node tools/site-preview.mjs"
   },
   "dependencies": {
     "react": "^19.2.8",

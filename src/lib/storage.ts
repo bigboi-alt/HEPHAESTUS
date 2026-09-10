@@ -7,6 +7,7 @@
  */
 
 import type { Palette } from "../engine/akmon";
+import type { CvDoc } from "../engine/canvas";
 
 export type ThemeId = "obsidian" | "graphite" | "paper" | "claude" | "blueprint" | "ember";
 
@@ -42,11 +43,22 @@ export const DEFAULT_SETTINGS: Settings = {
   handle: "@forge",
 };
 
+/** a saved canvas build — shown on the dashboard as “continue building” */
+export type SavedSite = {
+  id: string;
+  name: string;
+  doc: CvDoc;
+  palette: Palette;
+  pageCount: number;
+  updatedAt: number;
+};
+
 export type Snapshot = {
   version: number;
   palettes: Palette[];
   settings: Settings;
   savedAt: number;
+  sites?: SavedSite[];
 };
 
 export const SNAPSHOT_VERSION = 1;
@@ -74,6 +86,7 @@ export class LocalStore implements Store {
         palettes: Array.isArray(parsed.palettes) ? parsed.palettes : [],
         settings: { ...DEFAULT_SETTINGS, ...(parsed.settings ?? {}) },
         savedAt: parsed.savedAt ?? Date.now(),
+        sites: Array.isArray(parsed.sites) ? parsed.sites : [],
       };
     } catch {
       return null;

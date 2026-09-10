@@ -1,131 +1,349 @@
 <!doctype html>
 <html lang="en">
-<head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>hephaestus — downloads</title>
-<meta name="description" content="Hephaestus — design intelligence for the rest of us. Colour palettes from plain language, trend-aware directions, rule-based critique. No AI. Fully local." />
-<style>
-  :root { color-scheme: dark; }
-  * { box-sizing: border-box; }
-  html, body { margin: 0; padding: 0; background: #000; color: #e8e8e6; }
-  body { font: 14px/1.6 ui-monospace, "SF Mono", "Cascadia Mono", "Roboto Mono", Menlo, Consolas, monospace; }
-  .wrap { max-width: 760px; margin: 0 auto; padding: 56px 24px 96px; }
-  header .logo { font-size: 22px; letter-spacing: 0.14em; text-transform: lowercase; color: #fff; }
-  header .logo b { color: #8f8; font-weight: 400; }
-  header .tag { margin-top: 6px; color: #7a7a76; font-size: 12px; }
-  .status { margin: 36px 0 8px; font-size: 12px; color: #9a9a94; text-transform: lowercase; letter-spacing: 0.08em; }
-  .status .dot { display: inline-block; width: 8px; height: 8px; background: #444; margin-right: 8px; border-radius: 50%; }
-  .status.live .dot { background: #6f6; }
-  .status.err .dot { background: #f66; }
-  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; margin-top: 14px; }
-  .card { border: 1px solid #2a2a28; background: #0a0a09; padding: 18px 16px; }
-  .card h2 { font-size: 13px; font-weight: 400; text-transform: lowercase; letter-spacing: 0.1em; color: #fff; margin: 0 0 2px; }
-  .card .os-note { color: #6f6f6a; font-size: 11px; margin-bottom: 14px; }
-  .dl { display: block; border: 1px solid #3a3a38; padding: 9px 12px; margin-bottom: 8px; color: #e8e8e6; text-decoration: none; font-size: 12px; transition: background .15s, border-color .15s; }
-  .dl:hover { background: #141412; border-color: #8f8; color: #fff; }
-  .dl small { display: block; color: #6f6f6a; font-size: 10px; }
-  .dl.disabled { pointer-events: none; color: #4a4a46; border-color: #222; }
-  .meta { margin-top: 34px; padding-top: 16px; border-top: 1px solid #1c1c1a; color: #6f6f6a; font-size: 11px; }
-  .meta a { color: #9a9a94; }
-  .note { margin-top: 10px; color: #6f6f6a; font-size: 11px; }
-  #errbox { display: none; border: 1px solid #3a2016; background: #120a05; color: #c99; padding: 10px 12px; font-size: 12px; margin-top: 14px; }
-</style>
-</head>
-<body>
-<div class="wrap">
-  <header>
-    <div class="logo">hephaestus<b>/dl</b></div>
-    <div class="tag">design intelligence for the rest of us — palettes, trends, rules. no ai. fully local. free.</div>
-  </header>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Hephaestus — design help that shows its work</title>
+    <meta name="description" content="A free desktop app that picks your colours, lays out your pages and reviews your designs. No AI, no subscription, nothing sent anywhere." />
+    <meta name="theme-color" content="#f4eee6" />
+    <meta property="og:title" content="Hephaestus" />
+    <meta property="og:description" content="Free desktop design tool. Picks colours, builds layouts, reviews your work — with rules you can read. No AI." />
+    <meta property="og:type" content="website" />
+    <meta property="og:image" content="./assets/logo-ink-512.png" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <link rel="icon" type="image/svg+xml" href="./assets/favicon.svg" />
+    <link rel="alternate icon" type="image/png" href="./assets/favicon.png" />
+    <link rel="apple-touch-icon" href="./assets/logo-touch.png" />
+    <script>document.documentElement.className = "js";</script>
+    <script src="./config.js"></script>
+    <style>
+      :root {
+        --paper: #f4eee6;
+        --card: #fbf7f1;
+        --card-2: #efe6da;
+        --line: #e0d3c3;
+        --line-soft: #eaded0;
+        --ink: #2c1e15;
+        --ink-2: #6a5443;
+        --ink-3: #7b6250;
+        --brown: #6f4429;
+        --brown-2: #8a5a37;
+        --brown-ink: #fdf9f4;
+        --serif: ui-serif, Georgia, Cambria, "Times New Roman", Times, serif;
+        --sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+        --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+      }
+      * { box-sizing: border-box; }
+      html { scroll-behavior: smooth; -webkit-text-size-adjust: 100%; }
+      body {
+        margin: 0; background: var(--paper); color: var(--ink);
+        font-family: var(--sans); font-size: 16.5px; line-height: 1.62;
+        -webkit-font-smoothing: antialiased;
+      }
+      a { color: var(--brown); text-decoration: none; }
+      img { max-width: 100%; height: auto; }   /* never trust a height attribute to stretch */
+      a:hover { text-decoration: underline; }
+      .wrap { max-width: 1000px; margin: 0 auto; padding: 0 24px; }
 
-  <div class="status" id="status"><span class="dot"></span><span id="statusText">reading latest release…</span></div>
-  <div id="errbox"></div>
+      /* header */
+      header {
+        position: sticky; top: 0; z-index: 10; background: rgba(244,238,230,.9);
+        backdrop-filter: blur(10px); border-bottom: 1px solid var(--line-soft);
+      }
+      .bar { display: flex; align-items: center; gap: 12px; height: 62px; }
+      .bar img { width: 28px; height: 28px; display: block; }
+      .name { font-family: var(--serif); font-size: 18px; letter-spacing: .01em; }
+      .bar nav { margin-left: auto; display: flex; align-items: center; gap: 22px; font-size: 14.5px; }
+      .bar nav a { color: var(--ink-2); }
+      .bar nav a:hover { color: var(--brown); text-decoration: none; }
 
-  <div class="cards">
-    <div class="card">
-      <h2>windows</h2>
-      <div class="os-note">10 / 11 — x64</div>
-      <a class="dl disabled" id="w-setup" href="#">installer <small>.exe — recommended</small></a>
-      <a class="dl disabled" id="w-msi" href="#">msi <small>.msi — group policy friendly</small></a>
-    </div>
-    <div class="card">
-      <h2>macos</h2>
-      <div class="os-note">13+ — unsigned, right-click → open</div>
-      <a class="dl disabled" id="m-arm" href="#">apple silicon <small>.dmg — aarch64</small></a>
-      <a class="dl disabled" id="m-intel" href="#">intel <small>.dmg — x86_64</small></a>
-    </div>
-    <div class="card">
-      <h2>linux</h2>
-      <div class="os-note">glibc distros</div>
-      <a class="dl disabled" id="l-appimage" href="#">appimage <small>any distro — chmod +x</small></a>
-      <a class="dl disabled" id="l-deb" href="#">deb <small>debian / ubuntu</small></a>
-    </div>
-  </div>
+      /* hero */
+      .hero { display: grid; grid-template-columns: 1.25fr .75fr; gap: 40px; align-items: center; padding: 74px 0 64px; }
+      .kicker { font-size: 12.5px; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-3); margin: 0 0 18px; }
+      .kicker b { color: var(--brown); font-weight: 600; }
+      h1 { font-family: var(--serif); font-size: clamp(34px, 5.4vw, 53px); line-height: 1.09; font-weight: 400; letter-spacing: -.015em; margin: 0 0 20px; text-wrap: balance; }
+      h2 { text-wrap: balance; }
+      .lead { font-size: 18px; color: var(--ink-2); margin: 0 0 30px; max-width: 34ch; }
+      .cta { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
+      .btn {
+        display: inline-flex; flex-direction: column; gap: 1px; padding: 12px 22px; border-radius: 10px;
+        background: var(--brown); color: var(--brown-ink); border: 1px solid var(--brown);
+        font-size: 15.5px; font-weight: 550; line-height: 1.25;
+      }
+      .btn:hover { background: #5e381f; text-decoration: none; }
+      .btn small { font-weight: 400; font-size: 11.5px; opacity: .82; font-family: var(--mono); }
+      .btn.ghost { background: transparent; color: var(--ink); border-color: var(--line); }
+      .btn.ghost:hover { background: var(--card); border-color: var(--ink-3); }
+      .bust { justify-self: end; width: 100%; max-width: 300px; }
+      .bust img { width: 100%; height: auto; display: block; }
+      .facts { display: flex; flex-wrap: wrap; gap: 8px 0; margin: 26px 0 0; padding: 0; list-style: none; font-size: 13.5px; color: var(--ink-2); }
+      .facts li + li::before { content: "·"; margin: 0 10px; color: var(--line); }
 
-  <p class="note">your os wasn't detected? every file of the latest release is listed on the <a id="relLink" href="#" style="color:#8f8">release page</a>.</p>
+      /* sections */
+      section { padding: 58px 0; border-top: 1px solid var(--line-soft); }
+      h2 { font-family: var(--serif); font-weight: 400; font-size: clamp(25px, 3.3vw, 33px); letter-spacing: -.01em; margin: 0 0 8px; }
+      .sub { color: var(--ink-2); margin: 0 0 34px; max-width: 62ch; }
 
-  <div class="meta">
-    <div>hephaestus <span id="ver">—</span> · source: private repo · palettes &amp; settings never leave your machine</div>
-  </div>
-</div>
+      .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1px; background: var(--line-soft); border: 1px solid var(--line-soft); border-radius: 14px; overflow: hidden; }
+      .cell { background: var(--card); padding: 26px 26px 28px; }
+      .cell h3 { font-size: 16.5px; margin: 0 0 7px; font-weight: 600; letter-spacing: -.005em; }
+      .cell p { margin: 0; font-size: 15px; color: var(--ink-2); }
+      .cell .n { font-family: var(--mono); font-size: 11px; color: var(--brown-2); display: block; margin-bottom: 12px; }
 
-<script>
-// ── set these once ─────────────────────────────────────────────────────
-var OWNER = "your-github-username"; // e.g. "ada"
-var REPO  = "hephaestus";           // your private repo name
-// ───────────────────────────────────────────────────────────────────────
+      /* screenshots */
+      .shots { display: grid; gap: 26px; }
+      .shot figure { margin: 0; }
+      .shot img { width: 100%; height: auto; display: block; border: 1px solid var(--line); border-radius: 12px; background: var(--card-2); }
+      .shot figcaption { font-size: 13.5px; color: var(--ink-2); margin-top: 10px; }
+      .shot figcaption b { color: var(--ink); font-weight: 600; }
+      .pair { display: grid; grid-template-columns: 1fr 1fr; gap: 26px; }
 
-var els = {
-  w:  { setup: document.getElementById("w-setup"),  msi: document.getElementById("w-msi") },
-  m:  { arm: document.getElementById("m-arm"), intel: document.getElementById("m-intel") },
-  l:  { ai: document.getElementById("l-appimage"), deb: document.getElementById("l-deb") },
-  rel: document.getElementById("relLink"),
-  ver: document.getElementById("ver"),
-};
-var statusEl = document.getElementById("status");
-var statusText = document.getElementById("statusText");
-var errbox = document.getElementById("errbox");
+      /* plain list */
+      .plain { display: grid; gap: 0; margin: 0; padding: 0; list-style: none; border-top: 1px solid var(--line-soft); }
+      .plain li { display: grid; grid-template-columns: 190px 1fr; gap: 26px; padding: 17px 0; border-bottom: 1px solid var(--line-soft); }
+      .plain b { font-weight: 600; font-size: 15.5px; }
+      .plain span { color: var(--ink-2); font-size: 15px; }
 
-function pick(assets, nameRe) {
-  var hit = assets.filter(function (a) { return nameRe.test(a.name); });
-  return hit.length ? hit[0] : null;
-}
-function setBtn(a, asset) {
-  if (!a || !asset) return;
-  a.href = asset.browser_download_url;
-  a.classList.remove("disabled");
-  if (asset.size) {
-    var mb = (asset.size / 1048576).toFixed(1) + " MB";
-    var s = a.querySelector("small");
-    if (s && s.textContent.indexOf(".") === 0) s.textContent = s.textContent + " · " + mb;
-  }
-}
-function fail(msg) {
-  statusEl.classList.add("err");
-  statusText.textContent = msg;
-  errbox.style.display = "block";
-  errbox.textContent = "Could not read the latest release. If the repo is private, GitHub does not let anonymous visitors see releases — make the repo public (Settings → General → Danger Zone), then reload. Otherwise check OWNER/REPO at the top of this page.";
-  els.rel.href = "https://github.com/" + OWNER + "/" + REPO + "/releases/latest";
-}
+      /* download */
+      .os { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-top: 6px; }
+      .os a { display: block; padding: 18px 20px; border: 1px solid var(--line); border-radius: 12px; background: var(--card); color: var(--ink); }
+      .os a:hover { border-color: var(--brown); text-decoration: none; background: #fff; }
+      .os .t { font-size: 16px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
+      .os .d { display: block; font-size: 13px; color: var(--ink-2); margin-top: 3px; }
+      .os .z { display: block; font-family: var(--mono); font-size: 11.5px; color: var(--ink-3); margin-top: 9px; }
+      .tag { font-size: 10px; letter-spacing: .08em; text-transform: uppercase; background: var(--brown); color: var(--brown-ink); padding: 2px 7px; border-radius: 5px; font-weight: 600; }
+      .status { font-family: var(--mono); font-size: 12.5px; color: var(--ink-2); margin: 22px 0 0; }
+      .status i { font-style: normal; color: var(--brown); }
+      .note { font-size: 13.5px; color: var(--ink-2); margin: 10px 0 0; }
 
-fetch("https://api.github.com/repos/" + OWNER + "/" + REPO + "/releases/latest", { headers: { Accept: "application/vnd.github+json" } })
-  .then(function (r) { if (!r.ok) throw new Error("http " + r.status); return r.json(); })
-  .then(function (rel) {
-    els.ver.textContent = rel.tag_name;
-    els.rel.href = rel.html_url;
-    els.rel.textContent = "release page";
-    var as = rel.assets;
-    setBtn(els.w.setup,  pick(as, /setup\.exe$/i));
-    setBtn(els.w.msi,    pick(as, /\.msi$/i));
-    setBtn(els.m.arm,    pick(as, /aarch64.*\.dmg$/i) || pick(as, /arm64.*\.dmg$/i));
-    setBtn(els.m.intel,  pick(as, /x86_64.*\.dmg$/i) || pick(as, /x64.*\.dmg$/i));
-    setBtn(els.l.ai,     pick(as, /\.appimage$/i));
-    setBtn(els.l.deb,    pick(as, /\.deb$/i));
-    statusEl.classList.add("live");
-    statusText.textContent = "latest release: " + rel.tag_name + " — published " + new Date(rel.published_at).toUTCString().slice(0, 16);
-  })
-  .catch(fail);
-</script>
-</body>
+      footer { border-top: 1px solid var(--line-soft); padding: 30px 0 46px; font-size: 13.5px; color: var(--ink-3); }
+      .fbar { display: flex; flex-wrap: wrap; gap: 10px 24px; align-items: center; }
+      .fbar .sp { margin-left: auto; }
+      /* Content is visible by default; the fade is layered on only once JS has
+         confirmed it will run (see the class added in <head>). A broken script must
+         never leave a blank page. */
+      .js .reveal { opacity: 0; transform: translateY(14px); transition: opacity .5s ease, transform .5s ease; }
+      .js.nomotion .reveal { opacity: 1; transform: none; transition: none; }
+      .js .reveal.in { opacity: 1; transform: none; }
+      @media (prefers-reduced-motion: reduce) { .js .reveal { opacity: 1; transform: none; transition: none; } html { scroll-behavior: auto; } }
+
+      @media (max-width: 760px) {
+        .kicker { font-size: 11.5px; letter-spacing: .07em; }
+        .bar { height: 56px; gap: 10px; }
+        .bar nav { gap: 16px; font-size: 14px; }
+        .bar nav a { display: none; }
+        .bar nav a.nav-dl { display: inline; }
+      }
+      @media (max-width: 860px) {
+        .hero { grid-template-columns: 1fr; gap: 30px; padding: 46px 0 40px; }
+        .bust { order: -1; max-width: 190px; justify-self: start; }
+        .lead { max-width: none; }
+        .grid2, .pair { grid-template-columns: 1fr; }
+        .os { grid-template-columns: 1fr; }
+        .plain li { grid-template-columns: 1fr; gap: 4px; }
+        section { padding: 44px 0; }
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <div class="wrap bar">
+        <img src="./assets/logo-ink-128.png" alt="" width="28" height="28" />
+        <span class="name">Hephaestus</span>
+        <nav>
+          <a href="#does">What it does</a>
+          <a href="#honest">No AI</a>
+          <a href="#get" class="nav-dl">Download</a>
+          <a id="srcLink" href="https://github.com">Source</a>
+        </nav>
+      </div>
+    </header>
+
+    <main class="wrap">
+      <div class="hero">
+        <div>
+          <p class="kicker">Free desktop app · <b>Windows, macOS, Linux</b></p>
+          <h1>Design help that<br />shows its work.</h1>
+          <p class="lead">
+            Hephaestus picks your colours, lays out your pages and tells you what's wrong
+            with the result. Every answer comes from rules written in the app — you can read
+            why it made each choice.
+          </p>
+          <div class="cta">
+            <a class="btn" id="mainBtn" href="https://github.com">
+              <span id="mainBtnLabel">Download Hephaestus</span>
+              <small id="mainBtnSub">free · nothing to sign up for</small>
+            </a>
+            <a class="btn ghost" href="#does">See what it does</a>
+          </div>
+          <ul class="facts">
+            <li>Works offline</li><li>No account</li><li>No AI guessing</li>
+          </ul>
+        </div>
+        <div class="bust">
+          <img src="./assets/logo-ink-512.png" alt="The Hephaestus mark: a carved bust in profile" width="512" height="512" />
+        </div>
+      </div>
+
+      <section id="does">
+        <h2>Four things, all of them yours</h2>
+        <p class="sub">No cloud, no seats, no monthly bill. It's one program on your machine that does the parts of design that are tedious and repeatable.</p>
+        <div class="grid2">
+          <div class="cell reveal"><span class="n">01</span><h3>Colours from a sentence</h3><p>Type what you want — "calm banking app", "loud poster" — and it builds the whole palette: background, text, accents, borders, states. Contrast is checked while it works, not after.</p></div>
+          <div class="cell reveal"><span class="n">02</span><h3>Layouts that stay tidy</h3><p>Drop blocks on a canvas and everything keeps its alignment and spacing. Pages, links between pages, and an HTML export when you're done.</p></div>
+          <div class="cell reveal"><span class="n">03</span><h3>A review you can argue with</h3><p>Point it at a design and it lists what's weak — contrast too low, spacing too tight, too many colours fighting — each with a specific fix. You decide whether to take it.</p></div>
+          <div class="cell reveal"><span class="n">04</span><h3>Places to start</h3><p>Twenty-one ready directions with colours and type already paired, for the days you'd rather choose than build. Browse them, steal one, keep going.</p></div>
+        </div>
+      </section>
+
+      <section id="screens">
+        <h2>What it looks like</h2>
+        <p class="sub">These are the actual app, not mockups.</p>
+        <div class="shots">
+          <div class="shot reveal"><figure><img src="./assets/shots/akmon.webp" alt="The palette screen: a generated colour set with swatches and contrast readings" width="1600" height="1003" loading="lazy" /><figcaption><b>Colour screen.</b> One line of intent in, a full palette out — every pair labelled with its contrast ratio.</figcaption></figure></div>
+          <div class="pair">
+            <div class="shot reveal"><figure><img src="./assets/shots/canvas.webp" alt="The canvas screen with draggable blocks on a grid" width="1600" height="1003" loading="lazy" /><figcaption><b>Layout canvas.</b> Blocks snap and hold their spacing as you drag.</figcaption></figure></div>
+            <div class="shot reveal"><figure><img src="./assets/shots/cedalion.webp" alt="The review screen listing problems and suggested fixes" width="1600" height="1003" loading="lazy" /><figcaption><b>The reviewer.</b> Findings with fixes, ranked by how much they matter.</figcaption></figure></div>
+          </div>
+        </div>
+      </section>
+
+      <section id="honest">
+        <h2>What it isn't</h2>
+        <p class="sub">Worth saying out loud, because most tools avoid it.</p>
+        <ul class="plain">
+          <li class="reveal"><b>No AI</b><span>Nothing generates your work and nothing sends it anywhere. Rules and measurements instead — which means the same input gives the same answer, every time, and you can look up why.</span></li>
+          <li class="reveal"><b>No account, no telemetry</b><span>It runs offline. Your files stay on your disk. The only network request on this page is the one that reads the latest release from GitHub.</span></li>
+          <li class="reveal"><b>No subscription</b><span>It's free, and the code is in the open. Take it, build it, change it.</span></li>
+          <li class="reveal"><b>Not a Figma replacement</b><span>It won't do multiplayer, prototypes or plugins. It's strong at exactly the four things above and quiet about the rest.</span></li>
+        </ul>
+      </section>
+
+      <section id="get">
+        <h2>Get it</h2>
+        <p class="sub">Pick your system. The buttons below fill themselves from the newest release on GitHub, so this page is never out of date.</p>
+        <div class="os">
+          <a href="https://github.com" data-kind="windows"><span class="t">Windows <em class="tag" hidden>you</em></span><span class="d">Windows 10 and 11, 64-bit</span><span class="z" id="z-win">installer</span></a>
+          <a href="https://github.com" data-kind="mac"><span class="t">macOS <em class="tag" hidden>you</em></span><span class="d">Apple silicon and Intel</span><span class="z" id="z-mac">disk image</span></a>
+          <a href="https://github.com" data-kind="linux"><span class="t">Linux <em class="tag" hidden>you</em></span><span class="d">Any recent distro</span><span class="z" id="z-linux">AppImage · deb</span></a>
+        </div>
+        <p class="status" id="status"><i>reading the latest release…</i></p>
+        <p class="note" id="note">
+          macOS builds aren't signed with a developer certificate yet, so on first launch
+          right-click the app and choose <b>Open</b>. Everything else installs normally.
+        </p>
+      </section>
+    </main>
+
+    <footer>
+      <div class="wrap fbar">
+        <span>Hephaestus<span id="verFoot"></span> · a design workspace that explains itself</span>
+        <span class="sp" id="contactFoot"></span>
+        <span><a href="https://github.com" id="srcFoot">source on GitHub</a></span>
+      </div>
+    </footer>
+
+    <script>
+    /* fade-in, set up first so it runs whatever the release feed does below */
+    (function () {
+      if (!("IntersectionObserver" in window) || matchMedia("(prefers-reduced-motion: reduce)").matches) {
+        document.documentElement.classList.add("nomotion");
+        return;
+      }
+      var io = new IntersectionObserver(function (es) {
+        es.forEach(function (e) { if (e.isIntersecting) { e.target.classList.add("in"); io.unobserve(e.target); } });
+      }, { rootMargin: "0px 0px -8% 0px" });
+      document.querySelectorAll(".reveal").forEach(function (n) { io.observe(n); });
+      // safety net: anything still hidden after load (short pages, restored scroll) is shown
+      addEventListener("load", function () {
+        setTimeout(function () {
+          document.querySelectorAll(".reveal:not(.in)").forEach(function (n) {
+            if (n.getBoundingClientRect().top < innerHeight) n.classList.add("in");
+          });
+        }, 400);
+      });
+    })();
+
+    (function () {
+      var H = window.HEPH || {};
+      function $(id) { return document.getElementById(id); }
+      var els = {
+        status: $("status"), ver: $("verFoot"), src: $("srcLink"), srcFoot: $("srcFoot"),
+        mainBtn: $("mainBtn"), mainLabel: $("mainBtnLabel"), mainSub: $("mainBtnSub"),
+        contact: $("contactFoot"),
+      };
+      var GH = "https://github.com/" + H.owner + "/" + H.repo;
+      var REL = GH + "/releases/latest";
+      var cards = {
+        windows: { link: document.querySelector('[data-kind=windows]'), size: $("z-win"), re: /setup\.exe$/i, also: /\.msi$/i },
+        mac:     { link: document.querySelector('[data-kind=mac]'),     size: $("z-mac"),     re: /(aarch64|arm64).*\.dmg$/i, also: /(x86_64|x64|x86-64).*\.dmg$/i },
+        linux:   { link: document.querySelector('[data-kind=linux]'),   size: $("z-linux"),   re: /\.appimage$/i, also: /\.deb$/i },
+      };
+
+      // which OS is the visitor on — only to pick the headline button
+      var os = /mac|iphone|ipad/i.test(navigator.platform) ? "mac"
+        : /linux|android/i.test(navigator.userAgent) ? "linux"
+        : /win/i.test(navigator.platform || navigator.userAgent) ? "windows" : "";
+      if (os && cards[os]) {
+        cards[os].link.querySelector(".tag").hidden = false;
+        els.mainLabel.textContent = "Download for " + { windows: "Windows", mac: "macOS", linux: "Linux" }[os];
+      }
+
+      function say(html) { els.status.innerHTML = html; }
+
+      if (!H.owner || H.owner === "your-github-username") {
+        say("this copy isn't pointed at a repo yet — the buttons go to the releases page");
+        Object.keys(cards).forEach(function (k) { cards[k].link.href = REL; });
+        els.mainBtn.href = REL;
+        return;
+      }
+      els.src.href = GH; els.srcFoot.href = GH;
+      if (H.sourcePublic === false) {
+        els.src.textContent = "Source"; els.srcFoot.textContent = "private repo";
+        els.srcFoot.href = "#";
+      }
+      if (H.contact) els.contact.innerHTML = '<a href="mailto:' + H.contact + '">' + H.contact + "</a>";
+
+      fetch("https://api.github.com/repos/" + H.owner + "/" + H.repo + "/releases/latest", {
+        headers: { Accept: "application/vnd.github+json" },
+      })
+        .then(function (r) { if (!r.ok) throw 0; return r.json(); })
+        .then(function (rel) {
+          var A = rel.assets || [];
+          function find(c) {
+            for (var i = 0; i < A.length; i++) if (c.re.test(A[i].name)) return A[i];
+            for (i = 0; i < A.length; i++) if (c.also.test(A[i].name)) return A[i];
+            return null;
+          }
+          var mb = null;
+          Object.keys(cards).forEach(function (k) {
+            var a = find(cards[k]);
+            if (!a) return;
+            cards[k].link.href = a.browser_download_url;
+            cards[k].size.textContent = (a.size / 1048576).toFixed(1) + " MB";
+            if (k === os) mb = a;
+          });
+          if (mb) { els.mainBtn.href = mb.browser_download_url; els.mainSub.textContent = (mb.size / 1048576).toFixed(1) + " MB · free"; }
+          else els.mainBtn.href = REL;
+          var d = new Date(rel.published_at);
+          say("<i>" + (rel.tag_name || "") + "</i> · released " + (isNaN(d) ? "recently" : d.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" })));
+          // a one-line taste of the changelog — only if the line is actually prose:
+          // release bodies open with fences, badges and links far too often
+          if (rel.body) {
+            var line = rel.body.split(/\r?\n/)
+              .map(function (s) { return s.replace(/^\s*(?:[#>*\-+]|```)+\s*/, "").replace(/[*`_]+/g, "").trim(); })
+              .filter(function (s) { return /^[A-Za-z0-9]/.test(s) && (s.match(/\S+/g) || []).length >= 3 && s.length > 24 && s.length < 120 && !/^https?:/i.test(s); })[0];
+            if (line) say("<i>" + rel.tag_name + "</i> · " + line);
+          }
+          if (els.ver && rel.tag_name) els.ver.textContent = " " + rel.tag_name;
+        })
+        .catch(function () {
+          say("couldn't read the release list — <a href='" + REL + "'>open the releases page</a>");
+          Object.keys(cards).forEach(function (k) { cards[k].link.href = REL; });
+          els.mainBtn.href = REL;
+        });
+
+    })();
+    </script>
+  </body>
 </html>

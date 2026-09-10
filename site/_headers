@@ -1,5 +1,15 @@
 /*
-  X-Frame-Options: DENY
   X-Content-Type-Options: nosniff
+  X-Frame-Options: DENY
   Referrer-Policy: strict-origin-when-cross-origin
   Permissions-Policy: camera=(), microphone=(), geolocation=()
+  Content-Security-Policy: default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; connect-src 'self' https://api.github.com; form-action 'none'; base-uri 'self'
+
+/assets/*
+  Cache-Control: public, max-age=31536000, immutable
+
+/config.js
+  Cache-Control: public, max-age=300
+
+/*.html
+  Cache-Control: public, max-age=600, must-revalidate

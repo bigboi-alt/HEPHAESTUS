@@ -3,9 +3,12 @@
 # The deploy step skips itself until you add the two secrets, so it never
 # fails a push while unconfigured. To switch it on:
 #
-#   1. Create a Pages project once:
-#        npx wrangler pages project create hephaestus-downloads
-#      (or just run this workflow — the first deploy creates the project)
+#   1. Nothing to pre-create. The job runs `pages project create hephaestus
+#      --production-branch main` itself, tolerating "already exists" on every
+#      later run, then deploys. Site lands on https://hephaestus.pages.dev.
+#      (Doing it explicitly is required: `pages deploy` would otherwise *prompt*
+#      to create the missing project, and CI has no keyboard — and without the
+#      production branch set you'd get main.hephaestus.pages.dev instead.)
 #
 #   2. Repo -> Settings -> Secrets and variables -> Actions -> New secrets:
 #        CLOUDFLARE_API_TOKEN   (token with "Cloudflare Pages: Edit")
@@ -33,15 +36,50 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Do not remove: current wrangler hard-fails under Node 22 ("Wrangler requires
+      # at least Node.js v22.0.0"), and ubuntu-latest's built-in Node is 20.x. Without
+      # this pin the deploy step dies before it ever reaches Cloudflare.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
       - name: deploy to cloudflare pages (or warn and skip)
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: |
-          if [ -z "$CLOUDFLARE_API_TOKEN" ] || [ -z "$CLOUDFLARE_ACCOUNT_ID" ]; then
+          set -euo pipefail
+          # The :- defaults are load-bearing: this step runs under `set -u`, so a
+          # variable that is merely absent (a human running it by hand, or a secret
+          # renamed) must skip cleanly instead of aborting the shell before the check.
+          if [ -z "${CLOUDFLARE_API_TOKEN:-}" ] || [ -z "${CLOUDFLARE_ACCOUNT_ID:-}" ]; then
             echo "::warning::site deploy skipped - add CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID under repo Settings > Secrets and variables > Actions, then re-run this workflow"
             exit 0
           fi
+          PROJECT=hephaestus
+
+          # Create the Pages project explicitly, with main as the production branch.
+          # Two reasons this can't be left to `pages deploy`:
+          #   1. deploy prompts "create this project? [y/N]" when it's missing, and CI
+          #      has no keyboard - it fails instead of asking.
+          #   2. production branch has to be set, or the deploy lands on the branch
+          #      alias (main.hephaestus.pages.dev) instead of hephaestus.pages.dev.
+          # "already exists" is the normal case after the first run, so it's tolerated.
+          if npx --yes wrangler@latest pages project create "$PROJECT" --production-branch main >/tmp/create.log 2>&1; then
+            echo "created Pages project '$PROJECT' with production branch 'main'"
+          elif grep -qiE "already exists|taken|8000000" /tmp/create.log; then
+            # Pages names are unique across ALL accounts, not just yours. If the deploy
+            # right below now fails with a permissions / not-found error, someone else owns
+            # this name - change PROJECT above (the subdomain follows it) and push again.
+            echo "Pages project '$PROJECT' already exists - deploying to it"
+          else
+            echo "::error::could not create the Pages project '$PROJECT' - see the log above"
+            cat /tmp/create.log
+            exit 1
+          fi
+
           npx --yes wrangler@latest pages deploy site \
-            --project-name hephaestus-downloads \
+            --project-name "$PROJECT" \
             --branch main
+
+          echo "site live at https://$PROJECT.pages.dev"

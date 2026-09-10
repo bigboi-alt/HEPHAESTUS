@@ -15,6 +15,7 @@ import {
 } from "./color";
 import { describeColor, ROLE_ORDER, type Palette, type Role } from "./akmon";
 import { getPurpose, getTrend, TRENDS, type Purpose } from "../data/trends";
+import type { CanvasCtx } from "../store";
 
 /* ------------------------------------------------------------------ *
  * report types
@@ -509,6 +510,8 @@ export type CedalionContext = {
   screen?: string;
   /** Live facts about a site being built in the Build workspace. */
   buildSite?: { purposeLabel: string; sectionsOn: number; sectionNames: string[]; score?: number };
+  /** Live facts about the canvas page being edited right now. */
+  canvas?: CanvasCtx;
 };
 
 export type Answer = {
@@ -998,9 +1001,85 @@ function siteAnswer(ctx: CedalionContext) {
   return { text: "Here's my read on the site you're building:", bullets: lines, suggestions: ["Score my palette", "How do I make this pop?"] };
 }
 
+const KIND_LABEL: Record<string, string> = {
+  heading: "headline", text: "paragraph", list: "bullet list", quote: "quote",
+  button: "button", chip: "chip", stat: "stat", card: "card", image: "image block",
+  spacer: "spacer", divider: "divider", nav: "navbar", footer: "footer",
+};
+
+/** one bullet per real problem on the page, in priority order */
+export function canvasProblems(c: CanvasCtx): string[] {
+  const out: string[] = [];
+  const k = c.kinds ?? {};
+  const sev = (c.issues ?? []).filter((i) => i.sev !== "note");
+  if (sev.length) {
+    for (const i of sev.slice(0, 4)) out.push("· " + i.what + " → " + (i.fix ?? "fix it in the inspector"));
+  }
+  if (c.pageIx === 0 && !(k.heading ?? 0)) out.push("· page one has no headline — visitors decide to stay in the first five seconds; drop a heading block near the top.");
+  if (!(k.button ?? 0)) out.push("· nothing on this page asks for action — add a button and link it to a page.");
+  if (!c.hasNav && c.mode === "multi") out.push("· pages have no navigation bar — readers will get stranded. add a navbar block to each page.");
+  if (!c.hasFooter && c.pageHeight > 1400) out.push("· this long page has no footer — add one so the scroll ends with a landing, not a void.");
+  if (!(k.image ?? 0) && (k.heading ?? 0) > 1 && c.pageHeight > 1200) out.push("· a text-only long page tires the eye — an image block every 800px of scroll gives the reader a rest.");
+  if ((k.card ?? 0) > 6) out.push("· " + (k.card ?? 0) + " cards is a wall — group them in rows of three and let white space do the separating.");
+  if ((k.chip ?? 0) > 3) out.push("· more than three chips reads as noise — keep one tag per section.");
+  if (c.mode === "single" && c.pageHeight > 4200) out.push("· the single page is " + Math.round(c.pageHeight) + "px tall — long enough that separate pages might serve visitors better. switch to “multiple pages” and split the sections.");
+  if (c.mode === "multi" && c.pageCount > 6) out.push("· " + c.pageCount + " pages is a lot to maintain — every extra page dilutes the core message; consider folding thin pages into one.");
+  return out;
+}
+
+/** the full canvas read — structure + priorities + how to act */
+export function canvasRead(ctx: CedalionContext): Answer {
+  const c = ctx.canvas;
+  if (!c) return { text: "I'm not attached to a canvas right now — open the build bench and I'll read the page as you edit it.", suggestions: ["What should I fix first?"] };
+  const p = ctx.palette;
+  const a = p ? auditPalette(p, ctx.purposeId) : null;
+  const lines: string[] = [];
+  const kind = Object.entries(c.kinds).filter(([, n]) => n > 0).map(([kk, n]) => (n > 1 ? `${n} ${KIND_LABEL[kk] ?? kk}s` : `one ${KIND_LABEL[kk] ?? kk}`)).join(", ");
+  lines.push("I'm reading the page “" + c.pageName + "” (" + (c.mode === "single" ? "one long page" : c.pageCount + " pages, " + c.transition + " transition") + "). It holds " + (kind || "nothing yet") + " across " + Math.round(c.pageHeight) + "px of height.");
+  if (a) lines.push("The palette underneath scores " + a.score + "/100 (" + a.grade + ") — " + a.headline);
+  if ((c.issues ?? []).length === 0 && !c.pageIx) lines.push("The page reads clean right now: nothing overlapping, nothing below contrast floors, nothing hanging off the frame.");
+  lines.push("Problems I can measure, in the order I'd fix them:");
+  const probs = canvasProblems(c);
+  lines.push(...(probs.length ? probs : ["· none — genuinely tidy. Now make it say one thing loudly."]));
+  lines.push("Colour discipline check: " + (c.auditScore >= 90 ? "the palette is holding this page together — keep hand-picked tints rare and meaningful." : "hand-picked tints are fighting the palette (canvas score " + c.auditScore + ") — run merkhet → harmonise colours to let the palette own the page again."));
+  const sug = ["Score my palette", "How do I make this pop?", c.issues.some((i) => i.sev !== "note") ? "What should I fix first?" : "One long page or separate pages?"];
+  return { text: "Here's my read of the page you're building — measured, not vibes:", bullets: lines, suggestions: sug };
+}
+
+/** decide whether a question belongs to the canvas brain */
+const CANVAS_KEYS = [
+  "layout", "grid", "arrange", "structure", "sections", "section", "navbar", "nav",
+  "hero", "footer", "merkhet", "one long", "pages", "page look", "looks bad", "why does my page",
+  "fix my page", "fix the layout", "fix this page", "make it look", "what should i fix",
+];
+const PALETTE_KEYS = ["score", "contrast", "accessib", "colour", "color", "palette"];
+
+function canvasRoute(q: string, ctx: CedalionContext): boolean {
+  if (!ctx.canvas || !ctx.screen) return false;
+  const paletteAsk = PALETTE_KEYS.some((k) => q.includes(k));
+  if (paletteAsk) return false;
+  return CANVAS_KEYS.some((k) => q.includes(k));
+}
+
+export function cedalionStarters(screen?: string): string[] {
+  const base = [
+    "Score my palette",
+    "What should I fix first?",
+    "How do I make this pop?",
+    "Is this readable for colour-blind users?",
+    "What's actually trending in 2026?",
+    "Give me a joke",
+  ];
+  if (screen === "build") {
+    return ["Read my page", "Does this layout work?", "One long page or separate pages?", "What should my navbar link to?", "What is merkhet?", ...base.slice(0, 3)];
+  }
+  return base;
+}
+
 export function ask(question: string, ctx: CedalionContext = {}): Answer {
   const q = ` ${question.toLowerCase().replace(/[^\w\s'-]/g, " ").replace(/\s+/g, " ").trim()} `;
   if (!q.trim()) return { text: "Ask me anything about what you're building.", suggestions: FALLBACK_SUGGESTIONS };
+  if (canvasRoute(q, ctx)) return canvasRead(ctx);
 
   let best: Rule | undefined;
   let bestScore = 0;

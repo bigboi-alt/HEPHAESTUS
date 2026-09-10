@@ -1,0 +1,4 @@
+# the downloads live on the main page now
+/dl      /#get   301
+/download /#get  301
+/download.html /#get 301
