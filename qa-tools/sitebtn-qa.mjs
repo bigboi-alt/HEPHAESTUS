@@ -1,0 +1,34 @@
+import { APP, SHOTS } from "./paths.mjs";
+import { chromium } from "playwright";
+let pass = 0, fail = 0;
+const ok = (c, m) => { if (c) { pass++; console.log("  ✓ " + m); } else { fail++; console.log("  ✗ " + m); } };
+const b = await chromium.launch();
+const ctx = await b.newContext({ viewport: { width: 1440, height: 820 } });
+await ctx.addInitScript(() => localStorage.setItem("hephaestus.v1", JSON.stringify({ version: 1, palettes: [], sites: [], savedAt: Date.now(), settings: { theme: "claude", claudeStyle: "nyx", displayName: "Smith", motion: true, cedalionDock: false, density: "comfortable", colorFormat: "hex", accent: "#F5F5F5" } })));
+const page = await ctx.newPage();
+const errs = []; page.on("pageerror", (e) => errs.push(String(e)));
+await page.goto(APP, { waitUntil: "domcontentloaded" });
+await page.waitForTimeout(600);
+await page.locator("header").getByText("build", { exact: true }).click();
+await page.waitForTimeout(500);
+const offscreenBefore = await page.evaluate(() => {
+  const el = document.querySelector("[data-site-options]");
+  const r = el.getBoundingClientRect();
+  return { below: r.top > window.innerHeight, top: Math.round(r.top) };
+});
+ok(offscreenBefore.top > 500, `the options sit low in the rail (top ${offscreenBefore.top}px of 820) — the button exists to save the scroll hunt`);
+await page.getByRole("button", { name: "⚙ site" }).click();
+await page.waitForTimeout(700);
+const after = await page.evaluate(() => {
+  const el = document.querySelector("[data-site-options]");
+  const r = el.getBoundingClientRect();
+  const range = el.querySelector('input[type="range"]');
+  return { top: Math.round(r.top), visible: r.top > 60 && r.top < window.innerHeight - 200, accent: range ? getComputedStyle(range).accentColor : "none" };
+});
+ok(after.visible && after.top < offscreenBefore.top, `⚙ site scrolls the options up into view (top ${offscreenBefore.top} → ${after.top})`);
+ok(after.accent === "rgb(245, 245, 245)", `sliders take the app's accent colour rather than chrome blue (${after.accent})`);
+await page.screenshot({ path: `${SHOTS}/studio-options-shown.png` });
+ok(errs.length === 0, "no page errors " + JSON.stringify(errs.slice(0, 2)));
+console.log(`\n${pass} passed, ${fail} failed`);
+await b.close();
+process.exit(fail ? 1 : 0);

@@ -1,0 +1,8 @@
+{
+  "name": "hephaestus-qa",
+  "private": true,
+  "type": "module",
+  "description": "the release gates for hephaestus — every one drives the real thing",
+  "scripts": { "all": "node run-all.mjs" },
+  "dependencies": { "playwright": "^1.63.0" }
+}

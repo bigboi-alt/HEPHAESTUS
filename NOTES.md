@@ -80,3 +80,82 @@ instead of tens of thousands, so it stays fast.
 - The zip at `../hephaestus.zip` (5.07 MB, 588 files) is rebuilt with all of this, `.git`
   included, `.git/config` deliberately left out — set your own name and email in it
   (`git config user.name "…"`, `git config user.email "…"`).
+
+---
+
+# 2026-09-11 (later) · the site, redone to your notes
+
+You sent a screenshot and six complaints. All six are done.
+
+**1 · the right half of the hero is one big piece of pixel art now.** The bust fills a
+dark plate that runs the whole height of the hero and bleeds to the right edge of the
+window — corner brackets, its own block grid behind it, a scanline over it, and a mono
+caption strip (`◆ the forge · 56 × 74 blocks · quantised from the mark by rule ·
+0 models loaded`). It is the app's own mark pushed onto a 56-block grid, mapped to seven
+warm tones with a 4×4 Bayer dither, its bottom edge dissolving into loose pixels.
+No model, no filter: `tools/pixel-art.py`, ~200 lines you can read, and
+`python3 tools/pixel-art.py` regenerates it. It also prints the OS icons as SVG
+(`--icons`), which are drawn from geometry too — circles and ellipses, not a font.
+
+**2 · the screenshots are real, and there are eight of them.** You were right that I had
+only ever put three in, and none of the dashboard. `tools/shots.mjs` seeds a project,
+drives the running app and shoots each screen at 1600 × 1000 from a 2× capture: the
+dashboard in the **cream Claude skin**, the colour screen (page painted twice + the
+surface steps), the canvas with a block selected, **▶ preview** at 1440, the reviewer
+mid-repair showing "checked twice: 1 of 1 fixed, nothing left", the 1,750-entry trends
+library, the **Nyx** skin, and Cedalion answering. Each sits in a frame with a title
+strip like a window of its own. Run the script again after you change the app — that's
+how the page stays honest.
+
+**3 · download cards, rebuilt.** A 48 px pixel icon (Windows flag · apple · Tux) in a
+chiselled tile, the OS in serif, `you` on your own platform, one line about what it needs,
+and a mono foot that fills itself with the actual filename and size from your release
+(today: `looks for *-setup.exe`; after a release:
+`Hephaestus_0.3.0_x64-setup.exe · 8.4 MB`). Cards are notched at one corner and lift on
+hover with a hard offset shadow, no blurs anywhere.
+
+**4 · the GitHub 404s are fixed at the root.** The cause: the buttons were hard-wired to
+`github.com/your-github-username/hephaestus/releases/latest`, and `/releases/latest` is a
+404 for a repo with no releases — which was every repo, since none had been pushed yet.
+The page now contains **no GitHub URL at all**. Every download link starts as `#source`,
+a new section on the page that explains the code, MIT, and how to build it — a real
+destination, never a dead one. At runtime it asks `GET /repos/<owner>/<repo>` first and
+only writes GitHub links after that answers; when there's no release it uses
+`<repo>/releases`, which GitHub renders even when empty. Four states, all verified with a
+mocked API (`qa-tools/ghlinks-qa.mjs`, 28 assertions): placeholder, released, no release,
+private-or-typo. Plus a fifth: **can't reach GitHub** says so and leaves the links alone,
+because no wifi is not evidence your repo is gone. `node tools/connect.mjs <owner> --check`
+now tells you which state you're in before you commit, and `--clear` puts the page back.
+
+**5 · photos assemble out of pixels, and it never stops being true.** Scroll a picture in
+and it builds from blocks; scroll away and it falls apart; come back and it builds again —
+not a one-shot entrance. Blocks arrive from whichever edge is currently visible, so a
+picture caught mid-scroll is never an empty frame; the mosaic stays whole until 86% and
+then hands over to the sharp file fast, because a long cross-fade just looks blurry. At
+rest the overlay canvas is cleared and hidden — you are looking at the real image. It is
+`<canvas>` over `<img>`, `drawImage` only, so nothing can be tainted and it works from
+`file://`. And because decoration must never gate content: `prefers-reduced-motion`
+creates no canvases at all, JavaScript off means the markup has none, and if a screenshot
+404s the overlay removes itself rather than painting over the hole. There's a
+`◆ pixel on` switch in the footer for anyone who just doesn't want it (it remembers via
+localStorage). `qa-tools/pixel-qa.mjs` measures painted coverage at four scroll positions
+and asserts the second pass behaves like the first — 20 assertions.
+
+**6 · retro-modern over the whole page, palette untouched.** The same coffee-and-cream
+tokens, plus a burnt-down family for the dark plates. Body sits on an 18 px block grid;
+sections get a `§ 02 — SCREENS` marker in mono and a dashed pixel rule instead of a hairline;
+corners are square with one clipped notch; shadows are hard offsets, never blurs; the four
+feature cells carry the app's own glyphs (◈ ⊞ ✦ ) in chiselled tiles; buttons press into
+their shadow on `:active`.
+
+Also: the version chip in the header (`v0.3.0`), the nav in lowercase mono with a solid
+"get it" pill, and the og/social card is now the pixel bust on the plate
+(`site/assets/pixel/og.png`). Phone fix while I was in there: a `<pre>` inside a grid
+column was making 390 px pages 446 px wide, so those columns can shrink now and the
+commands wrap instead of scrolling sideways behind invisible scrollbars.
+
+**Checked:** `qa-tools/site-qa.mjs` across 7 viewports — contrast ok, no overflow, no
+stretched image, 11 images 0 broken, 0 external requests, same as baseline. All nine app
+suites still green (166 assertions: voice 25, akmon 22, planes 28, merkhet 13, imgsel 27,
+imgcovered 10, studio 20, trends 17, site button 4), `npm run typecheck` clean,
+`npm run lint` 0 errors / 24 warnings (the baseline), `npm run build` clean.

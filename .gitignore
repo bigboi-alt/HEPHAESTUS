@@ -10,3 +10,10 @@ src-tauri/target
 
 # generated single-file site preview (node tools/site-preview.mjs)
 site-preview.html
+
+# python cache from tools/pixel-art.py
+__pycache__/
+
+# the QA harness output and its own deps
+qa-shots/
+qa-tools/node_modules/

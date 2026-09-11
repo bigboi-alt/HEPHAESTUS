@@ -49,9 +49,12 @@ function build(html, label) {
     return `${m.slice(0, m.indexOf('"') + 1)}data:${MIME[ext] || "application/octet-stream"};base64,${b64}"`;
   });
 
-  // the offline copy can't reach GitHub: make the status line honest
-  html = html.replace(/<p class="status" id="status">[\s\S]*?<\/p>/,
-    '<p class="status" id="status"><i>this is the offline preview — buttons point at the releases page</i></p>');
+  // the offline copy can't reach GitHub: make the status line honest, and keep the id
+  // the page's own script looks for, with data-static so the script leaves it alone
+  html = html.replace(
+    /<p class="status" id="status">[\s\S]*?<\/p>/,
+    '<p class="status" id="status" data-static="1"><i id="statusText">this is the offline preview — '
+    + 'the buttons keep to the page, as they do before a repo is connected</i></p>');
 
   console.error(`${label}: ${n} assets inlined${missing.length ? " — MISSING " + missing.join(", ") : ""}`);
   return { html, n, missing };
