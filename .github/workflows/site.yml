@@ -1,4 +1,8 @@
-# Deploys the public download site (site/) to Cloudflare Pages.
+# Deploys the landing page (site/) to Cloudflare Pages.
+#
+# The page ships no download links and makes no requests, so this workflow is the only
+# moving part: push site/** and the URL updates. Two secrets, nothing to keep in sync
+# by hand, and nothing on the page that can point at a repo nobody can read.
 #
 # The deploy step skips itself until you add the two secrets, so it never
 # fails a push while unconfigured. To switch it on:
@@ -100,7 +104,42 @@ jobs:
               ;;
           esac
 
-          npx --yes wrangler@latest pages deploy site \
+          # ── bake the repo into the page, then deploy that copy ────────────────────
+          # site/index.html ships with `var HEPH_REPO = window.__hephRepo || "";` so the
+          # markup contains no owner and no GitHub URL of any kind. Here, at deploy time,
+          # the real "owner/repo" is written in — which is why there is nothing for a human
+          # to edit and nothing that can drift: push, and the download cards belong to
+          # whatever repo this workflow ran from.
+          REPO="${{ github.repository }}"
+          rm -rf site-built && cp -a site site-built
+          # the folder's own notes are for the repo, not for the people visiting the site
+          rm -f site-built/README.md
+          if ! grep -q 'window.__hephRepo' site-built/index.html; then
+            echo "::error::site/index.html lost the HEPH_REPO placeholder the deploy writes into"
+            exit 1
+          fi
+          sed -i "s#var HEPH_REPO = window.__hephRepo .*#var HEPH_REPO = \"$REPO\";#" site-built/index.html
+          grep -q "var HEPH_REPO = \"$REPO\";" site-built/index.html || {
+            echo "::error::the bake did not take - refusing to deploy an unbaked page"; exit 1; }
+          echo "baked: download cards will read https://github.com/$REPO"
+
+          # What an anonymous visitor can actually reach, printed so the run log answers
+          # "why are the cards grey" without anyone opening a browser:
+          # `|| true`, not `|| echo 000`: -w already prints 000 for a failed connection, and
+          # appending a second zero-string is what made the check below the loop read 000000.
+          repo_code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 15 "https://api.github.com/repos/$REPO" || true)
+          repo_code=${repo_code:-000}
+          rel_code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 15 "https://api.github.com/repos/$REPO/releases/latest" || true)
+          rel_code=${rel_code:-000}
+          echo "anonymous GitHub answers: repo $repo_code, latest release $rel_code"
+          case "$repo_code/$rel_code" in
+            200/200) echo "  -> cards will fill themselves from the release's assets" ;;
+            200/404) echo "  -> repo is public, no PUBLISHED release yet: cards point at $REPO/releases" ;;
+            404/*|401/*|403/*) echo "  -> repo is not readable anonymously (private): cards stay inert. That is correct, and it is also why a download link from here cannot work: GitHub will not serve release files to strangers on a private repo. Make the repo public, or publish the files somewhere public (R2), and the same deploy lights the cards up." ;;
+            *) echo "  -> GitHub did not answer; cards stay as written" ;;
+          esac
+
+          npx --yes wrangler@latest pages deploy site-built \
             --project-name "$PROJECT" \
             --branch main
 
@@ -116,6 +155,11 @@ jobs:
             code=${code:-000}
             if grep -qi "Hephaestus" /tmp/live.html 2>/dev/null; then
               echo "verified: https://$PROJECT.pages.dev is serving the site"
+              if grep -q "var HEPH_REPO = \"$REPO\";" /tmp/live.html; then
+                echo "verified: the live page carries the baked repo ($REPO), so the cards are wired"
+              else
+                echo "::warning::the live page does NOT carry the baked repo - it is serving an unbaked copy (a stale build, or a second deploy path)"
+              fi
               exit 0
             fi
             sleep 6

@@ -5,894 +5,636 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Hephaestus — design help that shows its work</title>
     <meta name="description" content="A free desktop app that picks your colours, lays out your pages and reviews your designs. No AI, no subscription, nothing sent anywhere." />
-    <meta name="theme-color" content="#f4eee6" />
+    <meta name="theme-color" content="#f5efe7" />
     <meta property="og:title" content="Hephaestus" />
     <meta property="og:description" content="Free desktop design tool. Picks colours, builds layouts, reviews your work — with rules you can read. No AI." />
     <meta property="og:type" content="website" />
-    <meta property="og:image" content="./assets/pixel/og.png" />
+    <meta property="og:image" content="./assets/og.png" />
     <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:image" content="./assets/pixel/og.png" />
+    <meta name="twitter:image" content="./assets/og.png" />
     <link rel="icon" type="image/svg+xml" href="./assets/favicon.svg" />
     <link rel="alternate icon" type="image/png" href="./assets/favicon.png" />
     <link rel="apple-touch-icon" href="./assets/logo-touch.png" />
     <script>
-      /* the page is readable with JS off; these classes only ever ADD behaviour */
+      /* the page is complete without JS; this class only ever ADDS a soft entrance */
       (function () {
         var r = document.documentElement;
         r.className = "js";
-        try {
-          var pref = localStorage.getItem("hephaestus.px");
-          if (pref === "off") r.className += " nopx";
-        } catch (e) {}
-        if (!("IntersectionObserver" in window) || matchMedia("(prefers-reduced-motion: reduce)").matches) {
-          r.className += " nomotion nopx";
-        }
+        if (matchMedia("(prefers-reduced-motion: reduce)").matches) r.className += " nomotion";
       })();
+
+      /* Which repo the download cards should read. You never edit this: the deploy step in
+         .github/workflows/site.yml rewrites the string below to "owner/repo" on every push.
+         Empty means "this copy was not built by that workflow" — and then the cards stay
+         exactly as they are written in the markup, inert and honest, with nothing to 404. */
+      var HEPH_REPO = window.__hephRepo || "";   // "owner/repo"
     </script>
-    <script src="./config.js"></script>
     <style>
       :root {
-        --paper: #f4eee6;
-        --card: #fbf7f1;
-        --card-2: #efe6da;
-        --line: #e0d3c3;
-        --line-soft: #eaded0;
+        --paper: #f5efe7;
+        --paper-2: #efe6d9;
+        --card: #fcf9f4;
+        --line: #e6dccb;
+        --line-soft: #eee4d6;
         --ink: #2c1e15;
         --ink-2: #6a5443;
-        --ink-3: #7b6250;
+        --ink-3: #75604f;   /* 5.2:1 on paper, 5.6:1 on a card — quiet, but never unreadable */
         --brown: #6f4429;
         --brown-2: #8a5a37;
-        --brown-ink: #fdf9f4;
-        /* the dark family: plates, terminals, the pixel art. same warmth, burnt down */
-        --panel: #1c1310;
-        --panel-2: #241a12;
-        --panel-line: #3d2a1e;
-        --panel-ink: #f7efe3;
-        --panel-dim: #bd8a5c;
+        --amber: #b78251;
+        --on-brown: #fdf9f4;
         --serif: ui-serif, Georgia, Cambria, "Times New Roman", Times, serif;
         --sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-        --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
-        --notch: 9px;
+        --mono: ui-monospace, "SF Mono", Menlo, Consolas, "DejaVu Sans Mono", monospace;
+        --r: 14px;
+        --r-sm: 10px;
+        --lift: 0 1px 1px rgba(44, 30, 21, .035), 0 14px 30px -24px rgba(44, 30, 21, .30);
+        --lift-2: 0 1px 2px rgba(44, 30, 21, .05), 0 22px 44px -28px rgba(44, 30, 21, .34);
       }
       * { box-sizing: border-box; }
       /* no visible scrollbars — the page still scrolls normally */
       html { scrollbar-width: none; }
-      html::-webkit-scrollbar, body::-webkit-scrollbar { width: 0; height: 0; background: transparent; }
-      *::-webkit-scrollbar { width: 0; height: 0; background: transparent; }
+      html::-webkit-scrollbar, body::-webkit-scrollbar, *::-webkit-scrollbar {
+        width: 0; height: 0; background: transparent;
+      }
       html { scroll-behavior: smooth; -webkit-text-size-adjust: 100%; }
       body {
-        margin: 0; color: var(--ink); font-family: var(--sans); font-size: 16.5px; line-height: 1.62;
+        margin: 0; color: var(--ink); font-family: var(--sans); font-size: 17px; line-height: 1.68;
         -webkit-font-smoothing: antialiased;
-        /* a pixel grid the width of one block, so the page sits on the same unit as the art */
-        background: var(--paper) radial-gradient(circle at 1px 1px, rgba(44, 30, 21, .05) 1px, transparent 0) 0 0 / 18px 18px;
+        /* warm paper, lit from the top left, and nothing else */
+        background:
+          radial-gradient(1100px 700px at 12% -8%, #fbf6ee 0%, rgba(251, 246, 238, 0) 60%),
+          radial-gradient(900px 620px at 96% 4%, #f7ecdd 0%, rgba(247, 236, 221, 0) 55%),
+          var(--paper);
       }
       a { color: var(--brown); text-decoration: none; }
-      img { max-width: 100%; height: auto; }   /* never trust a height attribute to stretch */
       a:hover { text-decoration: underline; }
-      .wrap { max-width: 1000px; margin: 0 auto; padding: 0 24px; }
+      ::selection { background: #e9d6bd; }
+      .wrap { max-width: 1060px; margin: 0 auto; padding: 0 24px; }
       .mono { font-family: var(--mono); }
 
       /* ── header ─────────────────────────────────────────────────────────── */
       header {
-        position: sticky; top: 0; z-index: 20; background: rgba(244, 238, 230, .92);
-        backdrop-filter: blur(10px); border-bottom: 1px solid var(--line-soft);
+        position: sticky; top: 0; z-index: 20; background: rgba(245, 239, 231, .86);
+        backdrop-filter: blur(12px) saturate(1.1); border-bottom: 1px solid var(--line-soft);
       }
-      .bar { display: flex; align-items: center; gap: 12px; height: 62px; }
-      .bar .mark { width: 28px; height: 28px; display: block; image-rendering: pixelated; }
-      .name { font-family: var(--serif); font-size: 18px; letter-spacing: .01em; }
+      .bar { display: flex; align-items: center; gap: 12px; min-height: 66px; }
+      .name { font-family: var(--serif); font-size: 19px; letter-spacing: .005em; }
       .vchip {
-        font-family: var(--mono); font-size: 10px; letter-spacing: .06em; color: var(--brown-2);
-        border: 1px solid var(--line); background: var(--card); padding: 2px 6px;
+        font-family: var(--mono); font-size: 10.5px; letter-spacing: .06em; color: var(--brown-2);
+        border: 1px solid var(--line); background: var(--card); padding: 3px 7px; border-radius: 99px;
       }
-      .bar nav { margin-left: auto; display: flex; align-items: center; gap: 22px; font-size: 13px; font-family: var(--mono); letter-spacing: .04em; }
-      .bar nav a { color: var(--ink-2); text-transform: lowercase; }
-      .bar nav a:hover { color: var(--brown); text-decoration: none; }
-      .bar nav a.pill { border: 1px solid var(--brown); color: var(--brown-ink); background: var(--brown); padding: 6px 12px; }
-      .bar nav a.pill:hover { background: #5e381f; }
+      .bar nav {
+        margin-left: auto; display: flex; align-items: center; gap: 4px;
+        font-size: 13px; font-family: var(--mono); letter-spacing: .03em;
+      }
+      .bar nav a { color: var(--ink-2); text-transform: lowercase; padding: 7px 11px; border-radius: 99px; }
+      .bar nav a:hover { color: var(--brown); background: #efe4d4; text-decoration: none; }
+      .bar nav a.pill {
+        border: 1px solid var(--brown); color: var(--on-brown); background: var(--brown);
+        padding: 7px 14px; margin-left: 8px;
+      }
+      .bar nav a.pill:hover { background: #5f3a22; color: var(--on-brown); }
 
-      /* ── hero: copy on the left, one big pixel plate on the right ───────── */
-      .band { border-bottom: 1px solid var(--line-soft); background: var(--card); }
-      .hero { display: grid; grid-template-columns: minmax(0, 1fr) clamp(320px, 38vw, 620px); align-items: stretch; }
-      .hero-copy { padding: 66px 44px 58px max(24px, calc((100vw - 1000px) / 2 + 24px)); }
-      .kicker { font-family: var(--mono); font-size: 12px; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-3); margin: 0 0 18px; }
+      /* ── hero: words on the left, the portrait on the right, same paper ─── */
+      .band { padding: 0 0 8px; }
+      .hero {
+        display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.02fr);
+        gap: clamp(24px, 4vw, 56px); align-items: center;
+        /* only the vertical padding is set here: the .wrap it shares a box with owns the
+           sides, and a `0` here would overwrite that and let the page touch the screen edge */
+        padding-top: clamp(40px, 6vw, 78px);
+        padding-bottom: clamp(34px, 5vw, 58px);
+      }
+      .kicker {
+        font-family: var(--mono); font-size: 12px; letter-spacing: .1em; text-transform: uppercase;
+        color: var(--ink-3); margin: 0 0 20px;
+      }
       .kicker b { color: var(--brown); font-weight: 600; }
-      h1 { font-family: var(--serif); font-size: clamp(34px, 4.8vw, 54px); line-height: 1.08; font-weight: 400; letter-spacing: -.018em; margin: 0 0 20px; text-wrap: balance; }
+      h1 {
+        font-family: var(--serif); font-size: clamp(36px, 5.1vw, 58px); line-height: 1.06;
+        font-weight: 400; letter-spacing: -.02em; margin: 0 0 22px; text-wrap: balance;
+      }
+      h2, h3 { font-family: var(--serif); font-weight: 400; letter-spacing: -.012em; }
       h2 { text-wrap: balance; }
-      .lead { font-size: 18px; color: var(--ink-2); margin: 0 0 30px; max-width: 36ch; }
+      .lead { font-size: 19px; color: var(--ink-2); margin: 0 0 30px; max-width: 40ch; }
       .cta { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
       .btn {
-        display: inline-flex; flex-direction: column; gap: 1px; padding: 12px 22px;
-        background: var(--brown); color: var(--brown-ink); border: 1px solid var(--brown);
-        font-size: 15.5px; font-weight: 550; line-height: 1.25; cursor: pointer;
-        clip-path: polygon(0 var(--notch), var(--notch) 0, 100% 0, 100% calc(100% - var(--notch)), calc(100% - var(--notch)) 100%, 0 100%);
-        filter: drop-shadow(3px 3px 0 rgba(44, 30, 21, .14));
-        transition: transform .12s ease, background .12s ease, filter .12s ease;
+        display: inline-flex; flex-direction: column; gap: 2px; padding: 13px 22px;
+        background: var(--brown); color: var(--on-brown); border: 1px solid var(--brown);
+        border-radius: var(--r-sm); font-size: 15.5px; font-weight: 550; line-height: 1.3;
+        cursor: pointer; box-shadow: var(--lift);
+        transition: transform .16s ease, background .16s ease, box-shadow .16s ease;
       }
-      .btn:hover { background: #5e381f; text-decoration: none; transform: translate(-1px, -1px); filter: drop-shadow(4px 4px 0 rgba(44, 30, 21, .18)); }
-      .btn:active { transform: translate(1px, 1px); filter: none; }
-      .btn small { font-weight: 400; font-size: 11.5px; opacity: .82; font-family: var(--mono); }
-      .btn.ghost { background: transparent; color: var(--ink); border-color: var(--line); }
-      .btn.ghost:hover { background: var(--paper); border-color: var(--ink-3); }
-      .facts { display: flex; flex-wrap: wrap; gap: 8px 0; margin: 26px 0 0; padding: 0; list-style: none; font-size: 13px; color: var(--ink-2); font-family: var(--mono); }
-      .facts li + li::before { content: "▚"; margin: 0 10px; color: var(--line); }
+      .btn:hover { background: #5f3a22; text-decoration: none; transform: translateY(-1px); box-shadow: var(--lift-2); }
+      .btn:active { transform: translateY(1px); box-shadow: none; }
+      .btn small { font-weight: 400; font-size: 11.5px; opacity: .8; font-family: var(--mono); }
+      .btn.ghost { background: transparent; color: var(--ink); border-color: var(--line); box-shadow: none; }
+      .btn.ghost:hover { background: var(--card); border-color: #d9c9b3; color: var(--brown); }
+      .facts {
+        display: flex; flex-wrap: wrap; gap: 6px 0; margin: 28px 0 0; padding: 0; list-style: none;
+        font-size: 13px; color: var(--ink-2); font-family: var(--mono);
+      }
+      .facts li + li::before { content: "·"; margin: 0 10px; color: var(--amber); }
 
-      /* the plate: a dark panel the size of the column, art centred in it */
-      .plate {
-        margin: 0; position: relative; background: var(--panel); color: var(--panel-ink);
-        display: flex; flex-direction: column;
-        justify-content: center; align-items: center; padding: 34px 20px 0; overflow: hidden;
-        border-left: 1px solid var(--panel-line);
+      /* the portrait: text, on the page's own background, nothing behind it */
+      .art { margin: 0; }
+      .art-box { container-type: inline-size; width: 100%; max-width: 660px; margin: 0 auto; }
+      pre.bust {
+        margin: 0; font-family: var(--mono); color: var(--brown); white-space: pre;
+        line-height: 1.02; letter-spacing: 0; word-break: normal;
+        font-size: clamp(5px, 1.12vw, 13.5px);              /* fallback if cqi is unsupported */
+        font-size: min(13.5px, calc(100cqi / 44));            /* exact fit: 72 cells × 0.60em */
+        text-align: center; user-select: none;
       }
-      .plate::before {
-        /* the same block grid the art is quantised to */
-        content: ""; position: absolute; inset: 0; pointer-events: none;
-        background:
-          repeating-linear-gradient(90deg, rgba(247, 239, 227, .05) 0 1px, transparent 1px 18px),
-          repeating-linear-gradient(0deg, rgba(247, 239, 227, .05) 0 1px, transparent 1px 18px);
-      }
-      .plate::after {
-        content: ""; position: absolute; inset: 0; pointer-events: none;
-        background: repeating-linear-gradient(0deg, rgba(0, 0, 0, .16) 0 1px, transparent 1px 3px);
-        mix-blend-mode: multiply; opacity: .5;
-      }
-      .plate .bracket { position: absolute; width: 22px; height: 22px; border: 2px solid var(--panel-dim); opacity: .8; }
-      .plate .bracket.tl { top: 12px; left: 12px; border-right: 0; border-bottom: 0; }
-      .plate .bracket.tr { top: 12px; right: 12px; border-left: 0; border-bottom: 0; }
-      .plate .bracket.bl { bottom: 56px; left: 12px; border-right: 0; border-top: 0; }
-      .plate .bracket.br { bottom: 56px; right: 12px; border-left: 0; border-top: 0; }
-      .art { position: relative; width: 100%; display: flex; justify-content: center; align-items: flex-end; }
-      .art img {
-        display: block; height: auto; width: 660px; max-width: 95%;
-        /* one whole device pixel per art block, no smoothing anywhere */
-        image-rendering: pixelated;
-      }
-      .plate-strip {
-        position: relative; margin: 22px -20px 0; padding: 9px 16px; width: calc(100% + 40px);
-        border-top: 1px solid var(--panel-line); background: var(--panel-2);
-        display: flex; flex-wrap: wrap; gap: 4px 14px; align-items: baseline;
-        font-family: var(--mono); font-size: 10.5px; letter-spacing: .04em; color: #d9cbb8;
-      }
-      .plate-strip b { color: var(--panel-ink); font-weight: 600; }
-      .plate-strip .co { margin-left: auto; }
-      /* #bd8a5c on the strip's #241a12 is 5.65:1 and on the plate's #1c1310 it is 6.05:1,
-         which is why the quiet tones here are tan rather than a dark brown */
-      .plate-strip i { font-style: normal; color: var(--panel-dim); }
+      html.js pre.bust { text-shadow: 0 1px 0 rgba(255, 255, 255, .5); }
 
-      /* ── sections ──────────────────────────────────────────────────────── */
-      section { padding: 60px 0; border-top: 1px solid var(--line-soft); }
-      main > section:first-of-type { border-top: 0; }
-      .sechead { display: flex; align-items: baseline; gap: 14px; margin: 0 0 6px; flex-wrap: wrap; }
-      .sechead .no { font-family: var(--mono); font-size: 11px; letter-spacing: .1em; color: var(--brown-2); }
-      .rule { height: 6px; margin: 0 0 22px; background: repeating-linear-gradient(90deg, var(--line) 0 6px, transparent 6px 12px); }
-      h2 { font-family: var(--serif); font-weight: 400; font-size: clamp(25px, 3.3vw, 34px); letter-spacing: -.012em; margin: 0; }
-      .sub { color: var(--ink-2); margin: 8px 0 30px; max-width: 64ch; }
+      /* ── sections ───────────────────────────────────────────────────────── */
+      main { padding-bottom: 20px; }
+      section { padding: clamp(40px, 5.4vw, 74px) 0; border-top: 1px solid var(--line-soft); }
+      .sechead { display: flex; align-items: baseline; gap: 14px; margin-bottom: 14px; }
+      .sechead .leader { flex: 1 1 40px; min-width: 24px; border-bottom: 1px dotted #dccbb4; transform: translateY(-7px); }
+      .sechead h2 { font-size: clamp(27px, 3.2vw, 38px); line-height: 1.15; margin: 0; }
+      .no { font-family: var(--mono); font-size: 11.5px; letter-spacing: .1em; color: var(--ink-3); text-transform: uppercase; white-space: nowrap; }
+      .sechead { margin-bottom: 26px; }
+      .sub { color: var(--ink-2); max-width: 68ch; margin: 0 0 30px; }
+      .sub b, .sub i { color: var(--ink); font-style: normal; }
 
-      .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1px; background: var(--line-soft); border: 1px solid var(--line-soft); box-shadow: 5px 5px 0 rgba(44, 30, 21, .05); }
-      .cell { background: var(--card); padding: 24px 26px 26px; display: grid; grid-template-columns: 46px 1fr; gap: 16px; align-items: start; }
+      .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+      .cell {
+        display: grid; grid-template-columns: 46px minmax(0, 1fr); gap: 18px; align-items: start;
+        background: var(--card); border: 1px solid var(--line); border-radius: var(--r);
+        padding: 22px 22px 20px; box-shadow: var(--lift); transition: box-shadow .2s ease, background .2s ease;
+      }
+      .cell:hover { box-shadow: var(--lift-2); background: #fdfbf7; }
       .glyph {
-        width: 46px; height: 46px; display: grid; place-items: center; border: 1px solid var(--line);
-        background: var(--paper); color: var(--brown); font-size: 21px; line-height: 1;
-        box-shadow: inset -3px -3px 0 var(--card-2);
+        width: 46px; height: 46px; display: grid; place-items: center; border-radius: 50%;
+        background: #f3e8d8; border: 1px solid #e6d5bd; color: var(--brown); font-size: 19px; line-height: 1;
       }
-      .cell h3 { font-size: 16.5px; margin: 2px 0 6px; font-weight: 600; letter-spacing: -.005em; }
-      .cell p { margin: 0; font-size: 15px; color: var(--ink-2); }
-      .cell .n { font-family: var(--mono); font-size: 10px; letter-spacing: .1em; color: var(--brown-2); display: block; margin-bottom: 9px; }
+      .cell .n { font-family: var(--mono); font-size: 11px; letter-spacing: .12em; color: var(--ink-3); }
+      .cell h3 { font-size: 21px; margin: 5px 0 7px; }
+      .cell p { margin: 0; color: var(--ink-2); font-size: 16px; }
 
-      /* ── screenshots ────────────────────────────────────────────────────── */
-      .shots { display: grid; gap: 26px; }
-      .shot figure { margin: 0; }
-      .frame { position: relative; background: var(--card); border: 1px solid var(--line); box-shadow: 6px 6px 0 rgba(44, 30, 21, .05); }
-      .frame img { width: 100%; height: auto; display: block; }
-      .frame .strip {
-        display: flex; align-items: center; gap: 8px; padding: 7px 10px; border-bottom: 1px solid var(--line);
-        background: var(--card-2); font-family: var(--mono); font-size: 10px; letter-spacing: .06em; color: var(--ink-2);
+      /* the screens: an index, not a gallery */
+      .ledger { display: grid; gap: 0; }
+      .row {
+        display: grid; grid-template-columns: 96px minmax(0, 1fr) minmax(0, 1.05fr);
+        gap: 20px; padding: 18px 4px; border-top: 1px solid var(--line-soft); align-items: start;
       }
-      .frame .strip u { text-decoration: none; color: var(--brown); }
-      .frame .strip .dots { display: inline-flex; gap: 3px; margin-right: 4px; }
-      .frame .strip .dots i { width: 6px; height: 6px; background: var(--line); display: block; }
-      .frame .strip .dots i:first-child { background: var(--brown-2); }
-      .frame .strip .r { margin-left: auto; }
-      .shot figcaption { font-size: 13.5px; color: var(--ink-2); margin-top: 10px; }
-      .shot figcaption b { color: var(--ink); font-weight: 600; }
-      .pair { display: grid; grid-template-columns: 1fr 1fr; gap: 26px; }
-      .night .frame { background: var(--panel); border-color: var(--panel-line); box-shadow: 6px 6px 0 rgba(44, 30, 21, .12); }
-      .night .frame .strip { background: var(--panel-2); border-bottom-color: var(--panel-line); color: var(--panel-dim); }
-      .night .frame .strip .dots i { background: var(--panel-line); }
-      .night .frame .strip .dots i:first-child { background: var(--panel-dim); }
+      .row:first-child { border-top: 0; }
+      .row .path { font-family: var(--mono); font-size: 12.5px; color: var(--brown); letter-spacing: .02em; padding-top: 4px; }
+      .row h3 { font-size: 19.5px; margin: 0 0 4px; }
+      .row p { margin: 0; color: var(--ink-2); font-size: 15.5px; }
+      .row .tally {
+        font-family: var(--mono); font-size: 12.5px; color: var(--ink-3); line-height: 1.75;
+        text-align: right; border-left: 1px dotted #e3d5c1; padding-left: 18px;
+      }
+      .row .tally b { color: var(--brown-2); font-weight: 600; }
 
-      /* ── plain list ─────────────────────────────────────────────────────── */
-      .plain { display: grid; gap: 0; margin: 0; padding: 0; list-style: none; border-top: 1px solid var(--line-soft); }
-      .plain li { display: grid; grid-template-columns: 210px 1fr; gap: 26px; padding: 17px 0; border-bottom: 1px solid var(--line-soft); }
-      .plain b { font-weight: 600; font-size: 15.5px; }
-      .plain b::before { content: "▪"; color: var(--brown-2); margin-right: 9px; font-size: 11px; }
-      .plain span { color: var(--ink-2); font-size: 15px; }
+      /* three real forged palettes, straight out of the engine */
+      .forged {
+        margin-top: 34px; background: var(--card); border: 1px solid var(--line);
+        border-radius: var(--r); padding: 24px; box-shadow: var(--lift);
+      }
+      .forged h3 { margin: 0 0 4px; font-size: 20px; }
+      .forged > p { margin: 0 0 20px; color: var(--ink-2); font-size: 15.5px; max-width: 62ch; }
+      .strip { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 14px 18px; align-items: center; padding: 13px 0; border-top: 1px dotted #ddcdb6; }
+      .strip:first-of-type { border-top: 0; padding-top: 0; }
+      .strip .say { font-size: 15.5px; }
+      .strip .say i { color: var(--ink-3); font-family: var(--mono); font-size: 12.5px; font-style: normal; display: block; margin-top: 3px; }
+      .chips { display: flex; gap: 0; border-radius: 8px; overflow: hidden; border: 1px solid var(--line); box-shadow: 0 1px 1px rgba(44,30,21,.05); }
+      .chips span { width: 46px; height: 38px; display: block; }
+      .forged .foot { font-family: var(--mono); font-size: 12px; color: var(--ink-3); margin: 18px 0 0; }
 
-      /* ── download ───────────────────────────────────────────────────────── */
-      .os { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-top: 6px; }
-      .os a {
-        display: block; padding: 18px 18px 16px; border: 1px solid var(--line); background: var(--card); color: var(--ink);
-        clip-path: polygon(0 12px, 12px 0, 100% 0, 100% calc(100% - 12px), calc(100% - 12px) 100%, 0 100%);
-        box-shadow: none; transition: transform .12s ease, border-color .12s ease, background .12s ease;
+      /* what it isn't */
+      ul.plain { list-style: none; margin: 0; padding: 0; }
+      ul.plain li {
+        display: grid; grid-template-columns: minmax(0, 190px) minmax(0, 1fr); gap: 8px 24px;
+        padding: 17px 4px; border-top: 1px solid var(--line-soft);
       }
-      .os a:hover { border-color: var(--brown); text-decoration: none; background: #fffdf9; transform: translate(-1px, -1px); }
-      .os .top { display: flex; align-items: center; gap: 12px; }
-      .ostile {
-        width: 62px; height: 62px; flex: 0 0 auto; display: grid; place-items: center; background: var(--paper);
-        border: 1px solid var(--line); color: var(--brown); box-shadow: inset -4px -4px 0 var(--card-2);
+      ul.plain li:first-child { border-top: 0; }
+      ul.plain b { font-family: var(--serif); font-size: 19px; font-weight: 400; color: var(--ink); }
+      ul.plain span { color: var(--ink-2); font-size: 16px; }
+      ul.plain code {
+        font-family: var(--mono); font-size: .88em; background: #f1e7d9; color: var(--brown);
+        padding: 1px 5px; border-radius: 5px;
       }
-      .os .osicon { width: 48px; height: 48px; display: block; }   /* 24 cells × 2 px, whole */
-      .os a.missing { opacity: .66; }
-      .os a.missing .go { color: var(--ink-3); }
-      .os .t { font-size: 17px; font-weight: 600; font-family: var(--serif); letter-spacing: -.01em; }
-      .os .d { display: block; font-size: 13px; color: var(--ink-2); margin-top: 12px; }
-      .os .file {
-        display: block; font-family: var(--mono); font-size: 10.5px; color: var(--ink-3); margin-top: 9px;
-        border-top: 1px dashed var(--line); padding-top: 9px; word-break: break-all;
-      }
-      .os .file b { color: var(--brown); font-weight: 600; }
-      .os .go { display: block; font-family: var(--mono); font-size: 11px; letter-spacing: .06em; color: var(--brown); margin-top: 10px; }
-      .tag { font-size: 9.5px; letter-spacing: .08em; text-transform: uppercase; background: var(--brown); color: var(--brown-ink); padding: 2px 6px; font-weight: 600; font-family: var(--mono); }
-      .status { font-family: var(--mono); font-size: 12.5px; color: var(--ink-2); margin: 22px 0 0; display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: baseline; }
-      .status i { font-style: normal; color: var(--brown); }
-      .status .dot { width: 8px; height: 8px; background: var(--line); display: inline-block; }
-      .status.live .dot { background: #4c7a52; }
-      .status.warn .dot { background: var(--brown-2); }
-      .note { font-size: 13.5px; color: var(--ink-2); margin: 14px 0 0; }
 
-      /* ── the code / terminal plate ─────────────────────────────────────── */
-      .split { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr); gap: 30px; align-items: start; }
-      .split > div { min-width: 0; }
-      .term {
-        background: var(--panel); color: var(--panel-ink); border: 1px solid var(--panel-line); padding: 16px 18px 18px;
-        font-family: var(--mono); font-size: 12.5px; line-height: 1.85; box-shadow: 6px 6px 0 rgba(44, 30, 21, .1);
-        overflow-x: auto;
+      /* how to get it */
+      .os { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+      .os > div {
+        background: var(--card); border: 1px solid var(--line); border-radius: var(--r);
+        padding: 22px; box-shadow: var(--lift); display: flex; flex-direction: column; gap: 12px;
       }
-      .term .p { color: var(--panel-dim); }
-      .term .c { display: block; white-space: pre; }
-      .term .h { color: var(--panel-dim); }
-      .term + .term { margin-top: 14px; }
-      .why { margin: 0; padding: 0; list-style: none; }
-      .why li { padding: 11px 0; border-bottom: 1px solid var(--line-soft); font-size: 15px; color: var(--ink-2); }
-      .why li b { color: var(--ink); font-weight: 600; }
-      .why li::before { content: "◈"; color: var(--brown-2); margin-right: 10px; font-size: 12px; }
+      .os .top { display: flex; align-items: center; gap: 10px; }
+      .os .idx { font-family: var(--mono); font-size: 11px; letter-spacing: .1em; color: var(--ink-3); }
+      .os .t { font-family: var(--serif); font-size: 22px; }
+      .os .d { margin: 0; color: var(--ink-2); font-size: 15.5px; }
+      .os .tag {
+        font-family: var(--mono); font-size: 11px; letter-spacing: .04em; color: var(--brown-2);
+        background: #f3e8d8; border: 1px solid #e6d5bd; border-radius: 99px; padding: 3px 9px;
+      }
+      .os .you {
+        font-family: var(--mono); font-size: 10.5px; letter-spacing: .08em; text-transform: uppercase;
+        color: var(--on-brown); background: var(--brown); border-radius: 99px; padding: 3px 8px;
+      }
+      .os .state {
+        margin-top: auto; font-family: var(--mono); font-size: 12.5px; color: var(--ink-3);
+        border-top: 1px dotted #ddcdb6; padding-top: 12px; display: flex; align-items: center; gap: 8px;
+      }
+      .os .state i { width: 7px; height: 7px; border-radius: 50%; background: #d9b98f; flex: none; }
+      /* filled in by the release reader: clickable, and it looks like it */
+      .os a.state:hover { text-decoration: none; }
+      .os .state.live { color: var(--brown); }
+      .os .state.live span { border-bottom: 1px solid transparent; }
+      .os .state.live:hover span { border-bottom-color: var(--brown); }
+      .os .state.live i { background: var(--brown); }
+      .os .state.some { color: var(--brown-2); }
+      .os .state.some i { background: var(--amber); }
+      .status {
+        display: flex; align-items: center; gap: 9px; margin: 20px 0 0; padding: 0;
+        font-family: var(--mono); font-size: 12.5px; color: var(--ink-2);
+      }
+      .status .dot { width: 8px; height: 8px; border-radius: 50%; background: #d9b98f; flex: none; }
+      .status.ok .dot { background: var(--brown); }
+      .status i { font-style: normal; }
+      .status.warn .dot { background: #c98f3e; }
+      .note {
+        margin: 22px 0 0; padding: 16px 18px; background: #f2e9dc; border: 1px solid var(--line);
+        border-left: 3px solid var(--amber); border-radius: var(--r-sm); color: var(--ink-2); font-size: 15.5px;
+      }
+      .note b { color: var(--ink); }
 
-      footer { border-top: 1px solid var(--line-soft); padding: 28px 0 46px; font-size: 13px; color: var(--ink-3); background: var(--card); }
-      .fbar { display: flex; flex-wrap: wrap; gap: 10px 24px; align-items: center; font-family: var(--mono); }
+      /* spec sheet */
+      dl.spec { display: grid; grid-template-columns: 1fr 1fr; gap: 0 40px; margin: 0; }
+      dl.spec div { display: flex; justify-content: space-between; gap: 16px; padding: 11px 2px; border-top: 1px solid var(--line-soft); }
+      dl.spec div:nth-child(-n+2) { border-top: 0; }
+      dl.spec dt { font-size: 15px; color: var(--ink-2); }
+      dl.spec dd { margin: 0; font-family: var(--mono); font-size: 13px; color: var(--ink); text-align: right; }
+
+      footer { border-top: 1px solid var(--line); background: var(--paper-2); margin-top: 30px; }
+      .fbar {
+        display: flex; flex-wrap: wrap; gap: 10px 26px; align-items: center;
+        /* vertical only — see .hero: the shared .wrap owns the sides, and 0 here erases it */
+        padding-top: 26px; padding-bottom: 26px;
+        font-family: var(--mono); font-size: 12.5px; color: var(--ink-3);
+      }
       .fbar .sp { margin-left: auto; }
-      .fbar button { font: inherit; color: var(--brown); background: none; border: 1px solid var(--line); padding: 3px 8px; cursor: pointer; }
-      .fbar button:hover { border-color: var(--brown); }
-      .fmark { width: 22px; height: auto; image-rendering: pixelated; display: block; }
+      .fbar a { color: var(--ink-2); }
+      .fmark { font-family: var(--serif); font-size: 15px; color: var(--ink); }
 
-      /* ── motion: fades and the pixel assembly. decoration only, never a gate ── */
-      .js .reveal { opacity: 0; transform: translateY(14px); transition: opacity .5s ease, transform .5s ease; }
-      .js.nomotion .reveal { opacity: 1; transform: none; transition: none; }
-      .js .reveal.in { opacity: 1; transform: none; }
-      /* the overlay canvas sits ON the photo; the photo stays in the document, so if
-         this script ever fails the picture is simply there. nothing is ever hidden by us. */
-      canvas.pxmask { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; visibility: hidden; }
-      html.nopx canvas.pxmask { display: none; }
-      @media (prefers-reduced-motion: reduce) {
-        .js .reveal { opacity: 1; transform: none; transition: none; }
-        html { scroll-behavior: auto; }
-        .btn, .os a { transition: none; }
-      }
+      /* the soft entrance: never hides content from a browser that doesn't run the script */
+      html.js .reveal { opacity: 0; transform: translateY(14px); }
+      html.js .reveal.in { opacity: 1; transform: none; transition: opacity .7s ease, transform .7s ease; }
+      html.nomotion .reveal { opacity: 1 !important; transform: none !important; }
 
-      @media (max-width: 1040px) {
-        .hero { grid-template-columns: 1fr; }
-        .hero-copy { padding: 44px 24px 36px; }
-        .plate { border-left: 0; border-top: 1px solid var(--panel-line); padding: 30px 20px 0; }
-        .art img { width: 460px; max-width: 76%; }
-        .plate .bracket.bl, .plate .bracket.br { bottom: 52px; }
+      @media (max-width: 1000px) {
+        .hero { grid-template-columns: minmax(0, 1fr); }
+        .art { order: 2; }
+        .art-box { max-width: 540px; }
+        pre.bust { font-size: min(12px, calc(100cqi / 44)); }
+        .row { grid-template-columns: minmax(0, 1fr); gap: 8px; padding: 20px 4px; }
+        .row .tally { text-align: left; border-left: 0; padding-left: 0; }
+        .row .path { padding-top: 0; color: var(--ink-3); }
+        .strip { grid-template-columns: minmax(0, 1fr); }
       }
       @media (max-width: 860px) {
-        .grid2, .pair, .split { grid-template-columns: minmax(0, 1fr); }
-        .os { grid-template-columns: 1fr; }
-        .plain li { grid-template-columns: 1fr; gap: 4px; }
-        section { padding: 46px 0; }
-      }
-      @media (max-width: 760px) {
-        .kicker { font-size: 11px; letter-spacing: .07em; }
-        .bar { height: 56px; gap: 10px; }
-        .bar nav { gap: 14px; font-size: 12.5px; }
-        .bar nav a { display: none; }
-        .bar nav a.nav-dl { display: inline; }
-        .art img { width: 340px; max-width: 88%; }
-        .cell { grid-template-columns: 1fr; gap: 12px; }
-        /* this page hides scrollbars everywhere, so a box that needs sideways
-           scrolling would give no hint of it — on a phone the commands wrap instead */
-        .term .c { white-space: pre-wrap; word-break: break-word; }
+        body { font-size: 16.5px; }
+        .bar nav a:not(.pill) { display: none; }
+        .grid2, .os, dl.spec { grid-template-columns: minmax(0, 1fr); }
+        dl.spec div:nth-child(2) { border-top: 1px solid var(--line-soft); }
+        ul.plain li { grid-template-columns: minmax(0, 1fr); }
+        .hero { padding-top: 28px; }
       }
     </style>
   </head>
   <body>
-    <header>
+    <header id="top">
       <div class="wrap bar">
-        <img class="mark" src="./assets/logo-ink-128.png" alt="" width="28" height="28" />
         <span class="name">Hephaestus</span>
         <span class="vchip">v0.3.0</span>
         <nav>
           <a href="#does">what it does</a>
           <a href="#screens">screens</a>
           <a href="#honest">no ai</a>
-          <a href="#source">the code</a>
-          <a href="#get" class="nav-dl pill">get it</a>
+          <a href="#get">get it</a>
+          <a href="#details">details</a>
         </nav>
       </div>
     </header>
 
     <div class="band">
-      <div class="hero">
-        <div class="hero-copy">
+      <div class="wrap hero">
+        <div>
           <p class="kicker">Free desktop app · <b>windows · macos · linux</b></p>
           <h1>Design help that<br />shows its work.</h1>
           <p class="lead">
-            Hephaestus picks your colours, lays out your pages and tells you what's wrong
-            with the result. Every answer comes from rules written in the app — you can read
-            why it made each choice.
+            Hephaestus picks your colours, lays out your pages and tells you what's wrong with
+            the result. Every answer comes from rules written in the app — the kind you can
+            read, argue with, and ignore when you disagree.
           </p>
           <div class="cta">
-            <a class="btn" data-gh="main" id="mainBtn" href="#get">
-              <span id="mainBtnLabel">Download for Windows</span>
-              <small id="mainBtnSub">free · nothing to sign up for</small>
-            </a>
-            <a class="btn ghost" href="#screens">See the screens</a>
+            <a class="btn" href="#does"><span>See what it does</span><small>four screens, no sign-up</small></a>
+            <a class="btn ghost" href="#honest">And what it isn't</a>
           </div>
           <ul class="facts">
-            <li>works offline</li><li>no account</li><li>no AI guessing</li><li>6 mb</li>
+            <li>works offline</li><li>no account</li><li>no AI guessing</li><li>about 6 mb</li>
           </ul>
         </div>
 
-        <figure class="plate">
-          <span class="bracket tl"></span><span class="bracket tr"></span>
-          <span class="bracket bl"></span><span class="bracket br"></span>
-          <div class="art">
-            <img class="px" data-px-grid="1" data-px-boot="1" src="./assets/pixel/bust.png" width="57" height="74"
-                 alt="The Hephaestus bust rendered as pixel art: 56 blocks wide, seven warm tones, the edges dissolving into loose pixels." />
+        <figure class="art">
+          <div class="art-box">
+            <!-- the characters between these tags are generated: tools/ascii-art.py --write -->
+            <pre class="bust" role="img" aria-label="The Hephaestus mark drawn in text characters: a carved head and shoulders, measured cell by cell, where the darkest cell is an at-sign and the lightest is a space." data-cols="72" data-rows="42">
+                                    -@#%==*%:=,                         
+                               ,@@@@@@#+*@#%@@@**,                      
+                             @@#%@#@@##%+@#@#%*@@%#                     
+                         .,*@@##@@@@@@@%+@@#%+=+++++@@@#                
+                       =@@@@%##@##*%*%%#@@@@#@@##+#=*%=+@%              
+                      *#@@@*@@@@%*#@@#%*##%++#@@@%@+%*%@@+**            
+                    ##@@#@#@#@@@#+#@@#%#*+=*@@@@@@@@##*+=*@@            
+                  :%##@@@%##@@@###@@@@@@@#@@+#*-%**#@@@#%%@-            
+                =#@@@@@%%#%#%##@@@#@#@@##@@@+*%+*#%=+##@##+             
+                %###@@#%##@@@@@%#%*+@#*-@#@@@#*++=%@+*%=%@*             
+               %###@@%%##@@###=@###@@#%=%#%%%@@@@%+%%*#@+*              
+              +#@@@@@%@#@@##@@##@##@@@@@@-+@%-%#@@@%%+*#@@:             
+             +*%%@#@@#%##@@@@@%@*+%@@@##++*@@##%%%*=-=-#%%              
+             +@@@@@%##@@@#@%##@@*%*@@@@*+@@#%*%%*++=+==+@               
+            *@#@#@*%%@###@@@##@@@%*=+@@#%%%#@@**=+==-=-=*               
+            *#@@@%#@@@@@@@#*==+#@@@@+*@@@#@@#%%****%@%+*+               
+            #%@@@##@@@%@@@%+@@@@@@#@%@%**@###@#@#@##@@@**               
+           *@%@@##@@@#@@@@@%%@@@@@@@@%*%##%***##@@*%@@@+:               
+            @@@##@@@##@%*@@@#@@@#@###*=%##%%+=--=%**%##@+,              
+             #@%@#@@@@@#*#@@@@@@@@@@##@+@#@%%*+======*#@@+              
+            +##%@@#@#@@@@#=%%@#@@@#@@@%#*%##%%++====-*#%#%+             
+            #@@%@@@@@@@@@@##@@@#@@@#@@@@#+@##%%**++=+@@@@@@             
+              @@%#@@#@#@#@@@@@##*%#@###@#%##%%**++==-=*#+               
+             =@@@#@*@#@@@@@@@@@@@@@###@#@#@##%%**++==*%#%               
+             @@@@@@%#@@@@#@@@@@@#@@#########%%*%*+=++@%%:               
+              @#@@@@@@@###@@@@@#@#@@@#@#@#@##%%****++*#@                
+               +@%@#*%%##@#@#@##%##@#@#@######%%**++==-*                
+               :%#@%@@@@##@@@@@##%#@@@@@@@@@@#@##%%**+=+                
+               .#@@@@@###@@@@@###%%@#@#@#@#@@@@@@@@@@@#@                
+                 %@@#%@@@@@@@@@##%%%@#@#@@@@@@@@#+                      
+                  #@@##@#@@##@#@#%**%######@#@@@                        
+                  :@@%@@@@@+##@#@%*+%#@##%##@@@*                        
+                     *#@@@%+%@#@##*+*###%%*++#++:                       
+                    ,### +=+%%#%#%*=+*%%%***%*=-*                       
+               -*%*%*%+---=*+**%**+=-++*+***=-:--*+-                    
+           =+=++ + +=- ===*+++ +*+*= -+++= -=--: - =+=*+*+*=--          
+          =+-===-+=== ===+==- ===+=-:--=- :--:, ::----:::==+= =-:       
+       - - , : : : - - - -=- - - - - , : : - , , , : : : - - , - :      
+     ,: :::,: : ,:: : : ::: :::-: : ,,, , : , , ,,,,, , ::: ,,::. ,     
+         , : , , ,   , :     ,   , : .   , , . , ,   , ,     , . . .    
+      , . .   , , . . .   . . . . , . . , .   . . . . .   . , .   .     
+               .                   .                                    
+</pre>
           </div>
-          <figcaption class="plate-strip">
-            <b>◆ the forge</b>
-            <span>56 × 74 blocks</span>
-            <i>quantised from the mark by rule · tools/pixel-art.py</i>
-            <span class="co">0 models loaded</span>
-          </figcaption>
         </figure>
       </div>
     </div>
 
     <main class="wrap">
       <section id="does">
-        <div class="sechead"><h2>Four things, all of them yours</h2><span class="no">§ 01 — WHAT IT DOES</span></div>
-        <div class="rule"></div>
-        <p class="sub">No cloud, no seats, no monthly bill. It's one program on your machine that does the parts of design that are tedious and repeatable.</p>
+        <div class="sechead"><h2>Four things, all of them yours</h2><span class="leader"></span><span class="no">§ 01 — what it does</span></div>
+        <p class="sub">No cloud, no seats, no monthly bill. It's one program on your machine that does the parts of design that are tedious and repeatable, and leaves the rest to you.</p>
         <div class="grid2">
           <div class="cell reveal"><span class="glyph">◈</span><div><span class="n">01 · AKMON</span><h3>Colours from a sentence</h3><p>Type what you want — "calm banking app", "loud poster" — and it builds the whole palette: background, text, accents, borders, states. Contrast is checked while it works, not after.</p></div></div>
-          <div class="cell reveal"><span class="glyph">⊞</span><div><span class="n">02 · CANVAS</span><h3>Layouts that stay tidy</h3><p>Drop blocks on a canvas and everything keeps its alignment and spacing. Pages, links between pages, and an HTML export when you're done — previewable before you ship it.</p></div></div>
+          <div class="cell reveal"><span class="glyph">⊞</span><div><span class="n">02 · CANVAS</span><h3>Layouts that stay tidy</h3><p>Drop blocks on a canvas and everything keeps its alignment and spacing. Pages, links between pages, and an HTML export when you're done — viewable full-screen before you use it anywhere.</p></div></div>
           <div class="cell reveal"><span class="glyph">✦</span><div><span class="n">03 · MERKHET</span><h3>A review you can argue with</h3><p>Point it at a design and it lists what's weak — contrast too low, spacing too tight, too many colours fighting — each with a specific fix it will make, or not, at your word. It never claims a repair it hasn't measured twice.</p></div></div>
-          <div class="cell reveal"><span class="glyph">▤</span><div><span class="n">04 · TRENDS</span><h3>Places to start</h3><p>1,750 directions with colours, type and layout rules already paired, each one with a picture and a recipe. Browse them, search them, steal one, keep going.</p></div></div>
+          <div class="cell reveal"><span class="glyph">▤</span><div><span class="n">04 · TRENDS</span><h3>Places to start</h3><p>1,750 directions with colours, type and layout rules already paired, each with a recipe you can pull apart. Browse them, search them, steal one, keep going.</p></div></div>
         </div>
       </section>
 
       <section id="screens">
-        <div class="sechead"><h2>What it looks like</h2><span class="no">§ 02 — SCREENS</span></div>
-        <div class="rule"></div>
-        <p class="sub">
-          The running app, shot at 1600 × 1000 — no mockups, no studio retouching. Both Claude
-          skins are in here: the cream one and the dusted-black one. Scroll a picture out of view
-          and it falls back apart into blocks; bring it back and it assembles again.
-        </p>
-        <div class="shots">
-          <div class="shot reveal"><figure>
-            <div class="frame">
-              <div class="strip"><span class="dots"><i></i><i></i><i></i></span><u>dashboard</u><span class="r">home · claude / ambrosia</span></div>
-              <img class="px" src="./assets/shots/01-dashboard.webp" width="1600" height="1000" alt="The dashboard in the cream Claude skin: stats band, saved builds, palette library, and a live grade for the current palette." loading="lazy" />
-            </div>
-            <figcaption><b>The bench.</b> Everything you've saved, the state of the current palette, and a grade that updates as you work. The greeting changes with what you last did and what's still open.</figcaption>
-          </figure></div>
+        <div class="sechead"><h2>The screens, in the order you meet them</h2><span class="leader"></span><span class="no">§ 02 — the app</span></div>
+        <p class="sub">There are six, and that's the whole app. Nothing here is a mockup — every line below is what the screen in front of you does.</p>
+        <div class="ledger">
+          <div class="row reveal"><span class="path">home</span><div><h3>The bench</h3><p>Everything you've saved, the state of the current palette, and a grade that moves as you work. The greeting changes with what you last did and what's still open.</p></div><span class="tally">five stats, live<br /><b>nothing loaded</b></span></div>
+          <div class="row reveal"><span class="path">akmon</span><div><h3>Colour</h3><p>One line of intent in, a whole palette out — painted twice on the same page so you can see what the colour is doing, with every surface measured in steps apart instead of vibes.</p></div><span class="tally">7 roles + states<br />contrast <b>while</b> it works</span></div>
+          <div class="row reveal"><span class="path">canvas</span><div><h3>The page</h3><p>Blocks you can click, drag and resize, on a grid that holds its own alignment. Text, images, stacks. Links between pages. An export you can open in a browser and check before you ship it.</p></div><span class="tally">16-column grid<br />export <b>one click</b></span></div>
+          <div class="row reveal"><span class="path">merkhet</span><div><h3>The reviewer</h3><p>Lists what's weak, with the measurement that says so and the fix it would make. Apply one, apply all, undo any of them — it re-measures after each change and tells you what actually moved.</p></div><span class="tally">measured <b>twice</b><br />every fix revertible</span></div>
+          <div class="row reveal"><span class="path">trends</span><div><h3>The library</h3><p>1,750 directions, each one a real starting point: palette, type, spacing rules, and the reason it hangs together. Search, sort, take one and change half of it.</p></div><span class="tally"><b>1,750</b> entries<br />all on your disk</span></div>
+          <div class="row reveal"><span class="path">ask</span><div><h3>The questions</h3><p>Type a question about your own work — "is this too busy", "why does the footer feel off" — and it answers from what's on the canvas, naming the blocks it looked at.</p></div><span class="tally">rules, not guesses<br />says when it <b>can't tell</b></span></div>
+        </div>
 
-          <div class="pair">
-            <div class="shot reveal"><figure>
-              <div class="frame">
-                <div class="strip"><span class="dots"><i></i><i></i><i></i></span><u>akmon</u><span class="r">colour</span></div>
-                <img class="px" src="./assets/shots/02-colour.webp" width="1600" height="1000" alt="The colour screen: a forged palette with the page painted twice — once as assigned, once with the voice removed — plus a table of surface steps." loading="lazy" />
-              </div>
-              <figcaption><b>One line of intent in, a whole palette out.</b> Below it, the same page painted twice so you can see what the colour is doing, and the surfaces measured in steps apart instead of vibes.</figcaption>
-            </figure></div>
-            <div class="shot reveal"><figure>
-              <div class="frame">
-                <div class="strip"><span class="dots"><i></i><i></i><i></i></span><u>build</u><span class="r">canvas</span></div>
-                <img class="px" src="./assets/shots/03-canvas.webp" width="1600" height="1000" alt="The layout canvas with a heading block selected, showing drag handles, a block palette on the left and site-wide options on the right." loading="lazy" />
-              </div>
-              <figcaption><b>Blocks, not components.</b> Drag, resize, stack, tab through what's underneath. The switches on the right are site-wide and the export obeys every one of them.</figcaption>
-            </figure></div>
-          </div>
-
-          <div class="pair">
-            <div class="shot reveal"><figure>
-              <div class="frame">
-                <div class="strip"><span class="dots"><i></i><i></i><i></i></span><u>build</u><span class="r">▶ preview · 1440</span></div>
-                <img class="px" src="./assets/shots/04-preview.webp" width="1600" height="1000" alt="The full-screen preview: the exported HTML shown at a chosen width with working links, beside the editor." loading="lazy" />
-              </div>
-              <figcaption><b>▶ preview shows the file, not a drawing of it.</b> The exported HTML, full size, at 1440 / 1200 / 834 / 390, with its links live. What you see is what ships.</figcaption>
-            </figure></div>
-            <div class="shot reveal"><figure>
-              <div class="frame">
-                <div class="strip"><span class="dots"><i></i><i></i><i></i></span><u>merkhet</u><span class="r">review · fix</span></div>
-                <img class="px" src="./assets/shots/05-review.webp" width="1600" height="1000" alt="The merkhet panel listing findings on the page, with a verdict that reads 'checked twice: 1 of 1 fixed, nothing left'." loading="lazy" />
-              </div>
-              <figcaption><b>The reviewer, mid-repair.</b> Four modes, each in plain language. Every change is measured before and after, anything that made it worse gets put back, and the verdict only says "fixed" when it verified it.</figcaption>
-            </figure></div>
-          </div>
-
-          <div class="shot reveal"><figure>
-            <div class="frame">
-              <div class="strip"><span class="dots"><i></i><i></i><i></i></span><u>trends</u><span class="r">1,750 directions · paged 24</span></div>
-              <img class="px" src="./assets/shots/06-library.webp" width="1600" height="1000" alt="The trends library: a searchable, tag-filterable list of directions, each with a drawn example and a recipe." loading="lazy" />
-            </div>
-            <figcaption><b>1,750 ways to start, and every one buildable.</b> Each entry carries the rules that define it, a picture drawn from them, and a recipe naming the exact preset, blocks and switches to press. Search, tag, sort, page.</figcaption>
-          </figure></div>
-
-          <div class="pair night">
-            <div class="shot reveal"><figure>
-              <div class="frame">
-                <div class="strip"><span class="dots"><i></i><i></i><i></i></span><u>akmon</u><span class="r">claude / nyx</span></div>
-                <img class="px" src="./assets/shots/07-night.webp" width="1600" height="1000" alt="The colour screen in the Nyx skin: dusted black with orange coals, same layout, same readings." loading="lazy" />
-              </div>
-              <figcaption><b>Two Claudes.</b> Click the theme tile and the cream one becomes dusted black with orange coals. Same voice, same rules, different room to work in.</figcaption>
-            </figure></div>
-            <div class="shot reveal"><figure>
-              <div class="frame">
-                <div class="strip"><span class="dots"><i></i><i></i><i></i></span><u>cedalion</u><span class="r">ask · answer</span></div>
-                <img class="px" src="./assets/shots/08-ask.webp" width="1600" height="1000" alt="The Cedalion window open beside the colour screen, answering a question about the current palette." loading="lazy" />
-              </div>
-              <figcaption><b>"ask cedalion" asks.</b> It reads the screen you're actually on and answers about it — the palette, the page, the canvas — in a window you can move and leave open.</figcaption>
-            </figure></div>
-          </div>
+        <div class="forged reveal">
+          <h3>What the colour engine actually gives back</h3>
+          <p>Three sentences, run through Akmon as it ships — the same call the app makes, with the
+          sentence as the seed and light mode asked for. Nothing below was chosen by hand.</p>
+          <div class="strip"><span class="say">“calm banking app”<i>Calm Banking Slag · analogous · background #EDF8F6</i></span><span class="chips"><span style="background:#E0EDEB"></span><span style="background:#C2D2D0"></span><span style="background:#607371"></span><span style="background:#4A6965"></span><span style="background:#6786A0"></span><span style="background:#749681"></span></span></div>
+          <div class="strip"><span class="say">“loud poster”<i>Loud Poster Hammer · complement · background #FFF8F9</i></span><span class="chips"><span style="background:#F6EAEC"></span><span style="background:#E4D4D7"></span><span style="background:#776569"></span><span style="background:#DA0063"></span><span style="background:#009B95"></span><span style="background:#FF3A7B"></span></span></div>
+          <div class="strip"><span class="say">“a bookshop that sells good coffee”<i>Bookshop That Crucible · neutral with an accent · background #FFFDFB</i></span><span class="chips"><span style="background:#F4EFEC"></span><span style="background:#E4DEDA"></span><span style="background:#59524E"></span><span style="background:#84624B"></span><span style="background:#A8894A"></span><span style="background:#D2721B"></span></span></div>
+          <p class="foot">surface · border · muted · primary · secondary · accent — copied out of the engine, not out of a designer's file.</p>
         </div>
       </section>
 
       <section id="honest">
-        <div class="sechead"><h2>What it isn't</h2><span class="no">§ 03 — THE CATCH</span></div>
-        <div class="rule"></div>
+        <div class="sechead"><h2>What it isn't</h2><span class="leader"></span><span class="no">§ 03 — the catch</span></div>
         <p class="sub">Worth saying out loud, because most tools avoid it.</p>
         <ul class="plain">
-          <li class="reveal"><b>No AI</b><span>Nothing generates your work and nothing sends it anywhere. Rules and measurements instead — which means the same input gives the same answer, every time, and you can look up why.</span></li>
-          <li class="reveal"><b>No account, no telemetry</b><span>It runs offline. Your files stay on your disk. The only network request on this page is the one that reads your latest release from GitHub, and it's a public endpoint.</span></li>
-          <li class="reveal"><b>No subscription</b><span>It's free, it's MIT, and the whole thing — every rule, every measurement — is in the repo. Take it, build it, change it.</span></li>
-          <li class="reveal"><b>Not a Figma replacement</b><span>It won't do multiplayer, prototypes or plugins. It's strong at exactly the four things above and quiet about the rest.</span></li>
-          <li class="reveal"><b>Even this page is by rule</b><span>The bust above is the app's own mark quantised onto a 56-block grid with a 4×4 Bayer dither and seven warm tones. The script that made it is in <code class="mono">tools/pixel-art.py</code> — 200 lines, no model.</span></li>
+          <li class="reveal"><b>No AI</b><span>Nothing generates your work and nothing sends it anywhere to be generated for you. Rules and measurements instead — so the same input gives the same answer every time, and you can look up why.</span></li>
+          <li class="reveal"><b>No account, no telemetry</b><span>The app runs offline and keeps its files on your disk. No fonts, no images, no analytics, nothing that could count you reading it. The only call this page can make is an anonymous read of a public release list, and it makes it twice at most, once: no token, no cookie, nothing beyond the IP any request carries.</span></li>
+          <li class="reveal"><b>No subscription</b><span>It's free, and it isn't free "while it's in beta". There's no key, no seat count, no license screen, nothing that stops working in a year.</span></li>
+          <li class="reveal"><b>Not a Figma replacement</b><span>It won't do multiplayer, prototypes or plugins. It's good at the four things above and quiet about everything else.</span></li>
+          <li class="reveal"><b>Nothing hard-wired</b><span>The markup contains no download URLs at all. The cards read the newest published release when there is one to read, and stay plainly inert when the repo is private, empty, or unreachable — so a stale page can't offer you a file that was never uploaded. <a href="#get">How to get it</a> has the details.</span></li>
+          <li class="reveal"><b>Even the portrait is by rule</b><span>The head above is the app's own mark measured on a 72-cell grid and set in ten characters, darkest to <code>@</code>. The strips in the screens section came out of the same kind of rule. <code>tools/ascii-art.py</code>: arithmetic, a font metric, nothing trained.</span></li>
         </ul>
       </section>
 
       <section id="get">
-        <div class="sechead"><h2>Get it</h2><span class="no">§ 04 — DOWNLOAD</span></div>
-        <div class="rule"></div>
-        <p class="sub">Pick your system. The three buttons below read the newest release on GitHub and fill themselves in, so this page is never out of date.</p>
+        <div class="sechead"><h2>How to get it</h2><span class="leader"></span><span class="no">§ 04 — availability</span></div>
+        <p class="sub">Pick your system. Each card fills itself from the newest published release of the repo this site was built from — and when there is no public release to read, it says <b>not posted yet</b> instead of pointing you at something that isn't there.</p>
         <div class="os">
-          <a class="reveal" data-gh="asset:windows" data-kind="windows" href="#source">
-            <span class="top">
-              <span class="ostile"><svg class="osicon" data-icon="windows" viewBox="0 0 24 21" fill="currentColor" aria-hidden="true"></svg></span>
-              <span><span class="t">Windows</span> <em class="tag" hidden>you</em></span>
-            </span>
-            <span class="d">Windows 10 and 11, 64-bit · installer</span>
-            <span class="file" id="f-win">looks for <b>*-setup.exe</b></span>
-            <span class="go">↓ download</span>
-          </a>
-          <a class="reveal" data-gh="asset:mac" data-kind="mac" href="#source">
-            <span class="top">
-              <span class="ostile"><svg class="osicon" data-icon="apple" viewBox="0 0 24 25" fill="currentColor" aria-hidden="true"></svg></span>
-              <span><span class="t">macOS</span> <em class="tag" hidden>you</em></span>
-            </span>
-            <span class="d">Apple silicon and Intel · disk image</span>
-            <span class="file" id="f-mac">looks for <b>*aarch64*.dmg</b></span>
-            <span class="go">↓ download</span>
-          </a>
-          <a class="reveal" data-gh="asset:linux" data-kind="linux" href="#source">
-            <span class="top">
-              <span class="ostile"><svg class="osicon" data-icon="linux" viewBox="0 0 24 26" fill="currentColor" aria-hidden="true"></svg></span>
-              <span><span class="t">Linux</span> <em class="tag" hidden>you</em></span>
-            </span>
-            <span class="d">Any recent distro · AppImage and .deb</span>
-            <span class="file" id="f-linux">looks for <b>*.AppImage</b></span>
-            <span class="go">↓ download</span>
-          </a>
+          <div class="reveal" data-kind="windows">
+            <span class="top"><span class="idx">01</span> <span class="t">Windows</span> <em class="you" hidden>you</em></span>
+            <p class="d">Windows 10 and 11, 64-bit. An installer, one .exe, nothing else dragged in.</p>
+            <a class="state" href="#get" data-dl="windows"><i></i><span>not posted yet</span></a>
+          </div>
+          <div class="reveal" data-kind="mac">
+            <span class="top"><span class="idx">02</span> <span class="t">macOS</span> <em class="you" hidden>you</em></span>
+            <p class="d">Apple silicon and Intel, one disk image for both. Unusual for a free tool, deliberate.</p>
+            <a class="state" href="#get" data-dl="mac"><i></i><span>not posted yet</span></a>
+          </div>
+          <div class="reveal" data-kind="linux">
+            <span class="top"><span class="idx">03</span> <span class="t">Linux</span> <em class="you" hidden>you</em></span>
+            <p class="d">Any recent distro: an AppImage that runs, and a .deb for the ones that want a package.</p>
+            <a class="state" href="#get" data-dl="linux"><i></i><span>not posted yet</span></a>
+          </div>
         </div>
-        <p class="status" id="status"><span class="dot"></span><i id="statusText">reading the latest release…</i></p>
-        <p class="note" id="note">
-          macOS builds aren't signed with a developer certificate yet, so on first launch
-          right-click the app and choose <b>Open</b>. Everything else installs normally.
+        <p class="status" id="status"><span class="dot"></span><i id="statusText">checking for a published release…</i></p>
+        <p class="note">
+          <b>Nothing here is typed by hand.</b> The deploy step points this page at the repo it was
+          built from, and the cards take whatever the newest <i>published</i> release actually holds —
+          file name, size, the works. A repo that is private, or a release that was never published,
+          or a network that won't answer all leave the cards as they are: no link invented, no
+          button that goes nowhere. macOS builds aren't signed with a developer certificate, so on
+          the first launch right-click the app and choose <b>Open</b>. Everything else installs normally.
         </p>
       </section>
 
-      <section id="source">
-        <div class="sechead"><h2>The code</h2><span class="no">§ 05 — OPEN, AND HOW TO BUILD IT</span></div>
-        <div class="rule"></div>
-        <div class="split">
-          <div>
-            <p class="sub" style="margin-bottom: 18px">
-              MIT, whole app and whole site, one folder. No CLA, no contributor agreement,
-              no "core stays closed". If the buttons above are still pointing here, this page
-              simply hasn't been connected to a repo yet — that's one command.
-            </p>
-            <ul class="why">
-              <li><b>The engine is 4 files.</b> colour, layout, review, trends — read them in an evening and you know every rule the app has.</li>
-              <li><b>Build it yourself, if the download isn't out yet.</b> <code class="mono">npm run tauri build</code> and the installer is in <code class="mono">src-tauri/target/release/bundle</code>.</li>
-              <li><b>Nothing phones home.</b> No update pinger, no crash reporter, no analytics. An updater that asks before it fetches, if you turn it on.</li>
-            </ul>
-          </div>
-          <div>
-            <div class="term">
-              <span class="h"># the app, from a clone</span>
-              <span class="c"><span class="p">▸</span> git clone https://github.com/OWNER/hephaestus
-<span class="p">▸</span> cd hephaestus &amp;&amp; npm install
-<span class="p">▸</span> npm run dev            <span class="h"># the web build, localhost</span>
-<span class="p">▸</span> npm run tauri dev      <span class="h"># the desktop shell</span>
-<span class="p">▸</span> npm run tauri build    <span class="h"># .msi · .dmg · AppImage</span></span>
-            </div>
-            <div class="term">
-              <span class="h"># this page, pointed at your releases</span>
-              <span class="c"><span class="p">▸</span> node tools/connect.mjs &lt;your-github-username&gt;
-  <span class="h">writes site/config.js, checks the repo is public,</span>
-  <span class="h">re-points every link, rebuilds the offline copy.</span></span>
-            </div>
-          </div>
-        </div>
+      <section id="details">
+        <div class="sechead"><h2>The small print, in full</h2><span class="leader"></span><span class="no">§ 05 — details</span></div>
+        <dl class="spec">
+          <div><dt>Version</dt><dd>0.3.0</dd></div>
+          <div><dt>Platforms</dt><dd>win · mac · linux</dd></div>
+          <div><dt>Disk</dt><dd>~6 mb installed</dd></div>
+          <div><dt>Network needed</dt><dd>never</dd></div>
+          <div><dt>Engine</dt><dd>4 files, all readable</dd></div>
+          <div><dt>Directions in the library</dt><dd>1,750</dd></div>
+          <div><dt>Accounts, keys, telemetry</dt><dd>none of the three</dd></div>
+          <div><dt>Licence</dt><dd>MIT</dd></div>
+          <div><dt>Made by</dt><dd>one person, on purpose</dd></div>
+          <div><dt>This page</dt><dd>one file, one allowed call</dd></div>
+        </dl>
       </section>
     </main>
 
     <footer>
       <div class="wrap fbar">
-        <img class="fmark" src="./assets/pixel/bust-cream.png" alt="" width="44" height="57" />
-        <span>Hephaestus<span id="verFoot"></span> · a design workspace that explains itself</span>
-        <span class="sp" id="contactFoot"></span>
-        <span><a data-gh="repo" href="#source">source on GitHub</a></span>
-        <button id="pxToggle" type="button" title="turn the pixel dissolve on scroll off">◆ pixel on</button>
+        <span class="fmark">Hephaestus</span>
+        <span>a design workspace that explains itself · v0.3.0</span>
+        <span class="sp">no cookies, no analytics, nothing loaded from anywhere but here</span>
+        <a href="#top" onclick="scrollTo({top:0,behavior:'smooth'});return false;">↑ top</a>
       </div>
     </footer>
 
     <script>
-    /* ═══ 1 · the pixel assembly ═══════════════════════════════════════════════
-       Every photo on the page assembles from blocks as it enters the view and falls
-       back apart as it leaves — in both directions, for as long as you scroll, not
-       a one-shot trick. How it works:
-
-         · the <img> stays in the document. a <canvas> is laid over it.
-         · progress p = how much of the picture is in the window (0 → 1).
-         · at each p, the frame draws the mosaic: cells whose own threshold has been
-           passed are painted from a 1-cell-per-block copy, with a little jitter left
-           over from the scatter. above p .74 the real image is cross-faded in.
-         · at p = 1 the canvas is cleared and hidden. The photo you see is the photo.
-         · no readback, only drawImage, so it can't be tainted and works from file://.
-         · if anything here throws, the canvases go away and the page is a page.
-    */
-    (function () {
-      var root = document.documentElement;
-      if (root.classList.contains("nopx") || !("IntersectionObserver" in window) || !root.classList.contains("js")) return;
-      var imgs = [].slice.call(document.querySelectorAll("img.px"));
-      if (!imgs.length) return;
-
-      function clamp(v) { return v < 0 ? 0 : v > 1 ? 1 : v; }
-      function hash(n, s) { var x = Math.sin(n * 12.9898 + s * 78.233) * 43758.5453; return x - Math.floor(x); }
-
-      var units = [];
-      imgs.forEach(function (img) {
-        if (!img.parentNode) return;
-        var host = img.closest(".frame, .art");
-        if (!host) return;
-        if (getComputedStyle(host).position === "static") host.style.position = "relative";
-        var cv = document.createElement("canvas");
-        cv.className = "pxmask";
-        cv.setAttribute("aria-hidden", "true");
-        host.appendChild(cv);
-        var u = { img: img, host: host, cv: cv, ctx: cv.getContext("2d"), cols: 0, rows: 0,
-                  off: document.createElement("canvas"), p: 0, shown: -1, boot: img.dataset.pxBoot ? 0 : 1, ready: false };
-        if (!u.ctx || !u.off.getContext) { cv.remove(); return; }
-        u.octx = u.off.getContext("2d");
-        units.push(u);
-        // the art is already a grid; use its own block count so cells ARE the blocks
-        u.pin = img.hasAttribute("data-px-grid");
-        measure(u);
-        if (img.complete && img.naturalWidth) arm(u); else img.addEventListener("load", function () { arm(u); }, { once: true });
-        img.addEventListener("error", function () { cv.remove(); }, { once: true });
-      });
-      if (!units.length) { root.classList.add("nopx"); return; }
-
-      function arm(u) {
-        if (!(u.img.naturalWidth > 1)) return;
-        u.ready = true;
-        size(u);
-      }
-      function measure(u) {
-        var r = u.img.getBoundingClientRect();
-        u.box = { w: Math.round(r.width), h: Math.round(r.height) };
-      }
-      /** geometry only changes on a resize; re-assigning canvas.width wipes the frame,
-          so nothing here may touch it unless the size really moved */
-      function size(u) {
-        var b = u.box, dpr = Math.min(3, window.devicePixelRatio || 1);
-        if (!b || b.w < 8 || b.h < 8) return;
-        var cols = u.pin ? u.img.naturalWidth : Math.max(10, Math.min(72, Math.round(b.w / 11)));
-        var rows = u.pin ? u.img.naturalHeight : Math.max(6, Math.round(cols * b.h / b.w));
-        var key = b.w + "x" + b.h + "@" + dpr;
-        if (key === u.key && cols === u.cols && rows === u.rows) return;
-        u.key = key;
-        u.cv.width = Math.round(b.w * dpr); u.cv.height = Math.round(b.h * dpr);
-        u.cols = cols; u.rows = rows; u.dpr = dpr;
-        u.off.width = cols; u.off.height = rows;
-        u.octx.imageSmoothingQuality = "high";
-        u.octx.clearRect(0, 0, cols, rows);
-        u.octx.drawImage(u.img, 0, 0, cols, rows);
-        var n = cols * rows;
-        u.th = new Float32Array(n);
-        for (var i = 0; i < n; i++) u.th[i] = hash(i + 1, cols * 7 + rows);
-        u.shown = -1;                      // repaint from scratch at the new geometry
-      }
-
-      function progress(u) {
-        var vh = window.innerHeight || 1;
-        var r = u.img.getBoundingClientRect();
-        if (!r.width) return 1;
-        var seen = Math.min(r.bottom, vh) - Math.max(r.top, 0);
-        // which edge is still inside the window decides the ORDER the blocks arrive
-        // from, so the part you can see is the part that has assembled. without this a
-        // picture leaving through the top would be an empty frame.
-        u.dir = r.top < 0 ? 1 : 0;
-        u.vis = seen / r.height;
-        return clamp((seen / r.height - 0.02) / 0.6);
-      }
-
-      function draw(u) {
-        var p = u.p, b = u.box, cols = u.cols, rows = u.rows, ctx = u.ctx;
-        if (!cols || !rows) return;
-        var dpr = u.dpr || 1;
-        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-        ctx.clearRect(0, 0, b.w, b.h);
-        if (p >= 0.999) { u.cv.style.visibility = "hidden"; return; }
-        u.cv.style.visibility = "visible";
-        var cw = b.w / cols, ch = b.h / rows;
-        // the mosaic stays whole until the last moment, then hands over quickly: a long
-        // cross-fade is what turns "assembling from blocks" into "slightly blurry photo"
-        var crisp = clamp((p - 0.86) / 0.14);
-        var gate = 1 - crisp;
-        ctx.imageSmoothingEnabled = false;
-        var scatter = p < 0.86 ? (1 - p) * (1 - p) : 0;
-        for (var r = 0; r < rows; r++) {
-          var y0 = r * ch;
-          var lead = (u.dir ? rows - 1 - r : r) / rows;          // counted from the visible edge
-          for (var c = 0; c < cols; c++) {
-            var a = (p - (lead * 0.74 + u.th[r * cols + c] * 0.17)) / 0.24;
-            if (a <= 0) continue;
-            if (a > 1) a = 1;
-            var jx = 0, jy = 0;
-            if (scatter > 0.004) {
-              jx = (hash(r * 31 + c * 7 + 1, 5) * 2 - 1) * cw * 1.1 * scatter;
-              jy = (hash(r * 17 + c * 13 + 2, 9) * 2 - 1) * ch * 1.1 * scatter - ch * 0.5 * scatter;
-            }
-            ctx.globalAlpha = a * gate;
-            ctx.drawImage(u.pin ? u.img : u.off, c, r, 1, 1,
-                          c * cw + jx, y0 + jy, cw + 0.7, ch + 0.7);
-          }
-        }
-        if (crisp > 0) {
-          ctx.globalAlpha = crisp;
-          ctx.imageSmoothingEnabled = u.pin ? false : true;
-          ctx.drawImage(u.img, 0, 0, b.w, b.h);
-        }
-        ctx.globalAlpha = 1;
-      }
-
-      var raf = null, last = 0;
-      function tick(now) {
-        raf = null;
-        var moving = false;
-        try {
-          for (var i = 0; i < units.length; i++) {
-            var u = units[i];
-            if (!u.ready) { if (u.img.complete) arm(u); continue; }
-            size(u);
-            u.p = progress(u);
-            if (u.boot < 1) { u.boot = Math.min(1, u.boot + (now - (last || now)) / 900); moving = true; }
-            if (Math.abs(u.p - u.shown) > 0.002) { u.shown = u.p; draw(u); moving = moving || u.p < 0.999; }
-          }
-        } catch (e) {
-          root.classList.add("nopx");
-          units.forEach(function (u) { u.cv.remove(); });
-          return;
-        }
-        last = now;
-        if (moving) raf = requestAnimationFrame(tick);
-      }
-      function queue() { if (raf === null) raf = requestAnimationFrame(tick); }
-      function onScroll() {
-        for (var i = 0; i < units.length; i++) measure(units[i]);
-        queue();
-      }
-      addEventListener("scroll", onScroll, { passive: true });
-      addEventListener("resize", onScroll);
-      if (window.ResizeObserver) {
-        var ro = new ResizeObserver(onScroll);
-        units.forEach(function (u) { ro.observe(u.host); });
-      }
-      // boot: the plate assembles on arrival; everything else just sits at rest
-      units.forEach(function (u) { if (u.boot < 1) { u.p = 0; } });
-      queue();
-      setTimeout(onScroll, 60);
-    })();
-
-    /* ═══ 2 · fades ═══════════════════════════════════════════════════════════ */
-    (function () {
-      var root = document.documentElement;
-      if (root.classList.contains("nomotion") || !("IntersectionObserver" in window)) return;
-      var io = new IntersectionObserver(function (es) {
-        es.forEach(function (e) { if (e.isIntersecting) { e.target.classList.add("in"); io.unobserve(e.target); } });
-      }, { rootMargin: "0px 0px -8% 0px" });
-      document.querySelectorAll(".reveal").forEach(function (n) { io.observe(n); });
-      addEventListener("load", function () {
-        setTimeout(function () {
-          document.querySelectorAll(".reveal:not(.in)").forEach(function (n) {
-            if (n.getBoundingClientRect().top < innerHeight) n.classList.add("in");
-          });
-        }, 400);
-      });
-    })();
-
-    /* ═══ 3 · the pixel toggle ══════════════════════════════════════════════
-       It's a decoration that moves. Some people want it off, so it says so. */
-    (function () {
-      var b = document.getElementById("pxToggle");
-      if (!b) return;
-      function label() { b.textContent = document.documentElement.classList.contains("nopx") ? "◇ pixel off" : "◆ pixel on"; }
-      label();
-      b.addEventListener("click", function () {
-        var off = document.documentElement.classList.toggle("nopx");
-        try { localStorage.setItem("hephaestus.px", off ? "off" : "on"); } catch (e) {}
-        label();
-        if (!off) location.reload();       // the canvases are built once, so let the page rebuild them
-      });
-    })();
-
-    /* ═══ 4 · the release feed, and a rule about links ═══════════════════════
-       A link on this page must never be able to 404. So the markup holds only
-       same-page anchors; a GitHub URL appears in a link after it has been checked
-       to exist (or after tools/connect.mjs has baked in one you typed).
-    */
-    (function () {
-      var H = window.HEPH || {};
-      var owner = (H.owner || "").trim(), repo = (H.repo || "hephaestus").trim();
-      var PLACEHOLDER = !owner || /your-github-username|owner/i.test(owner);
-      var $ = function (id) { return document.getElementById(id); };
-      var status = $("status"), say = function (t, cls) {
-        // the single-file preview is offline on purpose and says so; don't talk over it
-        if (!status || status.hasAttribute("data-static")) return;
-        var line = $("statusText");
-        if (!line) return;
-        line.textContent = t;
-        status.className = "status" + (cls ? " " + cls : "");
-      };
-      var GH = PLACEHOLDER ? "" : "https://github.com/" + owner + "/" + repo;
-      var links = [].slice.call(document.querySelectorAll("[data-gh]"));
-      function setHref(kind, url) {
-        links.forEach(function (a) { if (a.getAttribute("data-gh") === kind) { if (url) a.href = url; } });
-      }
-      function toNotes() {   /* the honest fallback: the section below explains why */
-        links.forEach(function (a) { a.href = "#source"; a.title = "not published yet — see “the code” below"; });
-      }
-
-      // the visitor's own system gets the headline button and the "you" flag
-      var os = /mac|iphone|ipad/i.test(navigator.platform) ? "mac"
-        : /linux|android/i.test(navigator.userAgent) ? "linux"
-        : /win/i.test(navigator.platform || navigator.userAgent) ? "windows" : "";
-      var NAMES = { windows: "Windows", mac: "macOS", linux: "Linux" };
-      if (os) {
-        $("mainBtnLabel").textContent = "Download for " + NAMES[os];
-        var card = document.querySelector("[data-kind=" + os + "]");
-        if (card) { var t = card.querySelector(".tag"); if (t) t.hidden = false; }
-      }
-      var FILE = { windows: ["f-win", /setup\.exe$/i, /\.msi$/i, "*.msi"], mac: ["f-mac", /(aarch64|arm64).*\.dmg$/i, /(x86_64|x64|x86-64).*\.dmg$/i, "*x64*.dmg"], linux: ["f-linux", /\.appimage$/i, /\.deb$/i, "*.deb"] };
-
-      if (PLACEHOLDER) {
-        toNotes();
-        setHref("main", "#get");
-        say("this copy isn't connected to a repo yet — the buttons come here until it is", "warn");
-        $("note").innerHTML = '<span class="mono" style="font-size:12.5px">node tools/connect.mjs &lt;your-github-username&gt;</span> — one command, then these buttons read your releases and nothing else changes.';
-        return;
-      }
-      // NB: the repo URL is only written in AFTER api.github.com has confirmed it
-      // exists. a link that was never verified must never be added by this script.
-      if (H.sourcePublic === false) {
-        say("the repo is private for now — the source link stays on this page", "warn");
-        toNotes();
-        return;
-      }
-      if (H.contact) $("contactFoot").innerHTML = '<a href="mailto:' + H.contact + '">' + H.contact + "</a>";
-
-      var api = "https://api.github.com/repos/" + owner + "/" + repo;
-      // three answers, not two: a 404 means there is nothing there, a failure to
-      // connect means we have no idea and must not rewrite a link that already works
-      function get(url) {
-        var ctl = typeof AbortController !== "undefined" ? new AbortController() : null;
-        var t = ctl && setTimeout(function () { ctl.abort(); }, 6000);
-        return fetch(url, { headers: { Accept: "application/vnd.github+json" }, signal: ctl ? ctl.signal : undefined })
-          .then(function (r) {
-            clearTimeout(t);
-            return r.ok ? r.json().then(function (j) { return { json: j }; }, function () { return { net: 1 }; })
-                        : { missing: r.status };
-          }, function () { clearTimeout(t); return { net: 1 }; });
-      }
-      // check the repo exists BEFORE a link goes anywhere near it
-      get(api).then(function (res) {
-        if (res && res.net) {
-          say("can't reach GitHub from here — the links stay as they were written", "warn");
-          return;
-        }
-        var r0 = res && res.json;
-        if (!r0) {
-          setHref("repo", "#source"); setHref("main", "#get"); toNotes();
-          say(owner + "/" + repo + " isn't public yet — links stay here until it is", "warn");
-          return;
-        }
-        setHref("repo", r0.html_url || GH);
-        return get(api + "/releases/latest").then(function (res) {
-          if (res && res.net) { say("can't reach GitHub from here — the links stay as they were written", "warn"); return; }
-          var rel = res && res.json;
-          var RELP = (r0.html_url || GH) + "/releases";   // this page exists even when it's empty
-          if (!rel || !rel.assets) {
-            setHref("releases", RELP); setHref("main", RELP);
-            links.forEach(function (a) { if (a.getAttribute("data-gh").indexOf("asset:") === 0) a.href = RELP; });
-            say("no release published yet — the buttons open the releases page", "warn");
-            return;
-          }
-          var A = rel.assets;
-          function pick(k) {
-            var c = FILE[k], re = c[1], also = c[2];
-            for (var i2 = 0; i2 < A.length; i2++) if (re.test(A[i2].name)) return A[i2];
-            for (i2 = 0; i2 < A.length; i2++) if (also.test(A[i2].name)) return A[i2];
-            return null;
-          }
-          var mb = null, found = 0;
-          Object.keys(FILE).forEach(function (k) {
-            var card = document.querySelector('[data-kind="' + k + '"]');
-            var a = pick(k);
-            if (!card) return;
-            if (!a) { card.querySelector(".file").innerHTML = "no <b>" + FILE[k][3] + "</b> in this release"; card.classList.add("missing"); return; }
-            found++;
-            card.href = a.browser_download_url;
-            card.title = a.name;
-            card.querySelector(".file").innerHTML = a.name + " · <b>" + (a.size / 1048576).toFixed(1) + " MB</b>";
-            if (k === os) mb = a;
-          });
-          var d = new Date(rel.published_at);
-          var when = isNaN(d) ? "recently" : d.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
-          if (mb) {
-            setHref("main", mb.browser_download_url);
-            $("mainBtnSub").textContent = (mb.size / 1048576).toFixed(1) + " MB · free · " + (rel.tag_name || "");
-          } else {
-            setHref("main", RELP);
-          }
-          // a one-line taste of the changelog — only if the line is actually prose:
-          // release bodies open with fences, badges and links far too often
-          var line = "";
-          if (rel.body) {
-            line = rel.body.split(/\r?\n/)
-              .map(function (s) { return s.replace(/^\s*(?:[#>*\-+]|```)+\s*/, "").replace(/[*`_]+/g, "").trim(); })
-              .filter(function (s) { return /^[A-Za-z0-9]/.test(s) && (s.match(/\S+/g) || []).length >= 3 && s.length > 24 && s.length < 120 && !/^https?:/i.test(s); })[0] || "";
-          }
-          say((rel.tag_name || "") + " · released " + when + (line ? " — " + line : ""), "live");
-          if ($("verFoot") && rel.tag_name) $("verFoot").textContent = " " + rel.tag_name;
-          if (!found) say((rel.tag_name || "the newest release") + " has no installer in it yet", "warn");
-        });
-      });
-    })();
-    </script>
-    <script>
-      /* the pixel icons, drawn by the same rules as everything else here.
-         generated from tools/pixel-art.py — geometry, one rect per run, no font, no image */
+      /* the release reader, and the rule it exists to enforce: this page never writes down a
+         link it hasn't seen come back from GitHub. Every fallback is an anchor that already
+         points at this section, so "no network", "private repo", "nothing published yet" and
+         "JavaScript off" all look the same — which is the correct answer, not a failure. */
       (function () {
-        var ICONS = {"windows": "<rect x=\"3\" y=\"1\" width=\"9\" height=\"1\"/><rect x=\"15\" y=\"1\" width=\"9\" height=\"1\"/><rect x=\"3\" y=\"2\" width=\"9\" height=\"1\"/><rect x=\"15\" y=\"2\" width=\"9\" height=\"1\"/><rect x=\"3\" y=\"3\" width=\"9\" height=\"1\"/><rect x=\"15\" y=\"3\" width=\"9\" height=\"1\"/><rect x=\"3\" y=\"4\" width=\"9\" height=\"1\"/><rect x=\"14\" y=\"4\" width=\"10\" height=\"1\"/><rect x=\"3\" y=\"5\" width=\"9\" height=\"1\"/><rect x=\"14\" y=\"5\" width=\"9\" height=\"1\"/><rect x=\"3\" y=\"6\" width=\"9\" height=\"1\"/><rect x=\"14\" y=\"6\" width=\"9\" height=\"1\"/><rect x=\"3\" y=\"7\" width=\"9\" height=\"1\"/><rect x=\"14\" y=\"7\" width=\"9\" height=\"1\"/><rect x=\"2\" y=\"8\" width=\"9\" height=\"1\"/><rect x=\"14\" y=\"8\" width=\"9\" height=\"1\"/><rect x=\"2\" y=\"9\" width=\"9\" height=\"1\"/><rect x=\"14\" y=\"9\" width=\"9\" height=\"1\"/><rect x=\"2\" y=\"12\" width=\"9\" height=\"1\"/><rect x=\"13\" y=\"12\" width=\"9\" height=\"1\"/><rect x=\"2\" y=\"13\" width=\"9\" height=\"1\"/><rect x=\"13\" y=\"13\" width=\"9\" height=\"1\"/><rect x=\"2\" y=\"14\" width=\"9\" height=\"1\"/><rect x=\"13\" y=\"14\" width=\"9\" height=\"1\"/><rect x=\"1\" y=\"15\" width=\"10\" height=\"1\"/><rect x=\"13\" y=\"15\" width=\"9\" height=\"1\"/><rect x=\"1\" y=\"16\" width=\"9\" height=\"1\"/><rect x=\"13\" y=\"16\" width=\"9\" height=\"1\"/><rect x=\"1\" y=\"17\" width=\"9\" height=\"1\"/><rect x=\"13\" y=\"17\" width=\"9\" height=\"1\"/><rect x=\"1\" y=\"18\" width=\"9\" height=\"1\"/><rect x=\"13\" y=\"18\" width=\"9\" height=\"1\"/><rect x=\"1\" y=\"19\" width=\"9\" height=\"1\"/><rect x=\"12\" y=\"19\" width=\"10\" height=\"1\"/><rect x=\"1\" y=\"20\" width=\"9\" height=\"1\"/><rect x=\"12\" y=\"20\" width=\"9\" height=\"1\"/>", "apple": "<rect x=\"16\" y=\"4\" width=\"2\" height=\"1\"/><rect x=\"14\" y=\"5\" width=\"4\" height=\"1\"/><rect x=\"11\" y=\"6\" width=\"1\" height=\"1\"/><rect x=\"13\" y=\"6\" width=\"5\" height=\"1\"/><rect x=\"11\" y=\"7\" width=\"5\" height=\"1\"/><rect x=\"10\" y=\"8\" width=\"4\" height=\"1\"/><rect x=\"5\" y=\"9\" width=\"14\" height=\"1\"/><rect x=\"4\" y=\"10\" width=\"16\" height=\"1\"/><rect x=\"3\" y=\"11\" width=\"18\" height=\"1\"/><rect x=\"3\" y=\"12\" width=\"18\" height=\"1\"/><rect x=\"2\" y=\"13\" width=\"17\" height=\"1\"/><rect x=\"2\" y=\"14\" width=\"17\" height=\"1\"/><rect x=\"2\" y=\"15\" width=\"16\" height=\"1\"/><rect x=\"2\" y=\"16\" width=\"16\" height=\"1\"/><rect x=\"2\" y=\"17\" width=\"16\" height=\"1\"/><rect x=\"2\" y=\"18\" width=\"16\" height=\"1\"/><rect x=\"2\" y=\"19\" width=\"17\" height=\"1\"/><rect x=\"2\" y=\"20\" width=\"17\" height=\"1\"/><rect x=\"3\" y=\"21\" width=\"18\" height=\"1\"/><rect x=\"4\" y=\"22\" width=\"16\" height=\"1\"/><rect x=\"5\" y=\"23\" width=\"6\" height=\"1\"/><rect x=\"13\" y=\"23\" width=\"6\" height=\"1\"/>", "linux": "<rect x=\"10\" y=\"2\" width=\"4\" height=\"1\"/><rect x=\"9\" y=\"3\" width=\"6\" height=\"1\"/><rect x=\"8\" y=\"4\" width=\"8\" height=\"1\"/><rect x=\"8\" y=\"5\" width=\"1\" height=\"1\"/><rect x=\"11\" y=\"5\" width=\"2\" height=\"1\"/><rect x=\"15\" y=\"5\" width=\"1\" height=\"1\"/><rect x=\"7\" y=\"6\" width=\"2\" height=\"1\"/><rect x=\"11\" y=\"6\" width=\"2\" height=\"1\"/><rect x=\"15\" y=\"6\" width=\"2\" height=\"1\"/><rect x=\"7\" y=\"7\" width=\"10\" height=\"1\"/><rect x=\"7\" y=\"8\" width=\"3\" height=\"1\"/><rect x=\"14\" y=\"8\" width=\"3\" height=\"1\"/><rect x=\"6\" y=\"9\" width=\"5\" height=\"1\"/><rect x=\"13\" y=\"9\" width=\"5\" height=\"1\"/><rect x=\"5\" y=\"10\" width=\"14\" height=\"1\"/><rect x=\"4\" y=\"11\" width=\"5\" height=\"1\"/><rect x=\"15\" y=\"11\" width=\"5\" height=\"1\"/><rect x=\"3\" y=\"12\" width=\"5\" height=\"1\"/><rect x=\"16\" y=\"12\" width=\"5\" height=\"1\"/><rect x=\"2\" y=\"13\" width=\"6\" height=\"1\"/><rect x=\"16\" y=\"13\" width=\"6\" height=\"1\"/><rect x=\"2\" y=\"14\" width=\"5\" height=\"1\"/><rect x=\"17\" y=\"14\" width=\"5\" height=\"1\"/><rect x=\"1\" y=\"15\" width=\"6\" height=\"1\"/><rect x=\"17\" y=\"15\" width=\"6\" height=\"1\"/><rect x=\"1\" y=\"16\" width=\"6\" height=\"1\"/><rect x=\"17\" y=\"16\" width=\"6\" height=\"1\"/><rect x=\"1\" y=\"17\" width=\"6\" height=\"1\"/><rect x=\"17\" y=\"17\" width=\"6\" height=\"1\"/><rect x=\"1\" y=\"18\" width=\"6\" height=\"1\"/><rect x=\"17\" y=\"18\" width=\"6\" height=\"1\"/><rect x=\"1\" y=\"19\" width=\"6\" height=\"1\"/><rect x=\"17\" y=\"19\" width=\"6\" height=\"1\"/><rect x=\"1\" y=\"20\" width=\"2\" height=\"1\"/><rect x=\"5\" y=\"20\" width=\"3\" height=\"1\"/><rect x=\"16\" y=\"20\" width=\"3\" height=\"1\"/><rect x=\"21\" y=\"20\" width=\"2\" height=\"1\"/><rect x=\"5\" y=\"21\" width=\"3\" height=\"1\"/><rect x=\"16\" y=\"21\" width=\"3\" height=\"1\"/><rect x=\"6\" y=\"22\" width=\"3\" height=\"1\"/><rect x=\"15\" y=\"22\" width=\"3\" height=\"1\"/><rect x=\"5\" y=\"23\" width=\"5\" height=\"1\"/><rect x=\"14\" y=\"23\" width=\"5\" height=\"1\"/><rect x=\"5\" y=\"24\" width=\"14\" height=\"1\"/><rect x=\"5\" y=\"25\" width=\"6\" height=\"1\"/><rect x=\"13\" y=\"25\" width=\"6\" height=\"1\"/>"};
-        Object.keys(ICONS).forEach(function (k) {
-          var svg = document.querySelector('svg[data-icon="' + k + '"]');
-          if (!svg || svg.childNodes.length) return;
-          svg.innerHTML = ICONS[k];
+        var PAIR = {
+          windows: { name: "Windows", pat: /\.(exe|msi)$/i, prefer: /setup/i },
+          mac:     { name: "macOS",   pat: /\.dmg$/i,            prefer: /aarch64|apple\s?silicon/i },
+          linux:   { name: "Linux",   pat: /\.(AppImage|deb)$/i, prefer: /AppImage/i }
+        };
+        var band = document.getElementById("status");
+        var line = document.getElementById("statusText");
+        var cards = [].slice.call(document.querySelectorAll(".os [data-dl]"));
+
+        function say(state, tone, text) {
+          if (band) { band.dataset.state = state; band.className = "status " + tone; }
+          if (line) line.textContent = text;
+        }
+        function mb(n) {
+          return n >= 1048576 ? (n / 1048576).toFixed(1) + " MB" : Math.max(1, Math.round(n / 1024)) + " KB";
+        }
+        function set(a, href, cls, text) {
+          if (href) a.href = href;
+          a.className = "state" + (cls ? " " + cls : "");
+          var label = a.querySelector("span") || a;
+          if (text) label.textContent = text;
+        }
+
+        var m = /^([A-Za-z0-9_.-]+)\/([A-Za-z0-9_.-]+)$/.exec((HEPH_REPO || "").trim());
+        if (!m) return say("unbaked", "warn", "this copy wasn't built by the deploy step, so the cards stay exactly as they are written");
+        if (!cards.length) return say("stale", "warn", "this page has no cards to fill");
+        if (!("fetch" in window)) return say("stale", "warn", "this browser can't read the release list, so the cards stay as written");
+
+        var root = "https://api.github.com/repos/" + m[1] + "/" + m[2];
+        var all = "https://github.com/" + m[1] + "/" + m[2] + "/releases";
+        var ctl = "AbortController" in window ? new AbortController() : null;
+        var timer = ctl ? setTimeout(function () { ctl.abort(); }, 6000) : null;
+        var opt = { headers: { accept: "application/vnd.github+json" } };
+        if (ctl) opt.signal = ctl.signal;
+
+        /* an unhandled rejection is a console error a visitor never sees but QA does, and a
+           200 whose body isn't JSON (a proxy page, a captive portal) is exactly that trap:
+           hand the parse failure back as "answered, couldn't read it" instead of throwing. */
+        function get(url) {
+          return fetch(url, opt).then(function (r) {
+            if (!r.ok) return { ok: false, status: r.status, data: null };
+            return r.json().then(function (d) { return { ok: true, status: r.status, data: d }; },
+                                   function () { return { ok: true, status: r.status, data: null }; });
+          }, function () { return null; });
+        }
+
+        /* Two requests, once, on load — and the repo is worth asking about because a 404 from
+           GitHub means one of two opposite things. "Nothing published yet" makes a link to the
+           releases page honest. "This repo is private" makes that same link a dead end for
+           whoever clicks it, and a dead end is the one thing this page promises never to ship. */
+        Promise.all([get(root + "/releases/latest"), get(root)]).then(function (both) {
+          if (timer) { clearTimeout(timer); timer = null; }
+          var rel = both[0], repo = both[1];
+          if (!rel && !repo) return say("offline", "warn", "can't reach GitHub from here — the cards stay as they were written");
+
+          if (rel && rel.ok && rel.data) {
+            return Promise.resolve(rel.data).then(function (d) {
+              var files = (d.assets || []).filter(function (f) { return f && f.name && f.browser_download_url; });
+              var filled = 0;
+              cards.forEach(function (a) {
+                var want = PAIR[a.getAttribute("data-dl")];
+                if (!want) return;
+                var pool = files.filter(function (f) { return want.pat.test(f.name); });
+                var best = pool.filter(function (f) { return want.prefer.test(f.name); })[0] || pool[0];
+                if (best) {
+                  a.href = best.browser_download_url;
+                  a.setAttribute("download", best.name);   // same tab, saved to disk — not a navigation
+                  a.className = "state live";
+                  (a.querySelector("span") || a).textContent = "↓ " + best.name + " · " + mb(best.size);
+                  filled++;
+                } else {
+                  set(a, all, "some", "→ nothing for " + want.name + " in " + (d.tag_name || "this release") + " yet");
+                }
+              });
+              var count = files.length + " file" + (files.length === 1 ? "" : "s") + " on it";
+              say("live", filled ? "ok" : "warn",
+                  (d.tag_name || "a release") + (d.published_at ? " · published " + String(d.published_at).slice(0, 10) : "")
+                  + " · " + count + " · " + filled + " of 3 cards filled");
+            });
+          }
+
+          /* A 404 on the release alone proves nothing. A 404 on the release with the repo
+             readable means "nothing published yet", and the releases page is a real place to
+             send someone. Two 404s means the repo is private, where that same link is a wall.
+             Anything else — a 500, an HTML login interstitial, a truncated body — is not
+             evidence of anything, so the cards keep the text the markup shipped with. */
+          if (rel && rel.status === 404) {
+            if (repo && repo.ok) {
+              cards.forEach(function (a) { set(a, all, "some", "→ all releases"); });
+              return say("no-release", "warn", "no published release yet — the cards take you to the releases page instead");
+            }
+            if (repo) {
+              return say("private", "warn", "this repo isn't readable from outside GitHub, so there is nothing public to download here. publish the repo, or put the builds somewhere public, and this page changes by itself");
+            }
+          }
+          return say("unreadable", "warn", "GitHub answered, but this page couldn't read the answer — the cards stay as they were written");
+        }).catch(function () {
+          if (timer) { clearTimeout(timer); timer = null; }
+          say("error", "warn", "the release reader gave up — the cards stay as they were written");
         });
+      })();
+    </script>
+
+    <script>
+      /* two niceties, both optional: a soft entrance, and a "you" tag on your own platform */
+      (function () {
+        var items = [].slice.call(document.querySelectorAll(".reveal"));
+        if (!("IntersectionObserver" in window) || document.documentElement.className.indexOf("nomotion") >= 0) {
+          return;
+        }
+        var io = new IntersectionObserver(function (rows) {
+          rows.forEach(function (r) {
+            if (r.isIntersecting) { r.target.classList.add("in"); io.unobserve(r.target); }
+          });
+        }, { rootMargin: "0px 0px -12% 0px", threshold: 0.08 });
+        items.forEach(function (el, i) {
+          el.style.transitionDelay = (i % 4) * 70 + "ms";
+          io.observe(el);
+        });
+
+        try {
+          var p = (navigator.userAgentData ? navigator.userAgentData.platform : navigator.platform) || "";
+          p = String(p).toLowerCase();
+          var kind = p.indexOf("win") >= 0 ? "windows" : (p.indexOf("mac") >= 0 ? "mac" : (p.indexOf("linux") >= 0 ? "linux" : ""));
+          if (kind) {
+            var card = document.querySelector('.os [data-kind="' + kind + '"] .you') ||
+                       document.querySelectorAll(".os .you")[kind === "windows" ? 0 : kind === "mac" ? 1 : 2];
+            if (card) card.hidden = false;
+          }
+        } catch (e) { /* a browser that won't say — fine, no tag */ }
       })();
     </script>
   </body>

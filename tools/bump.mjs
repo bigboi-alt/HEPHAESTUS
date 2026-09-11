@@ -33,3 +33,7 @@ json.version = next;
 writeFileSync(conf, JSON.stringify(json, null, 2) + "\n");
 
 console.log("bumped everything to " + next);
+console.log("");
+console.log("  to ship it:  git add -A && git commit -m 'v" + next + "' && git push");
+console.log("               git tag v" + next + " && git push --tags   ← that tag is what builds + publishes");
+console.log("  (no tag pushed = no release run: the workflow listens for tags, not for pushes)");

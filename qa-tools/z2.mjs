@@ -1,0 +1,12 @@
+import { chromium } from "playwright";
+const b = await chromium.launch();
+const ctx = await b.newContext({ viewport: { width: 1440, height: 980 }, deviceScaleFactor: 2 });
+const p = await ctx.newPage();
+const errs = []; p.on("pageerror", e => errs.push(String(e)));
+await p.goto("http://127.0.0.1:8099/index.html", { waitUntil: "networkidle" });
+await p.addStyleTag({ content: "html{scroll-behavior:auto!important}.reveal{opacity:1!important;transform:none!important}" });
+await p.evaluate(() => { const el = document.querySelector("#screens"); scrollTo({ top: el.getBoundingClientRect().top + scrollY - 30, behavior: "instant" }); });
+await p.waitForTimeout(500);
+await p.screenshot({ path: "/home/user/qa-shots/z-screens2.png" });
+console.log("errs", errs.length);
+await b.close();

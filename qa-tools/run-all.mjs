@@ -8,12 +8,12 @@
     node run-all.mjs                  # terminal 3 — everything
 
   Each suite exits non-zero when it fails, so this is what CI would run.
-  Pass names to run a few:  node run-all.mjs pixel-qa ghlinks-qa
+  Pass names to run a few:  node run-all.mjs ascii-qa site-qa
 */
 import { spawn } from "node:child_process";
 
 const ALL = ["voice-qa", "akmon-qa", "planes-qa", "merkhet-qa", "imgsel-qa", "imgcovered-qa",
-             "studio-qa", "trends-qa", "sitebtn-qa", "pixel-qa", "ghlinks-qa", "site-qa"];
+             "studio-qa", "trends-qa", "sitebtn-qa", "ascii-qa", "dl-qa", "site-qa"];
 const pick = process.argv.slice(2);
 const list = pick.length ? ALL.filter((n) => pick.includes(n)) : ALL;
 
@@ -35,7 +35,7 @@ const run = (name) => new Promise((res) => {
     if (!tally && name === "site-qa") {
       // one line per viewport: contrast ok | reveal:n/n | overflow:no | aspect:true | …
       const lines = out.split("\n").filter((l) => /contrast|reveal/.test(l));
-      const bad = lines.filter((l) => !/contrast ok/.test(l) || /overflow:YES|STRETCHED|broken:[1-9]|ext:[1-9]|ERRORS/.test(l));
+      const bad = lines.filter((l) => !/contrast ok/.test(l) || /overflow:YES|STRETCHED|broken:[1-9]|media:[1-9]|edge:LOW|ext:[1-9]|ERRORS/.test(l));
       tally = [null, String(lines.length), String(bad.length)];
       if (bad.length) out = bad.join("\n") + "\n" + out;
     }

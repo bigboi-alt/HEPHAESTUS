@@ -5,80 +5,66 @@ folder exactly as it is, and redeploys it whenever you push.
 
 ```
 site/
-  index.html     the whole site
-  config.js      ← the only file you edit to connect it (owner, repo, contact)
+  index.html     the whole site: markup, CSS and 15 lines of JS in one file
   _headers       security + cache headers (Cloudflare Pages reads this file)
   _redirects     old /dl and /download links → the download section
   robots.txt
   assets/
     logo-ink-512.png · logo-ink-128.png   the mark, on transparency
     favicon.png · favicon.svg · logo-touch.png
-    pixel/bust.png · bust-plate.png · bust-cream.png · og.png
-                                          the hero art, quantised from the mark
-    shots/*.webp                          real screenshots of the running app
+    og.png        the share card, built from the same character block
 ```
 
-Two things on this page are generated rather than placed by hand, and both generators are
-in the repo so nobody has to guess how they were made:
+One thing here is generated rather than placed by hand, and its generator is in the repo so
+nobody has to guess how it was made:
 
 | what | how |
 |---|---|
-| the pixel bust in the hero | `python3 tools/pixel-art.py` — grid, seven-tone ramp, 4×4 Bayer dither (needs Pillow) |
-| every screenshot | `node tools/shots.mjs` — drives the running app, shoots at 1600 × 1000 from 2× |
+| the portrait in the hero | `python3 tools/ascii-art.py --write` — the mark measured on a 72-cell grid, one character per cell (Pillow; `qa-tools/ascii-qa.mjs` fails the gate if the page and the generator ever disagree) |
 
-## connecting it (about 30 seconds of work)
+## the download cards fill themselves, and never lie
 
-```bash
-node tools/connect.mjs <your-github-username>        # repo defaults to "hephaestus"
-```
-
-That writes `site/config.js`, bakes your repo URL into the links that need one even with
-JavaScript off, and rebuilds the offline preview. Commit `site/` and you're done. (Editing
-`config.js` by hand does the same thing — the tool just saves you from missing a spot.)
-
-Two more flags:
-
-```bash
-node tools/connect.mjs <owner> --check   # ask GitHub what the page will see: repo visible?
-                                         # release tag? which assets matched each button?
-node tools/connect.mjs --clear           # back to the unconnected state
-```
-
-The download section reads:
+The three cards in `#get` are anchors. The page asks GitHub for the newest **published**
+release of one repo and, if a file in it matches the visitor's system, links that file — so
+clicking a card starts a download with nobody touching this folder:
 
 ```
-https://api.github.com/repos/<owner>/<repo>/releases/latest
+api.github.com/repos/<owner>/<repo>/releases/latest   the files
+api.github.com/repos/<owner>/<repo>                   whether the repo is readable at all
 ```
 
-…on every page load, then matches your release assets by filename — `*-setup.exe`,
-`*.msi`, `*aarch64*.dmg`, `*x64*.dmg`, `*.AppImage`, `*.deb` — and writes the real file
-sizes into the buttons. **So publishing a GitHub release updates the site by itself:**
-no redeploy, no edit. This was verified against a live repo (buttons filled from
-`neovim/neovim`'s release: `.msi 12.2 MB`, `.AppImage 10.8 MB`) and against Tauri's own
-output names, which is what `release.yml` uploads.
+The only thing the page knows about the repo is `var HEPH_REPO` at the top of the file, which
+ships as `window.__hephRepo || ""` and is rewritten to `"owner/repo"` by the deploy step in
+`.github/workflows/site.yml`. That is the whole wiring. There is no config file to edit, no
+owner name in the markup to keep in sync, and nothing to remember when a release goes out —
+publish the release, and the cards change. The two requests fire once per load, 6 s timeout.
 
-### the one rule about links: they can't 404
+Why the second request is not padding: **a 404 from GitHub means two opposite things.** Nothing
+published yet, or the repo is private. If the page guessed wrong it would hand a visitor a link
+to a 404, and a dead link is the one failure this page is built to make impossible. So:
 
-This used to be a bug people hit: the buttons were hard-wired to
-`github.com/your-github-username/hephaestus/releases/latest`, which is a 404 for anyone who
-deployed the site before creating the repo. Now:
+| what GitHub says | what a card does |
+|---|---|
+| release with a matching asset | links it: `↓ Hephaestus_0.3.0_aarch64.dmg · 14.9 MB` |
+| release without one for this OS | links `<repo>/releases`, label says which system is missing |
+| 404 release, repo readable | links `<repo>/releases`, status says nothing is published yet |
+| 404 both — **the repo is private** | stays `#get`, status says so. GitHub will not give release files to strangers on a private repo, and no amount of config makes it |
+| unreachable, 500, or a body that isn't JSON | stays `#get`, status says it couldn't read the answer |
+| no JavaScript at all | stays `#get` exactly as the markup reads |
 
-- the markup contains **no GitHub URL at all** — every download link starts as `#source`
-  on this page, and the page has a "the code" section for it to land on;
-- at runtime the page asks `GET /repos/<owner>/<repo>` first. **Only after that answers**
-  does it write GitHub URLs into the links, and it prefers `<repo>/releases` over
-  `/releases/latest`, because the first is a page that exists even with no releases;
-- four states, all honest, all checked in `qa-tools/ghlinks-qa.mjs`:
+Two consequences worth knowing before you call it a bug. **Anonymous visitors cannot download
+release assets from a private repo** — that is GitHub's rule, so with the repo private the cards
+sit in their inert state and light up by themselves the moment the repo (or the builds, somewhere
+public) is published. And the shipped page is not a wall of links: no `<img>`, no `<canvas>`, no
+web fonts, no analytics, no cookies, and no GitHub URL in the markup — the reader builds its URL
+at run time from the baked string, so `qa-tools/ascii-qa.mjs` can assert that an *unbaked* copy
+asks GitHub for nothing at all, and `site/_headers` narrows `connect-src` to `'self'
+https://api.github.com` so no other outside call is possible from this page even by accident.
 
-  | state | what the buttons do |
-  |---|---|
-  | `owner` is the placeholder | stay on the page; the note shows the one command to connect |
-  | repo public, release with installers | each card links its own asset and prints its real size |
-  | repo public, no release yet | open `<repo>/releases`, and say so |
-  | repo private / renamed / unreachable | stay on the page — never a link to a 404 |
-
-  A network failure is reported as *"can't reach GitHub from here"* and the links are left
-  exactly as they were written, because a missing wifi is not evidence that your repo is gone.
+Asset choice, if you ever need to widen it, is the `PAIR` table in the reader script: windows
+wants `.exe/.msi` and prefers `setup`, macOS wants `.dmg` and prefers `aarch64`, Linux wants
+`.AppImage` and takes `.deb` only if there is nothing else. `qa-tools/dl-qa.mjs` drives those
+six rows against a stand-in GitHub, decoy assets included.
 
 ## deploying on Cloudflare
 
@@ -99,6 +85,11 @@ Pick one of these, not both.
 
 Every later push that touches `site/**` redeploys automatically, and pull requests get
 their own preview URL.
+
+One catch, and it is only about the cards: a Pages build with an **empty** build command copies
+`site` out as-is, so nothing rewrites `HEPH_REPO` and the page keeps its fallback wording ("this
+copy wasn't built by the deploy step"). The page is complete and correct — the cards just don't
+know which repo to ask. Route B below is what bakes the repo in, and it costs two secrets.
 
 **B. The workflow already in the repo** — `.github/workflows/site.yml` does the same via
 `wrangler`. It skips itself quietly until both secrets exist, so it can't fail a build:
@@ -121,74 +112,78 @@ crawlers accept and a couple don't).
 
 ## the look, and why
 
-The palette comes off the mark itself. The bust is a warm carved-stone ramp, so the page
-is coffee-and-cream: paper `#f4eee6`, ink `#2c1e15`, one brown accent `#6f4429` for
-anything clickable. No pure black, no pure white, no gradients doing homework.
+The palette comes off the mark itself: coffee and cream. Paper `#f5efe7`, cards `#fcf9f4`,
+ink `#2c1e15`, one brown `#6f4429` for anything clickable, and `#75604f` for the small print —
+that last one is 5.2:1 on paper, chosen rather than inherited, because "muted" is where
+contrast goes to die. No pure black, no pure white, no gradient doing homework.
 
-The mark ships **on transparency** in two inks — light marble for dark surfaces, brown for
-light ones — because the same emblem has to survive the app's dark themes and this page's
-cream. The app picks between them in CSS from `[data-theme]`; the desktop icon is the only
-place with a tile behind it, and that tile is coffee brown, not black.
+Type is serif (`ui-serif`, falls back to Georgia) for headings, system sans for prose, and mono
+for anything that is a measurement: counts, sizes, file names. No web fonts, because a page that
+needs a CDN to look right looks broken when the CDN doesn't answer.
 
-Type is serif (`ui-serif`, falls back to Georgia) for headlines and system sans for
-everything else — no web fonts, because a site that needs a CDN to look right is a site
-that looks broken when the CDN doesn't answer. Mono is for the labels, sizes and file names,
-the parts that are measurements.
+The shape is cosy, not engineered: 14px radii, 1px warm borders, two-layer soft shadows, dotted
+leaders between a section title and its marker, and one paper tone throughout — there is no
+dark panel on this page any more, and the portrait sits directly on it with nothing behind it.
 
-The shape of it is retro-modern rather than soft: 1 px borders, square corners with one
-corner clipped (`clip-path`, no rounded-everything), hard offset shadows instead of blurs,
-and everything sitting on a block grid — the same unit the pixel art uses, so the type and
-the pictures agree. `inset` shadows give the icon tiles their chiselled edge.
+**The portrait is text.** `tools/ascii-art.py` measures the mark on a grid, then gives each
+cell one character out of ten (` .,:-=+*%#@`), darkest to densest. The page holds the result as
+literal characters: about 3 KB, no file, no filter, and it looks the same in `curl` as in a
+browser. Three consequences worth knowing before you edit it:
 
-**The pictures assemble out of pixels.** Each one carries a `<canvas>` overlay laid on top
-of the `<img>`; the progress is how much of the picture is in the window, so scrolling away
-dissolves it and scrolling back re-assembles it — in both directions, forever, not a
-one-shot entrance. Blocks arrive from whichever edge is currently visible, which is why a
-picture mid-scroll is never an empty box. It's decoration in the strict sense: at rest the
-canvas is cleared and hidden and you see the real PNG/webp; with `prefers-reduced-motion`
-the canvases are never created; with JavaScript off they don't exist; and the footer has a
-`◆ pixel on` switch that writes `hephaestus.px` to localStorage for anyone who just
-doesn't want it.
+- it sizes itself to the column with a container query — `font-size: min(13.5px, calc(100cqi / 44))`,
+  where 44 is 72 cells × a 0.6em monospace advance — so it fills half the hero at every width
+  and physically cannot overflow it; a `clamp()` line precedes it for a browser without `cqi`;
+- every line is **padded to the full grid width** before it is written. Rstripping trailing
+  spaces, which is the obvious tidy-up, shifts each row right by half its missing tail and skews
+  the face, because the block is centred;
+- the bottom fades out on a rule (`fade=0.26`: Bayer threshold plus a cheap hash), because a
+  bust's plinth is a slab of tone that says nothing at all in characters.
 
 ## house rules
 
-- **No third-party requests.** No fonts, analytics, CDNs or cookies. The one network call
-  on the page is the GitHub release fetch. Verified in QA: zero external asset references.
+- **One outside call, and only one.** The release reader talks to `api.github.com` and nothing
+  else; `connect-src 'self' https://api.github.com` says so in the headers as well as
+  in the markup, and `site-qa` counts the requests a load actually makes (one: the document).
 - **No build step.** If it needs a compiler, it doesn't belong here.
-- **Text stays visible without JavaScript.** The scroll fade is layered on only once JS
-  has confirmed it runs, and download links have real fallback `href`s — so a blocked
-  script produces a plain page, never a blank one.
-- **Small text clears WCAG AA** (≥4.5:1 on every surface it sits on) — checked by
-  `qa-tools/site-qa.mjs`, which measures computed colour against effective background.
-- **Real screenshots only**, captured from the running app.
-- **A link must not be able to 404.** Same-page anchors in the markup, GitHub URLs only
-  after the API has confirmed the repo, and a "the code" section for every fallback to
-  land on. `qa-tools/ghlinks-qa.mjs` walks all four states against a mocked API.
-- **Decoration never hides content.** The fades and the pixel assembly are additive: at
-  rest the overlay is cleared, and no-JS / reduced-motion / a 404'd asset each leave the
-  picture exactly as the markup says. Checked in `qa-tools/pixel-qa.mjs`.
+- **Text stays visible without JavaScript.** The soft entrance is added only once JS has
+  confirmed it runs, so a blocked script gives you the whole page, not a blank one. Checked both
+  with `javaScriptEnabled: false` and with reduced motion on.
+- **Small text clears WCAG AA** (≥4.5:1 against the surface it actually sits on) at seven
+  viewports, measured from computed colour against effective background.
+- **Nothing sits flush against the screen.** `.wrap` owns the side padding, so a component that
+  shares that class must never declare `padding: <y> 0` — the shorthand erases the sides and the
+  text touches the glass. That is exactly how the footer used to break, and `site-qa` now measures
+  the content's inset at every width instead of trusting the CSS.
+- **No dead links.** Every card starts life as `#get`, an id in this same document, and is only
+  ever repointed at something GitHub confirmed.
+- **Decoration never hides content.** The art is a `role="img"` with a sentence of label, and it
+  is the only element exempted from the 9px floor — its font size is a pixel size, not a line of copy.
 
 ## previewing
 
 ```bash
-cd site && python3 -m http.server 8099      # normal, with network
+cd site && python3 -m http.server 8099      # normal, with the headers in play
 node tools/site-preview.mjs                  # site-preview.html — one file, offline
 ```
 
-The single-file copy inlines every asset as a data URI for sandboxes that block network
-access. It's a viewing artifact — **deploy `site/`, never `site-preview.html`**, or you'll
-ship one uncachable 550 KB page.
+The single-file copy exists for sandboxes that block network access; since the page has no
+images left to inline, it is now barely bigger than `index.html`. It's a viewing artifact —
+**deploy `site/`, never `site-preview.html`**.
 
-## refreshing the pictures
+## regenerating the portrait
 
 ```bash
-npm run dev -- --port 5199        # the app, in another terminal
-node tools/shots.mjs              # all eight screens → site/assets/shots/*.webp
-node tools/shots.mjs canvas review    # or just the ones you changed
-
-python3 tools/pixel-art.py        # the hero art, the plate, the og card (needs Pillow)
-python3 tools/pixel-art.py --icons    # prints the OS icons as inline SVG for index.html
+python3 tools/ascii-art.py                          # print the block
+python3 tools/ascii-art.py --write                  # splice it into site/index.html
+python3 tools/ascii-art.py --og                     # the share card, same block on paper
+python3 tools/ascii-art.py --preview /tmp/a.png     # paint it, to look at the result
+python3 tools/ascii-art.py --cols 96 --gamma 1.3 --unsharp 0 --pad 0.01   # try a different grid
 ```
 
-Keep them current. A stale screenshot is the fastest way to make a good tool look abandoned —
-which is why the script drives the real UI instead of anyone taking a screenshot by hand.
+The defaults are the shipped picture, and `ascii-qa` regenerates them and diffs the result
+against the page — so tuning the numbers means committing new art in the same change, never a
+page that quietly no longer matches its generator.
+
+The page carries no screenshots on purpose. What the app looks like is in the app; this page
+describes it, and where it quotes a number (1,750 directions, 42 rows, the three forged
+palettes under `§ 02`) the number came out of the engine, not out of a designer's file.

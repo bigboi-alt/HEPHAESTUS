@@ -1,5 +1,5 @@
 # Releases Hephaestus desktop builds for Windows, macOS (Intel + Apple
-# Silicon) and Linux. Runs on every push to main/master (and manually).
+# Silicon) and Linux. Runs on a version tag, or when you press the button.
 #
 # How it works
 #   1. Each runner builds the frontend + the Tauri binary for its OS.
@@ -7,21 +7,36 @@
 #      v<VERSION> and uploads every installer to it as an asset.
 #      Drafts keep being updated on later pushes, so just keep pushing.
 #   3. When you are happy: open the repo on github.com -> Releases ->
-#      edit the draft -> "Publish release". The Cloudflare download site
-#      picks the published release up automatically.
+#      edit the draft -> "Publish release". Publishing one updates the release page
+#      on GitHub and nothing on the landing site: site/ carries no download links and
+#      reads no API while the repo is private. If a card should ever link a build, the
+#      edit is documented in site/README.md - three divs in #get, and the gate re-run.
 #
 # Before a new release, bump the version everywhere:
 #     node tools/bump.mjs 0.2.0
 
 name: release
 
+# Two ways to build installers, and nothing else triggers this — a private repo is metered
+# on Actions minutes, and macOS runners count 10x, so building three OSes on every push
+# would eat a free plan's month in about ten commits to buy files nobody can download.
+#
+#   git tag v0.3.1 && git push --tags      -> builds, and PUBLISHES release v0.3.1.
+#                                           The landing page notices by itself: its cards
+#                                           read the newest published release.
+#   Actions -> Release -> Run workflow     -> builds into a DRAFT you can look at first.
 on:
   push:
-    branches: [main, master]
+    tags: ['v*']
   workflow_dispatch:
 
 permissions:
   contents: write
+
+# two tags in quick succession used to race over one draft release; this makes them queue
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
   build-tauri:
@@ -111,6 +126,6 @@ jobs:
             - Linux — `*.deb` (Debian/Ubuntu) or `*.AppImage` (any distro: chmod +x and run)
 
             Runs 100% local. No account, no telemetry, no AI.
-          releaseDraft: true
+          releaseDraft: ${{ github.event_name != 'push' }}   # a tag publishes; a manual run leaves a draft
           prerelease: false
           args: ${{ matrix.args }}

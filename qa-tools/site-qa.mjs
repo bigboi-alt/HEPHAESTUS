@@ -10,6 +10,9 @@ const AUDIT = () => {
   for (const el of document.querySelectorAll("body *, h1, h2, h3, p, a, li, span, small, b, em")) {
     const cs = getComputedStyle(el);
     if (cs.display === "none" || !el.textContent.trim()) continue;
+    // the portrait is a picture made of glyphs: its font size is the size of a dot in an
+    // image, not a run of copy, so the legibility floor below deliberately doesn't apply
+    if (el.matches("pre.bust, .art-box")) continue;
     const fs = parseFloat(cs.fontSize);
     if (fs < 9) rows.push({ t: "TINY " + fs + "px " + (el.className || el.tagName), r: 0 });
     const key = el.tagName + "." + el.className + "@" + cs.fontSize + cs.color;
@@ -36,6 +39,13 @@ const AUDIT = () => {
       const want = i.naturalWidth / i.naturalHeight, got = box.width / box.height;
       return Math.abs(want - got) / want > 0.02;
     }).map((i) => i.alt || i.src.slice(-24)),
+    media: document.querySelectorAll("img,canvas,picture,iframe,video,svg").length,
+    // nothing may sit flush against the screen. measured on the CONTENT, not on the boxes
+    // that own the page's side padding — those stretch edge to width on purpose
+    edge: Math.min(...[...document.querySelectorAll("main > section > *, .hero > *, header .bar > *, .fbar > *")]
+      .filter((el) => el.getClientRects().length)
+      .map((el) => { const r = el.getBoundingClientRect(); return Math.min(r.left, window.innerWidth - r.right); })),
+    artEdge: (() => { const r = document.querySelector("pre.bust")?.getBoundingClientRect(); return r ? Math.round(Math.min(r.left, window.innerWidth - r.right)) : -1; })(),
     docTitle: document.title, h1: document.querySelector("h1")?.innerText.replace(/\n/g," "),
     links: [...document.querySelectorAll("a[href]")].length,
     extAssets: [...document.querySelectorAll("link[href^=http],script[src^=http],img[src^=http]")].length,
@@ -66,7 +76,7 @@ for (const [label, url, w, h, dsf] of [
   await page.waitForTimeout(900);
   const r = await page.evaluate(AUDIT);
   const bad = r.contrastFails.length;
-  console.log(`${label.padEnd(13)} ${bad ? "CONTRAST FAILS " + bad : "contrast ok "} | reveal:${r.reveals - r.stuckHidden}/${r.reveals} shown | overflow:${r.overflow ? "YES " + r.scrollW + ">" + r.innerW : "no"} | aspect:${r.distorted.length ? "STRETCHED " + JSON.stringify(r.distorted) : "true"} | imgs:${r.imgCount} broken:${r.broken.length} | ext:${r.extAssets} | links:${r.links} | h:${r.height}`);
+  console.log(`${label.padEnd(13)} ${bad ? "CONTRAST FAILS " + bad : "contrast ok "} | reveal:${r.reveals - r.stuckHidden}/${r.reveals} shown | overflow:${r.overflow ? "YES " + r.scrollW + ">" + r.innerW : "no"} | aspect:${r.distorted.length ? "STRETCHED " + JSON.stringify(r.distorted) : "true"} | imgs:${r.imgCount} broken:${r.broken.length} | media:${r.media} | edge:${r.edge >= 16 && r.artEdge >= 8 ? "ok" : "LOW " + Math.round(r.edge) + "/" + r.artEdge} | ext:${r.extAssets} | links:${r.links} | h:${r.height}`);
   r.contrastFails.slice(0, 6).forEach(f => console.log(`      ✗ ${f.t} → ${f.r}:1 (needs ${f.need})`));
   if (r.broken.length) console.log("      broken:", r.broken);
   if (errs.length) console.log("      ERRORS:", errs.slice(0, 4));

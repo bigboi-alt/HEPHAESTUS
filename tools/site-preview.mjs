@@ -3,8 +3,9 @@
   Builds a single-file, offline-friendly copy of the site: site-preview.html.
 
   Why: the sandboxed file preview some tools use has no network access, so a page that
-  fetches its own assets shows nothing. This inlines every local asset as a data URI and
-  folds config.js into the document, so one file shows the whole site.
+  loads its own assets shows nothing. This inlines every local file as a data URI, so one
+  document shows the whole site. (The live page has no images to inline any more; the
+  favicons are the only thing left that this touches.)
 
   It is a VIEWING copy. Deploy site/, never this file.
 
@@ -30,14 +31,6 @@ const REF = /(?:src|href)="(\.\/[^"]+|assets\/[^"]+)"/g;
 function build(html, label) {
   let n = 0;
   const missing = [];
-  // config.js is a script, not an asset — fold it in below instead of data-URI-ing it
-  const cfgPath = join(site, "config.js");
-  if (existsSync(cfgPath)) {
-    const cfg = readFileSync(cfgPath, "utf8").replace(
-      /window\.HEPH\s*=\s*\{[\s\S]*?\};/,
-      "window.HEPH = { owner: \"\", repo: \"\", sourcePublic: false, contact: \"\" };");
-    html = html.replace(/<script src="\.\/config\.js"><\/script>/, `<script>${cfg}</script>`);
-  }
   html = html.replace(REF, (m, path) => {
     if (/\.js(\?|$)/.test(path)) return m;
     const abs = join(site, path.replace(/^\.\//, ""));
@@ -48,13 +41,6 @@ function build(html, label) {
     n++;
     return `${m.slice(0, m.indexOf('"') + 1)}data:${MIME[ext] || "application/octet-stream"};base64,${b64}"`;
   });
-
-  // the offline copy can't reach GitHub: make the status line honest, and keep the id
-  // the page's own script looks for, with data-static so the script leaves it alone
-  html = html.replace(
-    /<p class="status" id="status">[\s\S]*?<\/p>/,
-    '<p class="status" id="status" data-static="1"><i id="statusText">this is the offline preview — '
-    + 'the buttons keep to the page, as they do before a repo is connected</i></p>');
 
   console.error(`${label}: ${n} assets inlined${missing.length ? " — MISSING " + missing.join(", ") : ""}`);
   return { html, n, missing };
