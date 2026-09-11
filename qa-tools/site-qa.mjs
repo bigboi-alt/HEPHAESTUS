@@ -1,5 +1,6 @@
 import { SHOTS, FILE_URL } from "./paths.mjs";
 import { chromium } from "playwright";
+import { stubGithub } from "./gh-stub.mjs";
 
 const AUDIT = () => {
   const srgb = (c) => { c /= 255; return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4); };
@@ -67,6 +68,7 @@ for (const [label, url, w, h, dsf] of [
 ]) {
   const ctx = await b.newContext({ viewport: { width: w, height: h }, deviceScaleFactor: dsf });
   const page = await ctx.newPage();
+  await stubGithub(page, "full");   // measured with releases on it, not just the empty state
   const errs = [];
   page.on("pageerror", e => errs.push(String(e).slice(0, 160)));
   page.on("console", m => { if (m.type() === "error") errs.push("console: " + m.text().slice(0, 120)); });

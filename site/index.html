@@ -23,11 +23,13 @@
         if (matchMedia("(prefers-reduced-motion: reduce)").matches) r.className += " nomotion";
       })();
 
-      /* Which repo the download cards should read. You never edit this: the deploy step in
-         .github/workflows/site.yml rewrites the string below to "owner/repo" on every push.
-         Empty means "this copy was not built by that workflow" — and then the cards stay
-         exactly as they are written in the markup, inert and honest, with nothing to 404. */
-      var HEPH_REPO = window.__hephRepo || "";   // "owner/repo"
+      /* Which repo the releases live in — the one thing this page needs to know. It names the
+         repo this site is built for, so a plain copy of site/ onto any host already works. The
+         deploy step in .github/workflows/site.yml rewrites the line to whatever repo it actually
+         ran from, which is what keeps it correct if the repo is ever renamed or moved. If the
+         value ends up unreadable, the cards and the release list stay exactly as the markup has
+         them: inert and honest, with nothing to 404 on. */
+      var HEPH_REPO = window.__hephRepo || "bigboi-alt/HEPHAESTUS";   // "owner/repo"
     </script>
     <style>
       :root {
@@ -256,6 +258,36 @@
         font-family: var(--mono); font-size: 12.5px; color: var(--ink-2);
       }
       .status .dot { width: 8px; height: 8px; border-radius: 50%; background: #d9b98f; flex: none; }
+      /* every release, listed straight off the repo. Paper cards, dotted rules, no motion. */
+      .rel { margin: 34px 0 0; padding: 26px 0 0; border-top: 1px dotted #ddcdb6; }
+      .rel h3 { display: flex; flex-wrap: wrap; align-items: baseline; column-gap: 12px; row-gap: 4px; margin: 0;
+        font-family: var(--serif); font-size: 19px; font-weight: 600; letter-spacing: -0.01em; }
+      .rel h3 .leader { flex: 1; border-top: 1px dotted #ddcdb6; transform: translateY(-4px); }
+      .rel h3 em { flex: 0 1 auto; min-width: 0; margin-left: auto; text-align: right; overflow-wrap: anywhere;
+        font-family: var(--mono); font-size: 11.5px; font-style: normal; color: var(--ink-3); }
+      .rel ul { list-style: none; display: grid; gap: 10px; margin: 14px 0 0; padding: 0; }
+      .rel li { background: var(--card); border: 1px solid var(--line); border-radius: var(--r);
+        padding: 14px 16px; box-shadow: var(--lift); min-width: 0; }
+      .rel .r1 { display: flex; flex-wrap: wrap; align-items: baseline; gap: 10px;
+        font-family: var(--mono); font-size: 12.5px; color: var(--ink-2); }
+      .rel .tag { font-weight: 700; color: var(--brown); text-decoration: none;
+        border-bottom: 1px solid transparent; }
+      a.tag:hover { border-bottom-color: var(--brown); }
+      .rel .pre { border: 1px solid var(--amber); border-radius: 999px; padding: 1px 7px;
+        font-size: 10.5px; color: var(--brown-2); }
+      .rel .what { font-family: var(--serif); font-size: 15px; color: var(--ink); }
+      .rel .quiet { color: var(--ink-3); font-family: var(--mono); font-size: 11.5px; }
+      .rel .files { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0 0; }
+      .rel .files li, .rel .files a, .rel .r1 { min-width: 0; overflow-wrap: anywhere; }
+      .rel .files li { background: transparent; border: 1px solid var(--line-soft);
+        border-radius: var(--r-sm); box-shadow: none; padding: 6px 10px;
+        font-family: var(--mono); font-size: 12px; }
+      .rel .files a { color: var(--brown); text-decoration: none; border-bottom: 1px solid transparent; }
+      .rel .files a:hover { border-bottom-color: var(--brown); }
+      .rel p.quiet { margin: 10px 0 0; }
+      .rel .none { background: transparent; border: 1px dashed #ddcdb6; box-shadow: none;
+        color: var(--ink-3); font-size: 14px; line-height: 1.55; font-family: var(--sans); }
+      .rel .none a { color: var(--brown); }
       .status.ok .dot { background: var(--brown); }
       .status i { font-style: normal; }
       .status.warn .dot { background: #c98f3e; }
@@ -444,7 +476,7 @@
 
       <section id="get">
         <div class="sechead"><h2>How to get it</h2><span class="leader"></span><span class="no">§ 04 — availability</span></div>
-        <p class="sub">Pick your system. Each card fills itself from the newest published release of the repo this site was built from — and when there is no public release to read, it says <b>not posted yet</b> instead of pointing you at something that isn't there.</p>
+        <p class="sub">Pick your system: each card hands out the matching file from the newest published release, and every release ever published is listed underneath with everything on it. When there is nothing to read, the page says so in words instead of pointing you at something that isn't there.</p>
         <div class="os">
           <div class="reveal" data-kind="windows">
             <span class="top"><span class="idx">01</span> <span class="t">Windows</span> <em class="you" hidden>you</em></span>
@@ -464,13 +496,21 @@
         </div>
         <p class="status" id="status"><span class="dot"></span><i id="statusText">checking for a published release…</i></p>
         <p class="note">
-          <b>Nothing here is typed by hand.</b> The deploy step points this page at the repo it was
-          built from, and the cards take whatever the newest <i>published</i> release actually holds —
-          file name, size, the works. A repo that is private, or a release that was never published,
-          or a network that won't answer all leave the cards as they are: no link invented, no
-          button that goes nowhere. macOS builds aren't signed with a developer certificate, so on
+          <b>Nothing here is typed by hand.</b> This file names one repo, the list below and the
+          cards above read whatever that repo has actually published, and a deploy overwrites the
+          name with the repo it ran from — so publishing a release is the whole maintenance
+          routine, and there is no number to remember. A repo that goes private, or a release that
+          was never published, or a network that won't answer all leave the cards as they are: no
+          link invented, no button that goes nowhere. macOS builds aren't signed with a developer certificate, so on
           the first launch right-click the app and choose <b>Open</b>. Everything else installs normally.
         </p>
+
+        <div class="rel" id="releases">
+          <h3>Every release<span class="leader"></span><em id="relCount">reading the repo once, on load…</em></h3>
+          <ul id="relList">
+            <li class="none">This list is read from GitHub when the page loads, so every release you publish appears here with each file on it — nothing to update by hand, and nothing that can go stale.</li>
+          </ul>
+        </div>
       </section>
 
       <section id="details">
@@ -500,18 +540,24 @@
     </footer>
 
     <script>
-      /* the release reader, and the rule it exists to enforce: this page never writes down a
-         link it hasn't seen come back from GitHub. Every fallback is an anchor that already
-         points at this section, so "no network", "private repo", "nothing published yet" and
-         "JavaScript off" all look the same — which is the correct answer, not a failure. */
+      /* the release reader. Two things it is responsible for: the three cards above, which pick
+         the newest release's file for your system, and the list below them, which shows every
+         published release with everything on it. One rule governs both: this page never writes
+         down a link it hasn't seen come back from GitHub, and every fallback is either plain text
+         or an anchor that already points at this section. "No network", "nothing published", "the
+         repo moved" and "JavaScript off" therefore all look like the page as written — which is
+         the correct answer, not a failure. */
       (function () {
         var PAIR = {
           windows: { name: "Windows", pat: /\.(exe|msi)$/i, prefer: /setup/i },
           mac:     { name: "macOS",   pat: /\.dmg$/i,            prefer: /aarch64|apple\s?silicon/i },
           linux:   { name: "Linux",   pat: /\.(AppImage|deb)$/i, prefer: /AppImage/i }
         };
+        var CAP = 24;                        // how many releases to list; a 25th means older ones exist
         var band = document.getElementById("status");
         var line = document.getElementById("statusText");
+        var list = document.getElementById("relList");
+        var count = document.getElementById("relCount");
         var cards = [].slice.call(document.querySelectorAll(".os [data-dl]"));
 
         function say(state, tone, text) {
@@ -519,7 +565,17 @@
           if (line) line.textContent = text;
         }
         function mb(n) {
-          return n >= 1048576 ? (n / 1048576).toFixed(1) + " MB" : Math.max(1, Math.round(n / 1024)) + " KB";
+          n = Number(n) || 0;
+          if (n >= 1048576) return (n / 1048576).toFixed(1) + " MB";
+          return n >= 1024 ? Math.max(1, Math.round(n / 1024)) + " KB" : n + " B";
+        }
+        /* built with createElement + textContent, never innerHTML: a release's name is a string
+           somebody typed on another machine, and this page has no business parsing it as markup */
+        function put(tag, cls, text) {
+          var e = document.createElement(tag);
+          if (cls) e.className = cls;
+          if (text !== null && text !== undefined) e.textContent = String(text);
+          return e;
         }
         function set(a, href, cls, text) {
           if (href) a.href = href;
@@ -527,22 +583,44 @@
           var label = a.querySelector("span") || a;
           if (text) label.textContent = text;
         }
+        function filesOf(rel) {
+          return (rel && rel.assets || []).filter(function (f) { return f && f.name && f.browser_download_url; });
+        }
+        function urlOf(f) {
+          var u = String((f && f.browser_download_url) || "");
+          return /^https:\/\//.test(u) ? u : null;      // a scheme we didn't expect is not a link
+        }
+        function assetLink(f) {
+          var u = urlOf(f);
+          if (!u) return null;
+          var a = put("a", null, "↓ " + f.name + " · " + mb(f.size));
+          a.href = u;
+          a.setAttribute("download", f.name);            // same tab, saved to disk — not a navigation
+          return a;
+        }
+        function ghLink(url, text) {
+          if (!/^https:\/\/github\.com\//.test(String(url || ""))) return null;
+          var a = put("a", null, text);
+          a.href = String(url);
+          return a;
+        }
 
-        var m = /^([A-Za-z0-9_.-]+)\/([A-Za-z0-9_.-]+)$/.exec((HEPH_REPO || "").trim());
-        if (!m) return say("unbaked", "warn", "this copy wasn't built by the deploy step, so the cards stay exactly as they are written");
+        var m = /^(?:https?:\/\/(?:www\.)?github\.com\/)?([\w.-]+)\/([\w.-]+?)(?:\.git)?\/?$/i.exec((HEPH_REPO || "").trim());
+        if (!m) return say("no-repo", "warn", "this page wasn't told which repo the releases live in, so the cards and the list stay exactly as they are written");
         if (!cards.length) return say("stale", "warn", "this page has no cards to fill");
         if (!("fetch" in window)) return say("stale", "warn", "this browser can't read the release list, so the cards stay as written");
 
-        var root = "https://api.github.com/repos/" + m[1] + "/" + m[2];
-        var all = "https://github.com/" + m[1] + "/" + m[2] + "/releases";
+        var repo = m[1] + "/" + m[2];
+        var root = "https://api.github.com/repos/" + repo;
+        var all = "https://github.com/" + repo + "/releases";
         var ctl = "AbortController" in window ? new AbortController() : null;
         var timer = ctl ? setTimeout(function () { ctl.abort(); }, 6000) : null;
         var opt = { headers: { accept: "application/vnd.github+json" } };
         if (ctl) opt.signal = ctl.signal;
 
-        /* an unhandled rejection is a console error a visitor never sees but QA does, and a
-           200 whose body isn't JSON (a proxy page, a captive portal) is exactly that trap:
-           hand the parse failure back as "answered, couldn't read it" instead of throwing. */
+        /* an unhandled rejection is a console error a visitor never sees but QA does, and a 200
+           whose body isn't JSON (a proxy page, a captive portal) is exactly that trap: hand the
+           parse failure back as "answered, couldn't read it" instead of throwing. */
         function get(url) {
           return fetch(url, opt).then(function (r) {
             if (!r.ok) return { ok: false, status: r.status, data: null };
@@ -551,60 +629,126 @@
           }, function () { return null; });
         }
 
-        /* Two requests, once, on load — and the repo is worth asking about because a 404 from
-           GitHub means one of two opposite things. "Nothing published yet" makes a link to the
-           releases page honest. "This repo is private" makes that same link a dead end for
-           whoever clicks it, and a dead end is the one thing this page promises never to ship. */
-        Promise.all([get(root + "/releases/latest"), get(root)]).then(function (both) {
+        /* Two requests, once, on load. /releases gives us everything — the newest stable one for
+           the cards and the whole list below — so the page does not have to ask /releases/latest
+           as well and hope the two agree. The repo is asked about because a 404 from GitHub means
+           two opposite things: nothing published, in which case <repo>/releases is an honest place
+           to send someone, or the repo isn't public, in which case that same link is a wall. */
+        Promise.all([get(root + "/releases?per_page=" + (CAP + 1)), get(root)]).then(function (both) {
           if (timer) { clearTimeout(timer); timer = null; }
-          var rel = both[0], repo = both[1];
-          if (!rel && !repo) return say("offline", "warn", "can't reach GitHub from here — the cards stay as they were written");
-
-          if (rel && rel.ok && rel.data) {
-            return Promise.resolve(rel.data).then(function (d) {
-              var files = (d.assets || []).filter(function (f) { return f && f.name && f.browser_download_url; });
-              var filled = 0;
-              cards.forEach(function (a) {
-                var want = PAIR[a.getAttribute("data-dl")];
-                if (!want) return;
-                var pool = files.filter(function (f) { return want.pat.test(f.name); });
-                var best = pool.filter(function (f) { return want.prefer.test(f.name); })[0] || pool[0];
-                if (best) {
-                  a.href = best.browser_download_url;
-                  a.setAttribute("download", best.name);   // same tab, saved to disk — not a navigation
-                  a.className = "state live";
-                  (a.querySelector("span") || a).textContent = "↓ " + best.name + " · " + mb(best.size);
-                  filled++;
-                } else {
-                  set(a, all, "some", "→ nothing for " + want.name + " in " + (d.tag_name || "this release") + " yet");
-                }
-              });
-              var count = files.length + " file" + (files.length === 1 ? "" : "s") + " on it";
-              say("live", filled ? "ok" : "warn",
-                  (d.tag_name || "a release") + (d.published_at ? " · published " + String(d.published_at).slice(0, 10) : "")
-                  + " · " + count + " · " + filled + " of 3 cards filled");
-            });
-          }
-
-          /* A 404 on the release alone proves nothing. A 404 on the release with the repo
-             readable means "nothing published yet", and the releases page is a real place to
-             send someone. Two 404s means the repo is private, where that same link is a wall.
-             Anything else — a 500, an HTML login interstitial, a truncated body — is not
-             evidence of anything, so the cards keep the text the markup shipped with. */
-          if (rel && rel.status === 404) {
-            if (repo && repo.ok) {
-              cards.forEach(function (a) { set(a, all, "some", "→ all releases"); });
-              return say("no-release", "warn", "no published release yet — the cards take you to the releases page instead");
+          var rel = both[0], head = both[1];
+          if (!rel && !head) return say("offline", "warn", "can't reach GitHub from here — the cards and the list stay as they were written");
+          var items = rel && rel.ok && Array.isArray(rel.data) ? rel.data : null;
+          if (items === null) {
+            if (rel && rel.status === 404 && head && !head.ok) {
+              return say("private", "warn", repo + " isn't readable from outside GitHub, so there is nothing public to download here. make it public, or put the builds somewhere public, and this page changes by itself");
             }
-            if (repo) {
-              return say("private", "warn", "this repo isn't readable from outside GitHub, so there is nothing public to download here. publish the repo, or put the builds somewhere public, and this page changes by itself");
-            }
+            return say("unreadable", "warn", "GitHub answered, but this page couldn't read the answer — the cards and the list stay as they were written");
           }
-          return say("unreadable", "warn", "GitHub answered, but this page couldn't read the answer — the cards stay as they were written");
+          render(items, !!(head && head.ok));
         }).catch(function () {
           if (timer) { clearTimeout(timer); timer = null; }
-          say("error", "warn", "the release reader gave up — the cards stay as they were written");
+          say("error", "warn", "the release reader gave up — the cards and the list stay as they were written");
         });
+
+        function render(items, readable) {
+          var newest = null, i;
+          for (i = 0; i < items.length; i++) {
+            if (!items[i].prerelease && !items[i].draft) { newest = items[i]; break; }
+          }
+          var shown = items.slice(0, CAP);
+          var onShow = 0;
+          shown.forEach(function (r) { onShow += filesOf(r).length; });
+
+          if (list) list.textContent = "";
+          if (!shown.length) {
+            if (list) {
+              var none = put("li", "none", "Nothing published yet. The moment a release exists on " + repo + " it lands here with its files, and the cards above start handing them out — no edit to this page, and nothing to redeploy.");
+              if (readable) { var a = ghLink(all, " See the releases page →"); if (a) none.appendChild(a); }
+              list.appendChild(none);
+            }
+            if (count) count.textContent = "no releases yet · " + repo;
+            if (readable) cards.forEach(function (c) { set(c, all, "some", "→ all releases"); });
+            return say(readable ? "no-release" : "empty", "warn",
+              readable ? "no published release on " + repo + " yet — the cards take you to the releases page instead"
+                       : "this repo has no releases yet, and nothing else to read");
+          }
+
+          shown.forEach(function (r) {
+            var li = put("li");
+            var row = put("div", "r1");
+            var tag = ghLink(r.html_url, r.tag_name || "untitled");
+            if (tag) { tag.className = "tag"; row.appendChild(tag); } else { row.appendChild(put("span", "tag", r.tag_name || "untitled")); }
+            if (r.prerelease) row.appendChild(put("span", "pre", "pre-release"));
+            if (r.published_at) row.appendChild(put("span", "when", String(r.published_at).slice(0, 10)));
+            var nm = String(r.name || "").trim();
+            if (nm && nm !== r.tag_name) row.appendChild(put("span", "what", nm));
+            var fs = filesOf(r);
+            row.appendChild(put("span", "quiet", fs.length + (fs.length === 1 ? " file" : " files")));
+            li.appendChild(row);
+            if (fs.length) {
+              var ul = put("ul", "files");
+              fs.forEach(function (f) {
+                var one = put("li");
+                var al = assetLink(f);
+                if (al) one.appendChild(al); else one.textContent = f.name;
+                ul.appendChild(one);
+              });
+              li.appendChild(ul);
+            } else {
+              li.appendChild(put("p", "quiet", "no files on this one — just the tag and its notes"));
+            }
+            if (list) list.appendChild(li);
+          });
+
+          if (items.length > CAP && list) {
+            var extra = items.length - CAP;
+            var more = put("li", "none", extra + " older release" + (extra === 1 ? "" : "s") + " not shown here. ");
+            var ma = ghLink(all, "all of them on GitHub →");
+            if (ma) more.appendChild(ma);
+            list.appendChild(more);
+          }
+
+          var filled = 0, nf = filesOf(newest);
+          if (newest) {
+            cards.forEach(function (c) {
+              var want = PAIR[c.getAttribute("data-dl")];
+              if (!want) return;
+              /* only files with a URL worth handing out count as a candidate: a platform whose only
+                 asset links somewhere we didn't expect is "nothing for that system", not a button
+                 that throws you at a wall — or worse, at a javascript: URL somebody published */
+                 var pool = nf.filter(function (f) { return want.pat.test(f.name) && urlOf(f); });
+              var best = pool.filter(function (f) { return want.prefer.test(f.name); })[0] || pool[0];
+              if (best) {
+                c.href = urlOf(best);
+                c.setAttribute("download", best.name);
+                c.className = "state live";
+                (c.querySelector("span") || c).textContent = "↓ " + best.name + " · " + mb(best.size);
+                filled++;
+              } else {
+                set(c, all, "some", "→ nothing for " + want.name + " in " + (newest.tag_name || "this release") + " yet");
+              }
+            });
+          } else {
+            /* pre-releases only: nothing to hand out as "the installer", but the list below is
+               still real and the releases page is a real place, so say which one you're in */
+            cards.forEach(function (c) { set(c, all, "some", "→ pre-releases only, see them all"); });
+          }
+
+          if (count) {
+            count.textContent = shown.length + (shown.length === 1 ? " release" : " releases")
+              + " · " + onShow + (onShow === 1 ? " file" : " files")
+              + (newest ? " · newest " + newest.tag_name : " · pre-releases only") + " · " + repo;
+          }
+          var head = newest
+            ? (newest.tag_name || "a release") + (newest.published_at ? " · published " + String(newest.published_at).slice(0, 10) : "")
+                + " · " + nf.length + (nf.length === 1 ? " file" : " files") + " on it"
+            : (shown[0].tag_name || "the newest") + " is a pre-release, so no card points at it";
+          say(newest && filled ? "live" : (newest ? "no-match" : "pre-release"),
+              newest && filled ? "ok" : "warn",
+              head + " · " + filled + " of " + cards.length + " cards filled"
+              + " · " + shown.length + (shown.length === 1 ? " release" : " releases") + " listed below");
+        }
       })();
     </script>
 

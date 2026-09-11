@@ -13,6 +13,7 @@
 import { readFileSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { chromium } from "playwright";
+import { stubGithub } from "./gh-stub.mjs";
 import { ROOT, SITE, FILE_URL, SHOTS } from "./paths.mjs";
 
 let pass = 0, fail = 0;
@@ -68,8 +69,10 @@ ok(!/href="https?:\/\/github\.com/.test(html) && !/content="https?:/.test(html),
   "no link in the shipped markup points at github.com — the only owner the page knows is the one the deploy writes in");
 ok(!/your-github-username|connect\.mjs|site\/config\.js/.test(html),
   "no placeholder owner, no connect step, no config file to keep in sync — the deploy bakes or nothing does");
-ok(/var HEPH_REPO = window\.__hephRepo \|\| "";/.test(html),
-  "and the repo slot ships empty, which is what makes an unbaked copy inert rather than wrong");
+ok(/var HEPH_REPO = window\.__hephRepo \|\| "bigboi-alt\/HEPHAESTUS";/.test(html),
+  "the page names exactly one repo, as a plain owner/repo — and a deploy may overwrite the line");
+ok(!/["'`][\w.-]+\/["'`]?\s*\.git|api\.github\.com\/repos\/[\w.-]+/i.test(html),
+  "and it names no other repo, so there is no second owner anywhere for the list to read by mistake");
 ok(!/<script[^>]+\ssrc=/.test(html), "every script is inline — nothing to fetch, nothing to block");
 ok(!/(src|href|content)="https?:/.test(html.replace(/<meta name="description"[\s\S]*?\/>/, "")),
   "no absolute URL in any src, href or content attribute");
@@ -88,6 +91,7 @@ const b = await chromium.launch();
 const seen = [];
 const ctx = await b.newContext({ viewport: { width: 1440, height: 900 }, javaScriptEnabled: true });
 const page = await ctx.newPage();
+await stubGithub(page);   // the page is measured here, not the download logic — dl-qa owns that
 const errs = [];
 page.on("pageerror", (e) => errs.push(String(e)));
 page.on("console", (m) => { if (m.type() === "error") errs.push("console: " + m.text()); });
@@ -95,8 +99,9 @@ page.on("request", (r) => { if (!r.url().startsWith("data:")) seen.push(r.url())
 await page.goto(SITE, { waitUntil: "networkidle" });
 await page.waitForTimeout(700);
 const origin = new URL(SITE).origin;
-ok(seen.every((u) => u.startsWith(origin)),
-  `a page nobody has baked makes ${seen.length} request${seen.length === 1 ? "" : "s"}, all its own — no API call, no ${"github"} fetch`);
+const offsite = seen.filter((u) => !u.startsWith(origin));
+ok(offsite.every((u) => u.startsWith("https://api.github.com/repos/bigboi-alt/HEPHAESTUS")),
+  `${seen.length} request${seen.length === 1 ? "" : "s"} to load the page: ${offsite.length} of them offsite, and every offsite one is the same repo's release list — no fonts, no images, no analytics`);
 ok(errs.length === 0, `no page errors ${JSON.stringify(errs.slice(0, 2))}`);
 
 const box = await page.evaluate(() => {
@@ -125,13 +130,14 @@ const cards = await page.evaluate(() => [...document.querySelectorAll(".os > [da
            live: !!(a && a.classList.contains("live")), text: (a?.innerText || "").trim() };
 }));
 ok(cards.length === 3, `three systems listed (${cards.length})`);
-// the cards ARE anchors now — that is what makes "click and the download starts" possible —
-// but on a page nobody has baked every one of them still resolves to this section of itself
-ok(cards.every((c) => c.raw === "#get" && !c.live && c.abs?.location === undefined),
-  `every card falls back to #get (${[...new Set(cards.map((c) => c.raw))].join(", ")}) — no owner in the markup, so nothing to 404 on`);
-ok(cards.every((c) => /not posted yet/.test(c.text)), "and each one says plainly that the build isn't posted yet");
-ok(cards.every((c) => c.raw === new URL(c.abs).hash.replace("#", "") || c.abs.startsWith("http://127.0.0.1")),
-  "the resolved href is still same-page — an anchor can be upgraded without ever shipping a dead link");
+// the cards ARE anchors now — that is what makes "click and the download starts" possible. On a
+// repo with nothing published, the only two honest outcomes are this section's own anchor and the
+// releases page GitHub confirmed exists; a file link at that moment would be a lie
+ok(cards.every((c) => (c.raw === "#get" || c.raw === "https://github.com/bigboi-alt/HEPHAESTUS/releases") && !c.live),
+  `no card claims a file it didn't see: ${[...new Set(cards.map((c) => c.raw))].join(" | ")}`);
+ok(!cards.some((c) => /\/releases\/latest|\/download\//.test(c.raw || "")),
+  "and none of them links /releases/latest or a raw asset path — only URLs that exist for sure");
+ok(cards.every((c) => /not posted yet|all releases/.test(c.text)), "and each says which of the two it is", cards.map((c) => c.text).join(" / "));
 ok(!(await page.evaluate(() => Object.keys(localStorage).length)), "the page writes nothing to localStorage");
 await page.screenshot({ path: `${SHOTS}/ascii-hero.png` });
 await ctx.close();
@@ -140,6 +146,7 @@ await ctx.close();
 for (const [label, opts] of [["JS off", { javaScriptEnabled: false }], ["reduced motion", { reducedMotion: "reduce" }]]) {
   const c2 = await b.newContext({ viewport: { width: 1100, height: 900 }, ...opts });
   const p2 = await c2.newPage();
+  await stubGithub(p2);
   await p2.goto(SITE, { waitUntil: "load" });
   const r = await p2.evaluate(() => {
     const els = [...document.querySelectorAll(".reveal")];
@@ -156,6 +163,7 @@ for (const [label, opts] of [["JS off", { javaScriptEnabled: false }], ["reduced
 /* the single-file preview has to carry the same art, or the shipped copy lies */
 const pv = await b.newContext({ viewport: { width: 1280, height: 900 } });
 const pp = await pv.newPage();
+await stubGithub(pp);
 const pvErrs = [];
 pp.on("pageerror", (e) => pvErrs.push(String(e)));
 await pp.goto(FILE_URL, { waitUntil: "load" });

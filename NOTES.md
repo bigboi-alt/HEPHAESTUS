@@ -291,3 +291,52 @@ clean, `npm run lint` 0 errors / 24 warnings on 49 files, `npm run build` clean,
 `site-preview.html` regenerated after the last copy edit (109 KB, `file://`, no server, and it asks GitHub nothing), both
 workflows re-parsed with `yaml.safe_load`, and `site/index.html` is 42,661 B with `href="https://`
 counting zero occurrences in the shipped markup.
+
+---
+
+# 2026-09-11 (latest) · every release on the page, and the repo name that makes it work
+
+Two things arrived at once: the repo went **public** (`bigboi-alt/HEPHAESTUS`, checked live:
+`"private": false`) and the ask became *"i want all the releases in the site"*. So the page stopped
+showing one release's worth of buttons and started showing the release history — while the deploy's
+bake step turned out to have already worked: the live page carried `var HEPH_REPO =
+"bigboi-alt/HEPHAESTUS"`, which is the exact string that line was waiting to be rewritten into.
+
+**1 · the repo name moved into the file, as a working default.** `window.__hephRepo ||
+"bigboi-alt/HEPHAESTUS"`. The deploy still overwrites the line — that is what survives a rename or
+a fork — but a plain copy of `site/` on any host now reads the right releases with nothing
+connected. That killed the last scenario where the page could only ever be half-wired (Cloudflare's
+Git integration with an empty build command, which copies the folder verbatim and had no way to bake
+anything). It also broke the QA by association: `unbaked` stopped being a state the shipped file can
+be in, so the suite now drives `no-repo` (a value that *isn't* `owner/repo`) and a `default` case
+that loads the real file with no test hook at all and asserts the only two hosts it ever contacts
+are itself and that repo's release list. One `/releases/latest` became `/releases`, because one
+endpoint can serve both the cards and the list — and the page no longer needs two answers to agree.
+
+**2 · a list of every release, built without ever parsing a string as markup.** Rows are
+`createElement` + `textContent`, never `innerHTML`, because a release name is what somebody typed
+on another machine. Two rules came out of that and both were bugs I wrote first: a
+`browser_download_url` that isn't `https://` used to be handed straight to a card as `href` — a
+`javascript:` URL published as an asset would have become the Windows button — so `urlOf()` gates
+both the cards and the list, and a platform whose only asset fails it now reads "nothing for that
+system yet"; and `newest` can be null when a repo has only pre-releases, which threw inside the card
+loop before the outer catch turned it into a vague message. Pre-releases are listed, labelled, and
+never chosen as "the installer". The list caps at 24 rows with a counted "and N older releases"
+line, because a page that grows forever on the 40th release is its own kind of broken.
+
+**3 · the layout gate had a blind spot, and it was the whole point.** `site-qa` measured the page
+with no releases on it, so it approved an overflow that only exists *after* content arrives: at
+360 px the heading's `bigboi-alt/HEPHAESTUS` counter was `flex: none` and refused to shrink, and a
+`Hephaestus_0.3.0_amd64.AppImage · 21.8 MB` chip can't break anywhere, pushing the document 26 px
+wide. Fixed (`flex-wrap`, `min-width: 0`, `overflow-wrap: anywhere`) — and the suites that measure
+the page now measure it through `gh-stub.mjs` in `full` mode, four releases including the longest
+names a real Tauri build emits. A gate that only sees an empty state certifies the state nobody
+visits.
+
+**Checked:** `node qa-tools/run-all.mjs` → **12/12 suites green, 302 assertions + 7 viewports
+clean** (`dl-qa` 50 → 88, `ascii-qa` 44 → 45, both re-pointed at what the page now does). `npm run
+typecheck` clean, `npm run lint` 0 errors / 24 warnings on 50 files, `npm run build` clean,
+`site-preview.html` regenerated (117 KB, `file://`, and with no releases published it reads the
+repo and shows "Nothing published yet", which is today's truth: `git tag -l` on the remote is empty,
+0 releases, so the cards correctly resolve to `<repo>/releases` and will fill themselves the moment a
+`v*` tag is pushed). `site/index.html` is 51,403 B with zero `href="https://…` in the markup.

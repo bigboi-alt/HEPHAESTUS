@@ -5,7 +5,7 @@ folder exactly as it is, and redeploys it whenever you push.
 
 ```
 site/
-  index.html     the whole site: markup, CSS and 15 lines of JS in one file
+  index.html     the whole site: markup, CSS and three small scripts in one file
   _headers       security + cache headers (Cloudflare Pages reads this file)
   _redirects     old /dl and /download links → the download section
   robots.txt
@@ -22,49 +22,69 @@ nobody has to guess how it was made:
 |---|---|
 | the portrait in the hero | `python3 tools/ascii-art.py --write` — the mark measured on a 72-cell grid, one character per cell (Pillow; `qa-tools/ascii-qa.mjs` fails the gate if the page and the generator ever disagree) |
 
-## the download cards fill themselves, and never lie
+## the cards and the release list read your repo, and never lie
 
-The three cards in `#get` are anchors. The page asks GitHub for the newest **published**
-release of one repo and, if a file in it matches the visitor's system, links that file — so
-clicking a card starts a download with nobody touching this folder:
+`#get` holds two things that both come from the same source: three cards that hand out the file
+matching your system, and underneath them a list of **every published release**, newest first,
+with each file on it and its size. Both read one endpoint at load time:
 
 ```
-api.github.com/repos/<owner>/<repo>/releases/latest   the files
-api.github.com/repos/<owner>/<repo>                   whether the repo is readable at all
+api.github.com/repos/bigboi-alt/HEPHAESTUS/releases   the releases and their files, newest first
+api.github.com/repos/bigboi-alt/HEPHAESTUS             whether a stranger can read the repo at all
 ```
 
-The only thing the page knows about the repo is `var HEPH_REPO` at the top of the file, which
-ships as `window.__hephRepo || ""` and is rewritten to `"owner/repo"` by the deploy step in
-`.github/workflows/site.yml`. That is the whole wiring. There is no config file to edit, no
-owner name in the markup to keep in sync, and nothing to remember when a release goes out —
-publish the release, and the cards change. The two requests fire once per load, 6 s timeout.
+Two requests, once per page load, 6 s timeout, and nothing else leaves the browser. The newest
+*stable* release feeds the cards (pre-releases are listed but never handed out as "the installer");
+the whole list feeds the section below it. There is no polling and no cache-busting trick: reload
+the page and you have the current truth.
 
-Why the second request is not padding: **a 404 from GitHub means two opposite things.** Nothing
-published yet, or the repo is private. If the page guessed wrong it would hand a visitor a link
-to a 404, and a dead link is the one failure this page is built to make impossible. So:
+The page knows one repo, from one line near the top of `index.html`:
 
-| what GitHub says | what a card does |
-|---|---|
-| release with a matching asset | links it: `↓ Hephaestus_0.3.0_aarch64.dmg · 14.9 MB` |
-| release without one for this OS | links `<repo>/releases`, label says which system is missing |
-| 404 release, repo readable | links `<repo>/releases`, status says nothing is published yet |
-| 404 both — **the repo is private** | stays `#get`, status says so. GitHub will not give release files to strangers on a private repo, and no amount of config makes it |
-| unreachable, 500, or a body that isn't JSON | stays `#get`, status says it couldn't read the answer |
-| no JavaScript at all | stays `#get` exactly as the markup reads |
+```js
+var HEPH_REPO = window.__hephRepo || "bigboi-alt/HEPHAESTUS";   // "owner/repo"
+```
 
-Two consequences worth knowing before you call it a bug. **Anonymous visitors cannot download
-release assets from a private repo** — that is GitHub's rule, so with the repo private the cards
-sit in their inert state and light up by themselves the moment the repo (or the builds, somewhere
-public) is published. And the shipped page is not a wall of links: no `<img>`, no `<canvas>`, no
-web fonts, no analytics, no cookies, and no GitHub URL in the markup — the reader builds its URL
-at run time from the baked string, so `qa-tools/ascii-qa.mjs` can assert that an *unbaked* copy
-asks GitHub for nothing at all, and `site/_headers` narrows `connect-src` to `'self'
-https://api.github.com` so no other outside call is possible from this page even by accident.
+The default means a plain copy of `site/` onto any host already works. `site.yml` overwrites that
+line with `github.repository` — the repo the deploy actually ran from — which is what keeps the
+page correct through a rename, a move or a fork, and it refuses to deploy if the write didn't
+land. There is no `config.js`, no connect step, no per-release edit: publishing a release on GitHub
+is the whole maintenance routine.
 
-Asset choice, if you ever need to widen it, is the `PAIR` table in the reader script: windows
-wants `.exe/.msi` and prefers `setup`, macOS wants `.dmg` and prefers `aarch64`, Linux wants
-`.AppImage` and takes `.deb` only if there is nothing else. `qa-tools/dl-qa.mjs` drives those
-six rows against a stand-in GitHub, decoy assets included.
+Why the second request is not padding: **a 404 from GitHub means two opposite things** — nothing
+published, or a repo a stranger can't see. Guess wrong and the page hands a visitor a 404, which
+is the one failure this page is built to make impossible.
+
+| what GitHub says | the cards | the release list |
+|---|---|---|
+| release with a matching asset | `↓ Hephaestus_0.3.0_aarch64.dmg · 14.9 MB`, click downloads | one row per release, every file linked, sizes included |
+| release without one for this OS | `<repo>/releases`, label says which system is missing | still shows the files that do exist |
+| pre-releases only | `<repo>/releases`, labelled `pre-release` | rows appear, tagged as pre-releases |
+| nothing published | `<repo>/releases`, which renders even when empty | "Nothing published yet", plus where to look |
+| 404 both — **private or renamed** | stay `#get`, status says so | the written sentence stays; no link to a wall |
+| unreachable, 500, or a body that isn't JSON | stay `#get` | stay as written |
+| JavaScript off | stay `#get`, exactly as the markup reads | the same sentence, from the markup |
+
+Two things follow from that, and both are deliberate rather than unfinished:
+
+- **Anonymous visitors cannot download release assets from a private repo.** That is GitHub's
+  rule, so the page goes inert-and-honest while a repo is private and lights up by itself when it
+  is public. It is public now, which is why the cards already resolve.
+- Nothing in the shipped file links out. No `<img>`, no `<canvas>`, no web fonts, no analytics, no
+  cookies, and no `href="https://…"` anywhere — the reader builds its URLs at run time from that
+  one string. `qa-tools/ascii-qa.mjs` asserts the page asks exactly one host, and `site/_headers`
+  narrows `connect-src` to `'self' https://api.github.com` so no other outside call is possible
+  even by accident.
+
+The rows are built with `createElement` + `textContent`, never `innerHTML`: a release's name is a
+string typed on another machine, and this page does not parse it as markup. A `browser_download_url`
+that isn't `https://` is never linked, and a platform whose only asset fails the extension test gets
+"nothing for that system yet" instead of a button that goes nowhere. Both cases are in the gate.
+
+If you ever need to widen the picking, it is the `PAIR` table in the reader script: windows wants
+`.exe/.msi` and prefers `setup`, macOS wants `.dmg` and prefers `aarch64`, Linux wants `.AppImage`
+and takes `.deb` only if there is nothing else. `qa-tools/dl-qa.mjs` drives all of it — 88
+assertions across twelve states — against a stand-in GitHub with decoy assets, absurd names,
+`javascript:` URLs, 25 releases, a captive portal and a 2.5 s network.
 
 ## deploying on Cloudflare
 

@@ -175,7 +175,7 @@ python3 -m http.server 8099 --directory site      # the site
 cd qa-tools && npm i && npx playwright install chromium && node run-all.mjs
 ```
 
-That's the release gate: 12/12, 263 assertions plus seven viewports of the live page, and
+That's the release gate: 12/12, 302 assertions plus seven viewports of the live page, and
 `run-all.mjs` exits non-zero if any of them complains. `npm run typecheck` (`tsc -b`, not `tsc --noEmit` — the root config is a
 solution file and the latter silently does nothing) and `npm run lint` (oxlint, which also
 covers `tools/` and `qa-tools/`) are expected to come back clean.
@@ -198,16 +198,17 @@ then `npx tauri icon src-tauri/icons/app-icon.png`).
 | Workflow | When | What it does |
 |---|---|---|
 | `release.yml` | **a `v*` tag, or a manual run** — deliberately not every push | builds Windows (x64), macOS (aarch64 + x86_64), Linux (deb + AppImage) and puts them on a release tagged `v<version>`: a tag push **publishes** it, a manual run leaves a **draft**. Runs queue per tag rather than racing over one draft |
-| `site.yml` | push touching `site/`, or manual | writes this repo's name into the built page, then deploys `site/` to Cloudflare Pages — which is the only thing the download cards need to know — and prints what GitHub will answer a visitor. Only runs once the `CLOUDFLARE_API_TOKEN` / `CLOUDFLARE_ACCOUNT_ID` secrets exist |
+| `site.yml` | push touching `site/`, or manual | writes this repo's name into the built page (the one thing the cards and the release list need), deploys it to Cloudflare Pages, prints what GitHub will answer a visitor, and verifies the live URL carries the write. Only runs once the `CLOUDFLARE_API_TOKEN` / `CLOUDFLARE_ACCOUNT_ID` secrets exist |
 
 **The site** lives in `site/` — one static page, no build step, coffee-and-cream, the hero
-portrait set in text characters measured off the mark. Its three download cards fill themselves:
-at run time the page reads the newest **published** release of whichever repo built it and links
-the file that matches your system, so clicking one starts the download. The markup carries no
-GitHub URL and no owner name — `site.yml` rewrites one line in the copy it deploys, which is why
-there is no `config.js`, no connect step, and nothing to edit after a release. When there is
-nothing to confirm, the card stays the anchor it already was and says so; `qa-tools/dl-qa.mjs`
-drives all seven of those states against a stand-in GitHub. `site/_headers` narrows
+portrait set in text characters measured off the mark. Its three download cards and its list of
+**every** release both read `bigboi-alt/HEPHAESTUS` at run time: the newest stable release's file
+for your system on the card, the whole release history underneath, sizes and all. The one line that
+names the repo is a working default, and `site.yml` overwrites it with whatever repo the deploy ran
+from — which is why there is no `config.js`, no connect step, and nothing to edit after publishing.
+When there is nothing to confirm, the card stays the anchor it already was and says so;
+`qa-tools/dl-qa.mjs` drives twelve of those states against a stand-in GitHub, including a release
+whose name is really HTML and an asset whose URL is really `javascript:`. `site/_headers` narrows
 `connect-src` to `'self' https://api.github.com`, so that reader is the only way this page can
 reach outside itself. One honest ceiling: **GitHub will not hand release files to anonymous
 visitors on a private repo**, so while the repo is private the cards stay inert and labelled —
@@ -231,9 +232,10 @@ node tools/bump.mjs 0.2.0
 2. That tag is the whole release: Actions builds all three systems and **publishes** `v0.2.0`.
    Nothing to click on github.com, and no run needed if you'd rather look first — press
    **Run workflow** instead and it stops at a draft you can publish by hand.
-3. The download page needs no step at all: its cards read the newest published release of this
-   repo when a visitor loads the page, so they pick up `v0.2.0` on the next load after the tag.
-   `site.yml` must have run at least once, since that is what tells the page which repo to ask.
+3. The download page needs no step at all: its cards and its release list read this repo when a
+   visitor loads the page, so they pick up `v0.2.0` on the next load after the tag — no redeploy,
+   no edit. Running `site.yml` at least once is still worth it, because that overwrites the repo
+   the page asks with the repo the deploy actually ran from.
    While the repo is private the cards say so instead of linking — that is GitHub enforcing
    privacy on strangers, not a bug in the page.
 

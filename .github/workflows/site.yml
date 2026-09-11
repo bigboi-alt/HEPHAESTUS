@@ -104,12 +104,12 @@ jobs:
               ;;
           esac
 
-          # ── bake the repo into the page, then deploy that copy ────────────────────
-          # site/index.html ships with `var HEPH_REPO = window.__hephRepo || "";` so the
-          # markup contains no owner and no GitHub URL of any kind. Here, at deploy time,
-          # the real "owner/repo" is written in — which is why there is nothing for a human
-          # to edit and nothing that can drift: push, and the download cards belong to
-          # whatever repo this workflow ran from.
+          # ── write this repo's name into the page, then deploy that copy ───────────
+          # site/index.html already names the repo its releases live in, so a copy of the
+          # folder onto any host works on its own. This step overwrites that with
+          # github.repository — the repo the workflow actually ran from — which is what makes
+          # the page survive a rename, a move, or a fork. There is nothing for a human to edit
+          # either way, and the placeholder it looks for is the only contract.
           REPO="${{ github.repository }}"
           rm -rf site-built && cp -a site site-built
           # the folder's own notes are for the repo, not for the people visiting the site
@@ -133,8 +133,8 @@ jobs:
           rel_code=${rel_code:-000}
           echo "anonymous GitHub answers: repo $repo_code, latest release $rel_code"
           case "$repo_code/$rel_code" in
-            200/200) echo "  -> cards will fill themselves from the release's assets" ;;
-            200/404) echo "  -> repo is public, no PUBLISHED release yet: cards point at $REPO/releases" ;;
+            200/200) echo "  -> cards fill from the newest release's assets, and the list below them shows every one" ;;
+            200/404) echo "  -> repo is public, no PUBLISHED release yet: cards point at $REPO/releases and the list says so. Push a v* tag and release.yml will change that line by itself." ;;
             404/*|401/*|403/*) echo "  -> repo is not readable anonymously (private): cards stay inert. That is correct, and it is also why a download link from here cannot work: GitHub will not serve release files to strangers on a private repo. Make the repo public, or publish the files somewhere public (R2), and the same deploy lights the cards up." ;;
             *) echo "  -> GitHub did not answer; cards stay as written" ;;
           esac
