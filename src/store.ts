@@ -58,6 +58,8 @@ type State = {
   chat: ChatTurn[];
   buildMeta: BuildMeta | null;
   cedalionOpen: boolean;
+  /** a question handed to Cedalion from elsewhere in the app, waiting to be spoken */
+  cedalionSeed: string | null;
   toast: string | null;
   sites: SavedSite[];
   resumeId: string | null;
@@ -83,6 +85,10 @@ type State = {
   clearChat: () => void;
   setBuildMeta: (m: BuildMeta | null) => void;
   setCedalionOpen: (v: boolean) => void;
+  /** open the dock and, if given, actually answer something — a button that only
+      flips a flag is a button that does nothing the second time you press it */
+  askCedalion: (question?: string) => void;
+  clearCedalionSeed: () => void;
   say: (msg: string) => void;
   upsertSite: (site: SavedSite) => void;
   deleteSite: (id: string) => void;
@@ -116,6 +122,7 @@ export const useApp = create<State>((set, get) => ({
   chat: [],
   buildMeta: null,
   cedalionOpen: false,
+  cedalionSeed: null,
   toast: null,
   sites: [],
   resumeId: null,
@@ -231,9 +238,11 @@ export const useApp = create<State>((set, get) => ({
       ],
     }),
 
-  clearChat: () => set({ chat: [] }),
+  clearChat: () => set({ chat: [], cedalionSeed: null }),
   setBuildMeta: (buildMeta) => set({ buildMeta }),
   setCedalionOpen: (cedalionOpen) => set({ cedalionOpen }),
+  askCedalion: (question) => set({ cedalionOpen: true, cedalionSeed: question?.trim() ? question.trim() : null }),
+  clearCedalionSeed: () => set({ cedalionSeed: null }),
 
   upsertSite: (site) => {
     const exists = get().sites.some((x) => x.id === site.id);

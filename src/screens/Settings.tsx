@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { useApp } from "../store";
-import { DEFAULT_SETTINGS, download, type ThemeId } from "../lib/storage";
-import { TRENDS, TRENDS_UPDATED, TRENDS_VERSION } from "../data/trends";
+import { DEFAULT_SETTINGS, download, type ClaudeStyle, type ThemeId } from "../lib/storage";
+import { TRENDS_UPDATED, TRENDS_VERSION } from "../data/trends";
+import { CATALOG, CATALOG_INFO } from "../engine/catalog";
 import { SPACE_SIZE } from "../engine/akmon";
 
 import Emblem from "../components/Emblem";
@@ -16,13 +17,18 @@ const SECTIONS: { id: Section; label: string }[] = [
   { id: "about", label: "about" },
 ];
 
-const THEMES: { id: ThemeId; label: string; note: string; swatch: string[] }[] = [
+const THEMES: { id: ThemeId; label: string; note: string; swatch: string[]; variants?: boolean }[] = [
   { id: "obsidian", label: "Obsidian", note: "pure black, maximum contrast", swatch: ["#000000", "#0b0b0b", "#1b1b1b", "#f2f2f2"] },
   { id: "graphite", label: "Graphite", note: "softer dark, easier at night", swatch: ["#0e1012", "#1a1e21", "#282c30", "#e9ebee"] },
   { id: "paper", label: "Paper", note: "warm light, print-adjacent", swatch: ["#f6f4ef", "#fffdf9", "#d2ccbe", "#1a1812"] },
-  { id: "claude", label: "Claude", note: "cream shell, dusted-orange voice", swatch: ["#f4efe4", "#fcf9f1", "#c4562a", "#221b10"] },
+  { id: "claude", label: "Claude", note: "two skins · pick one", swatch: ["#f4efe4", "#fcf9f1", "#c4562a", "#221b10"], variants: true },
   { id: "blueprint", label: "Blueprint", note: "cold blue-black, technical", swatch: ["#05070d", "#0e1421", "#17233a", "#dce6f5"] },
   { id: "ember", label: "Ember", note: "the forge itself", swatch: ["#0a0605", "#17100c", "#2a1a12", "#ff7043"] },
+];
+
+const CLAUDE_STYLES: { id: ClaudeStyle; label: string; note: string; swatch: string[] }[] = [
+  { id: "ambrosia", label: "Ambrosia", note: "the cream, as it has always been", swatch: ["#f4efe4", "#fcf9f1", "#ece4d2", "#c4562a"] },
+  { id: "nyx", label: "Nyx", note: "dusted black, orange coals", swatch: ["#141210", "#1b1817", "#35302a", "#d97757"] },
 ];
 
 const ACCENTS = ["#F5F5F5", "#FF7043", "#7FB2FF", "#4ADE80", "#FBBF24", "#C084FC", "#F472B6"];
@@ -30,6 +36,9 @@ const ACCENTS = ["#F5F5F5", "#FF7043", "#7FB2FF", "#4ADE80", "#FBBF24", "#C084FC
 export default function Settings() {
   const { settings, setSettings, go, palettes, say } = useApp();
   const [section, setSection] = useState<Section>("general");
+  /* Claude has two skins, so its tile opens a second row of choices instead of
+     just selecting the theme. */
+  const [claudeChoices, setClaudeChoices] = useState(false);
 
   return (
     <div style={{ display: "grid", gridTemplateColumns: "220px 1fr", minHeight: "100vh" }}>
@@ -136,7 +145,10 @@ export default function Settings() {
                 {THEMES.map((t) => (
                   <button
                     key={t.id}
-                    onClick={() => setSettings({ theme: t.id })}
+                    onClick={() => {
+                      setSettings({ theme: t.id });
+                      if (t.id === "claude") setClaudeChoices((v) => settings.theme === "claude" ? !v : true);
+                    }}
                     className="panel"
                     style={{
                       padding: 10, textAlign: "left",
@@ -151,6 +163,42 @@ export default function Settings() {
                   </button>
                 ))}
               </div>
+
+              {settings.theme === "claude" && claudeChoices && (
+                <div className="fade-in" style={{ marginTop: 10, border: "1px solid var(--line)", background: "var(--raise)", padding: 12 }}>
+                  <div className="row" style={{ justifyContent: "space-between", marginBottom: 10 }}>
+                    <span className="label">Claude · which skin</span>
+                    <button className="faint mono-sm" style={{ fontSize: 10 }} onClick={() => setClaudeChoices(false)}>done</button>
+                  </div>
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(190px,1fr))", gap: 10 }}>
+                    {CLAUDE_STYLES.map((c) => (
+                      <button
+                        key={c.id}
+                        onClick={() => setSettings({ claudeStyle: c.id })}
+                        className="panel"
+                        style={{
+                          padding: 10, textAlign: "left",
+                          borderColor: (settings.claudeStyle ?? "ambrosia") === c.id ? "var(--accent)" : "var(--line)",
+                        }}
+                      >
+                        <div style={{ display: "flex", height: 30, marginBottom: 8, border: "1px solid var(--line)" }}>
+                          {c.swatch.map((col) => <div key={col} style={{ flex: 1, background: col }} />)}
+                        </div>
+                        <div style={{ fontSize: 12 }}>{c.label}</div>
+                        <div className="faint mono-sm">{c.note}</div>
+                      </button>
+                    ))}
+                  </div>
+                  <div className="faint mono-sm" style={{ marginTop: 10 }}>
+                    same palette rules, same orange voice — only the shell changes. nothing you have designed is touched.
+                  </div>
+                </div>
+              )}
+              {settings.theme === "claude" && !claudeChoices && (
+                <button className="faint mono-sm" style={{ marginTop: 8, fontSize: 10 }} onClick={() => setClaudeChoices(true)}>
+                  choose the skin · {CLAUDE_STYLES.find((c) => c.id === (settings.claudeStyle ?? "ambrosia"))?.label.toLowerCase()} ▾
+                </button>
+              )}
             </div>
 
             <Row label="Accent" note="Used for focus rings, Cedalion's marker and primary actions.">
@@ -218,7 +266,7 @@ export default function Settings() {
             <Meta k="version" v="0.3.0 — the forge rework" />
             <Meta k="current release" v="palette engine · trend library · direction engine · Cedalion" />
             <Meta k="next" v="Akmon canvas · live composition scoring" />
-            <Meta k="trend library" v={`v${TRENDS_VERSION} · ${TRENDS_UPDATED} · ${TRENDS.length} entries`} />
+            <Meta k="trend library" v={`v${TRENDS_VERSION} · ${TRENDS_UPDATED} · ${CATALOG.length} entries (${CATALOG_INFO.curated} curated, ${CATALOG_INFO.composed} composed)`} />
             <Meta k="colour space" v={`${SPACE_SIZE.pretty} addressable palettes`} />
             <Meta k="built with" v="React · TypeScript · Vite · Zustand" />
             <Meta k="dependencies for colour, trends or scoring" v="none" />

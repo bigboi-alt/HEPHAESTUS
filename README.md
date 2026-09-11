@@ -105,6 +105,15 @@ cautions when it contradicts the purpose, and an exportable token file (radius, 
 motion, shadow, font stack). The first half of every set is safe; the second half is allowed to
 argue with the brief — and gets flagged when it does.
 
+**3. The catalogue** (`src/engine/catalog.ts`) — the two layers above composed into a searchable
+library of **1,750 entries**: every layout atom × every accent atom × twelve registers (Atrium, Ledger,
+Foundry, Vitrine, Signal, Marginalia, Atelier, Kiosk, Corridor, Console, Nook, Archive), with ids built
+from the parts so a duplicate is impossible rather than merely unlikely. 1,390 combinations are refused
+because their atoms fight each other. Each entry carries the numbers Cedalion scores against, a drawn
+example generated from those numbers, and a recipe naming the exact grid preset, blocks, site options and
+merkhet mode to use — so "implementable" is a list of clicks, not an adjective. Generation is deterministic
+and happens once at startup; the screen pages 24 rows at a time.
+
 **Keeping it current:** set a raw JSON URL in Settings and the app merges an updated `trends.json`
 by id. You push one file to a public gist or repo; every installed copy learns the new trend. Free,
 no server, no build.
@@ -113,8 +122,18 @@ no server, no build.
 
 - 24 purposes across 14 sectors, each with a brief, priorities, the sections you'll actually need, and a trend posture
 - Library of saved palettes as minimal cards — search, sort by Cedalion score, favourite, import/export JSON
-- Live preview applying your palette to a landing page, dashboard and storefront
-- Five shell themes (Obsidian, Graphite, Paper, Blueprint, Ember), accent colour, density, motion toggle
+- Build's ▶ preview opens the **exported site itself** — the same HTML string the .html download writes —
+  full size, at four widths, with working links and transitions. Not a second renderer that can disagree
+  with what you ship
+- Twelve site options (typeface, text size, corners, card depth, image fill, motion, airiness, heading
+  case, heading tracking, button shape, card outline, reset) that are honoured by the editor *and* the
+  exporter — checked, not asserted
+- Merkhet measures, repairs, then measures again: it reports how many problems it fixed, what is still
+  open, and what it tried and put back because the page read worse. No tick for a fix it hasn't verified
+- Akmon shows surfaces as a stack of planes with the perceptual distance between them, and voice as
+  editable cards, plus a page fragment painted twice to make the difference between the two unmistakable
+- Six shell themes (Obsidian, Graphite, Paper, Claude, Blueprint, Ember), accent colour, density, motion
+  toggle — and Claude comes in two skins, Ambrosia (cream) and Nyx (dusted black with orange coals)
 - Everything persists locally. No account, no telemetry, no network.
 
 ---
@@ -222,12 +241,12 @@ You can tell which build a draft holds by its run time: a run that finishes in ~
    - Account resources: **Include → your account**
    - Create → **copy the token now** (Cloudflare shows it only once)
 2. **Account ID**: dash.cloudflare.com home page → right column → copy the long hex ID.
-3. Nothing to create in Cloudflare. The workflow makes the project itself — `pages project create hephaestus --production-branch main`, tolerating "already exists" after the first run — so the site lands on **https://hephaestus.pages.dev**, not a branch alias. If you'd rather do it by eye instead: Workers & Pages → Create → Pages → Upload assets → project name `hephaestus`, then delete that test upload and let the workflow take over.
+3. Nothing to create in Cloudflare. The workflow asks the Pages API whether the project name it wants — `hephaestus-app` — is yours. Free: it creates it with `main` as the production branch. Yours from a previous run: it deploys straight in. **Someone else's: it stops and says so**, because `wrangler pages deploy` would otherwise mint a suffixed clone (`hephaestus-app-x9k`) and cheerfully report success. Want a different subdomain? Add an Actions **variable** named `PAGES_PROJECT` with the name you want — the project name *is* the subdomain, and Cloudflare cannot rename one later. By-eye alternative: Workers & Pages → Create → Pages → Upload assets → project name `hephaestus-app`, then delete that test upload and let the workflow take over.
 4. github.com repo → **Settings → Secrets and variables → Actions → New repository secret**, twice:
    - name `CLOUDFLARE_API_TOKEN`, value = token from step 1
    - name `CLOUDFLARE_ACCOUNT_ID`, value = ID from step 2
    Names must match **exactly** — a typo is a silent skip, not an error.
-5. Run the **site** workflow manually once (repo → Actions → site → Run workflow), then open **https://hephaestus.pages.dev**. Buttons stay disabled until the repo is public — GitHub refuses anonymous reads of private releases, which is correct behaviour.
+5. Run the **site** workflow manually once (repo → Actions → site → Run workflow). The last step of that job loads the URL it just deployed to and checks the page's `<title>` before it claims anything, so the run summary tells you the truth: **https://hephaestus-app.pages.dev**. Buttons stay disabled until the repo is public — GitHub refuses anonymous reads of private releases, which is correct behaviour.
 6. Point the site at your repo so the buttons can fill themselves: `node tools/connect.mjs <your-github-username>`, commit, push. Without this the page says it isn't connected yet (deliberate — no broken buttons, no guessing).
 
 Actions billing note: builds on **public** repos are unlimited/free; on **private** repos they burn the 2,000 free minutes/month. Since a public download site is the endgame anyway, flip the repo public when you start iterating releases.

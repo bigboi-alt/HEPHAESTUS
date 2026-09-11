@@ -3,12 +3,12 @@
 # The deploy step skips itself until you add the two secrets, so it never
 # fails a push while unconfigured. To switch it on:
 #
-#   1. Nothing to pre-create. The job runs `pages project create hephaestus
+#   1. Nothing to pre-create. The job runs `pages project create hephaestus-app
 #      --production-branch main` itself, tolerating "already exists" on every
-#      later run, then deploys. Site lands on https://hephaestus.pages.dev.
+#      later run, then deploys. Site lands on https://hephaestus-app.pages.dev.
 #      (Doing it explicitly is required: `pages deploy` would otherwise *prompt*
 #      to create the missing project, and CI has no keyboard — and without the
-#      production branch set you'd get main.hephaestus.pages.dev instead.)
+#      production branch set you'd get main.hephaestus-app.pages.dev instead.)
 #
 #   2. Repo -> Settings -> Secrets and variables -> Actions -> New secrets:
 #        CLOUDFLARE_API_TOKEN   (token with "Cloudflare Pages: Edit")
@@ -56,30 +56,73 @@ jobs:
             echo "::warning::site deploy skipped - add CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID under repo Settings > Secrets and variables > Actions, then re-run this workflow"
             exit 0
           fi
-          PROJECT=hephaestus
 
-          # Create the Pages project explicitly, with main as the production branch.
-          # Two reasons this can't be left to `pages deploy`:
-          #   1. deploy prompts "create this project? [y/N]" when it's missing, and CI
-          #      has no keyboard - it fails instead of asking.
-          #   2. production branch has to be set, or the deploy lands on the branch
-          #      alias (main.hephaestus.pages.dev) instead of hephaestus.pages.dev.
-          # "already exists" is the normal case after the first run, so it's tolerated.
-          if npx --yes wrangler@latest pages project create "$PROJECT" --production-branch main >/tmp/create.log 2>&1; then
-            echo "created Pages project '$PROJECT' with production branch 'main'"
-          elif grep -qiE "already exists|taken|8000000" /tmp/create.log; then
-            # Pages names are unique across ALL accounts, not just yours. If the deploy
-            # right below now fails with a permissions / not-found error, someone else owns
-            # this name - change PROJECT above (the subdomain follows it) and push again.
-            echo "Pages project '$PROJECT' already exists - deploying to it"
-          else
-            echo "::error::could not create the Pages project '$PROJECT' - see the log above"
-            cat /tmp/create.log
-            exit 1
-          fi
+          # The Pages project name IS the subdomain, and it cannot be renamed later -
+          # Cloudflare only lets you delete the project and make a new one. Override
+          # without editing this file by setting a repo variable PAGES_PROJECT.
+          PROJECT="${PAGES_PROJECT:-hephaestus-app}"
+          API="${CF_PAGES_API:-https://api.cloudflare.com/client/v4}"
+
+          # Ask the API whether THIS ACCOUNT owns the name. `pages deploy` cannot be
+          # trusted here: when the name belongs to somebody else it silently creates a
+          # suffixed clone (hephaestus -> hephaestus-b4x), reports "Deployment complete",
+          # and the URL you wanted 404s. Pages names are unique across all accounts.
+          status=$(curl -s -o /dev/null -w "%{http_code}" \
+            -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+            "$API/accounts/$CLOUDFLARE_ACCOUNT_ID/pages/projects/$PROJECT")
+
+          case "$status" in
+            200)
+              echo "Pages project '$PROJECT' already belongs to this account - deploying to it"
+              ;;
+            404)
+              echo "no project named '$PROJECT' in this account - creating it (production branch: main)"
+              resp=$(curl -s \
+                -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+                -H "Content-Type: application/json" \
+                -d "{\"name\":\"$PROJECT\",\"production_branch\":\"main\"}" \
+                "$API/accounts/$CLOUDFLARE_ACCOUNT_ID/pages/projects")
+              if [ "$(printf '%s' "$resp" | jq -r '.success')" != "true" ]; then
+                echo "::error::Cloudflare refused to create the Pages project '$PROJECT'. Names are unique across every Cloudflare account, so the most likely reason is that someone else already owns it."
+                printf '%s' "$resp" | jq -r '.errors[]? | "  Cloudflare said: \(.code): \(.message)"' >&2 || true
+                echo ""
+                echo "Pick a name that is yours. Two ways, then push:"
+                echo "  1. repo variable  Settings > Secrets and variables > Actions > Variables > PAGES_PROJECT = <any free name>"
+                echo "  2. edit this file  PROJECT=\"hephaestus-app\" (line above)"
+                echo "A clean https://hephaestus.* URL only comes from a custom domain; pages.dev gives you the project name."
+                exit 1
+              fi
+              echo "created '$PROJECT' with production branch 'main'"
+              ;;
+            *)
+              echo "::error::Cloudflare answered HTTP $status while checking the project name - not deploying"
+              exit 1
+              ;;
+          esac
 
           npx --yes wrangler@latest pages deploy site \
             --project-name "$PROJECT" \
             --branch main
 
-          echo "site live at https://$PROJECT.pages.dev"
+          # A green deploy step is not proof the site is reachable. Poll the real URL
+          # and check it is OUR page; this is the step that would have caught the
+          # hephaestus-b4x mix-up on the first run instead of printing a false "live at".
+          for _ in 1 2 3 4 5; do
+            rm -f /tmp/live.html
+            # `|| true`, not `|| echo 000`: curl already reports 000 for a failed
+            # connection, and appending another zero-string made the error read 000000.
+            code=$(curl -s -o /tmp/live.html -w "%{http_code}" -L --max-time 20 \
+              "https://$PROJECT.pages.dev" || true)
+            code=${code:-000}
+            if grep -qi "Hephaestus" /tmp/live.html 2>/dev/null; then
+              echo "verified: https://$PROJECT.pages.dev is serving the site"
+              exit 0
+            fi
+            sleep 6
+          done
+
+          echo "::error::deployed, but https://$PROJECT.pages.dev is not serving the site (last check: HTTP $code)."
+          echo "  If the deploy went to a different project name, that name is what is live - check Cloudflare > Workers & Pages."
+          echo "  Otherwise set the production branch: Pages > $PROJECT > Settings > Production branch = main, then re-run."
+          exit 1
+

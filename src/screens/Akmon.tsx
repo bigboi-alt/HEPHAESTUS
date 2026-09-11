@@ -9,6 +9,7 @@ import {
   ramp, round, simulateCvd, wcagLevel, type CvdType,
 } from "../engine/color";
 import { auditPalette, type Audit } from "../engine/cedalion";
+import { SurfacePlanes, VOICE_JOBS, VoiceSurfaceSplit } from "../components/ForgeSplit";
 import { STUDIO_PRESETS } from "../data/presets";
 import { download } from "../lib/storage";
 
@@ -26,11 +27,10 @@ function gradeColor(score: number): string {
   return score >= 82 ? "var(--ok)" : score >= 70 ? "var(--warn)" : "var(--bad)";
 }
 
-const NEUTRALS: Role[] = ["background", "surface", "border", "text", "muted"];
 const VOICE: Role[] = ["primary", "secondary", "accent"];
 
 export default function Akmon() {
-  const { current, generate, vary, toggleLock, setSwatch, savePalette, purposeId, setCedalionOpen } = useApp();
+  const { current, generate, vary, toggleLock, setSwatch, savePalette, purposeId, askCedalion } = useApp();
   const [prompt, setPrompt] = useState(current?.prompt ?? "");
   const [tool, setTool] = useState<Tool | null>(null);
   const [cvd, setCvd] = useState<CvdType | "none">("none");
@@ -75,7 +75,12 @@ export default function Akmon() {
           </h1>
         </div>
         <div className="row gap-1">
-          <button className="btn" style={{ fontSize: 10 }} onClick={() => setCedalionOpen(true)}>ask cedalion</button>
+          <button
+            className="btn"
+            style={{ fontSize: 10 }}
+            onClick={() => askCedalion(current ? "Score my palette" : "What can you do?")}
+            title="Cedalion reads this palette and tells you what is measurably wrong"
+          >ask cedalion</button>
           <button className="btn" style={{ fontSize: 10 }} onClick={() => vary(0.35)}>nudge</button>
           <button className="btn" style={{ fontSize: 10 }} onClick={() => vary(0.9)}>shake</button>
         </div>
@@ -173,20 +178,20 @@ export default function Akmon() {
       {/* ---------- swatches ---------- */}
       <div style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) 330px", gap: 18, alignItems: "start" }}>
         <div style={{ display: "flex", flexDirection: "column", gap: 18, minWidth: 0 }}>
-          <SwatchGroup
-            title="surfaces"
-            sub="background, surface, border, text, muted — with a whisper of the brand hue"
-            roles={NEUTRALS}
-            swatch={swatch}
+          <VoiceSurfaceSplit palette={current} shown={shown} />
+
+          <SurfacePlanes
+            palette={current}
             shown={shown}
-            bg={bg}
-            onLock={toggleLock}
             onHex={(r, h) => setSwatch(r, h)}
+            onLock={toggleLock}
           />
+
           <SwatchGroup
-            title="voice"
-            sub="the three colours that carry the brand — primary, secondary, accent"
+            title="voice · the three that carry the brand"
+            sub="these are the colours you edit. surfaces you only ever adjust."
             roles={VOICE}
+            jobs={VOICE_JOBS}
             swatch={swatch}
             shown={shown}
             bg={bg}
@@ -215,7 +220,7 @@ export default function Akmon() {
 
         {/* ---------- right rail: cedalion + save ---------- */}
         <div style={{ position: "sticky", top: 74, display: "flex", flexDirection: "column", gap: 12 }}>
-          {audit && <AuditCard audit={audit} onOpenChat={() => setCedalionOpen(true)} />}
+          {audit && <AuditCard audit={audit} onOpenChat={() => askCedalion("What should I fix first?")} />}
           <div className="panel" style={{ padding: 12 }}>
             <div className="row gap-1" style={{ flexWrap: "wrap" }}>
               <button className="btn btn-primary" style={{ flex: 1, fontSize: 11 }} onClick={() => savePalette()}>save to library</button>
@@ -247,9 +252,10 @@ export default function Akmon() {
 }
 
 /* ---------- one swatch group ---------- */
-function SwatchGroup({ title, sub, roles, swatch, shown, bg, onLock, onHex }: {
+function SwatchGroup({ title, sub, roles, jobs, swatch, shown, bg, onLock, onHex }: {
   title: string; sub: string;
   roles: Role[];
+  jobs?: Record<string, string>;
   swatch: (r: Role) => { hex: string; name: string; locked: boolean };
   shown: (h: string) => string;
   bg: string;
@@ -288,6 +294,9 @@ function SwatchGroup({ title, sub, roles, swatch, shown, bg, onLock, onHex }: {
                   <span className="label" style={{ fontSize: 9 }}>{role}</span>
                   <span className="faint" style={{ fontSize: 9, maxWidth: 120, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.name}</span>
                 </div>
+                {jobs?.[role] && (
+                  <div className="faint" style={{ fontSize: 9.5, lineHeight: 1.5 }}>{jobs[role]}</div>
+                )}
                 <div className="row" style={{ gap: 5 }}>
                   <input
                     type="color"

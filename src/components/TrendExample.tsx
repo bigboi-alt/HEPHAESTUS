@@ -33,9 +33,32 @@ const KIND: Record<string, K> = {
   "gamified-onboarding": "gamified", "grid-rules": "grid",
 };
 
+/** the composed catalogue encodes its parts in the id —
+ *  `layout__accent__register` — so the mock can be chosen from what it *is*
+ *  instead of from a lookup table that would need 1,200 rows. */
+const REGISTER_KIND: Record<string, K> = {
+  atrium: "soft", ledger: "chart", foundry: "brutal", vitrine: "depth", signal: "dashboard",
+  marginalia: "editorial", atelier: "retro", kiosk: "micro", corridor: "kinetic", console: "tokens",
+  nook: "gamified", archive: "grid",
+};
+const ACCENT_KIND: Record<string, K> = {
+  glass: "glass", "hard-shadow": "brutal", elevated: "depth", duotone: "saturated",
+  earth: "soft", neon: "kinetic", giant: "kinetic", mono: "tokens", serif: "editorial",
+  scroll: "kinetic", spring: "depth", command: "exp-nav", a11y: "a11y",
+};
+
+function kindFor(id: string): K {
+  if (KIND[id]) return KIND[id];
+  const parts = id.split("__");
+  if (parts.length < 3) return "editorial";
+  const [, accent, register] = parts;
+  for (const key of Object.keys(ACCENT_KIND)) if (accent.includes(key)) return ACCENT_KIND[key];
+  return REGISTER_KIND[register] ?? "editorial";
+}
+
 export default function TrendExample({ t }: { t: Trend }) {
   const c = palFor(t.id);
-  const kind: K = KIND[t.id] ?? "editorial";
+  const kind: K = kindFor(t.id);
   const [rLo, rHi] = t.rules.radius ?? [8, 12];
   const r = Math.round((rLo + rHi) / 2);
   const bw = t.rules.borderWeight ? Math.max(1, t.rules.borderWeight[0]) : 1;

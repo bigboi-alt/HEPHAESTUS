@@ -9,7 +9,7 @@ import { useApp } from "../store";
 import { ask, auditPalette, cedalionStarters } from "../engine/cedalion";
 
 export function CedalionChat({ compact = false }: { compact?: boolean }) {
-  const { chat, pushChat, clearChat, current, purposeId, screen, buildMeta, canvasCtx } = useApp();
+  const { chat, pushChat, clearChat, current, purposeId, screen, buildMeta, canvasCtx, cedalionSeed, clearCedalionSeed } = useApp();
   const starters = cedalionStarters(screen);
   const [draft, setDraft] = useState("");
   const endRef = useRef<HTMLDivElement>(null);
@@ -17,6 +17,16 @@ export function CedalionChat({ compact = false }: { compact?: boolean }) {
   useEffect(() => {
     endRef.current?.scrollIntoView?.({ block: "end", behavior: "smooth" });
   }, [chat.length]);
+
+  /* a question handed over from another screen — speak it once, then forget it */
+  const seededRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!cedalionSeed || cedalionSeed === seededRef.current) return;
+    seededRef.current = cedalionSeed;
+    send(cedalionSeed);
+    clearCedalionSeed();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cedalionSeed]);
 
   function send(text: string) {
     const q = text.trim();
@@ -194,9 +204,11 @@ export default function CedalionDock() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [screen]);
 
-  /* launcher — hidden inside the studio (the studio has its own chat buttons) */
+  /* launcher — hidden inside the studio (the studio has its own chat buttons), and
+     hidden entirely when the shell setting turns the dock off: if nobody asked for
+     a floating pill, don't stick one on the screen */
   if (!cedalionOpen) {
-    if (screen === "build") return null;
+    if (screen === "build" || !settings.cedalionDock) return null;
     return (
       <button
         onClick={() => {

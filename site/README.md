@@ -54,9 +54,10 @@ Pick one of these, not both.
    - Framework preset: **None**
    - Build command: **empty**
    - Build output directory: **`site`**
-4. Save and Deploy → **https://hephaestus.pages.dev** in about a minute. Name the
-   project `hephaestus` — that project name *is* the subdomain, and it matches what
-   `site.yml` deploys to, so both routes land on the same URL.
+4. Save and Deploy → **https://hephaestus-app.pages.dev** in about a minute. Name the
+   project `hephaestus-app` — that project name *is* the subdomain, and it matches what
+   `site.yml` deploys to, so both routes land on the same URL. Cloudflare cannot rename
+   a `*.pages.dev` subdomain afterwards, so pick it once, properly.
 
 Every later push that touches `site/**` redeploys automatically, and pull requests get
 their own preview URL.
@@ -69,10 +70,12 @@ their own preview URL.
 | `CLOUDFLARE_API_TOKEN` | dash.cloudflare.com → My Profile → API Tokens → Create (Custom: Account → Cloudflare Pages → Edit) |
 | `CLOUDFLARE_ACCOUNT_ID` | dash.cloudflare.com home → right column, the long hex id |
 
-Then run the `site` workflow once by hand. It creates the Pages project `hephaestus`
-with `main` as the production branch (a missing project can't be handled by
-`pages deploy` alone — that path prompts interactively, and CI has no keyboard),
-so you land on `https://hephaestus.pages.dev` rather than `main.hephaestus.pages.dev`.
+Then run the `site` workflow once by hand. It checks the Pages API for ownership of
+`hephaestus-app`, creates it with `main` as the production branch if it is free (a missing
+project can't be handled by `pages deploy` alone — that path prompts interactively, and CI
+has no keyboard), refuses to continue if the name belongs to somebody else, and finally
+loads `https://hephaestus-app.pages.dev` and greps for our `<title>` before saying the
+deploy worked. Override the name with an Actions variable `PAGES_PROJECT`.
 
 **Custom domain:** Pages project → Custom domains → Set up a domain. Certificate is handled.
 If you use a domain, consider making `og:image` absolute (it's relative today, which most

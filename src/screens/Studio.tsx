@@ -13,10 +13,11 @@ import { generatePalette, type Palette } from "../engine/akmon";
 import { auditPalette, canvasProblems } from "../engine/cedalion";
 import {
   FRAME_W, activePages, blockColors, roleHex, readableOn, auditCanvas,
-  merkhet, canvasToHtml, emptyBlock, freshDoc, freshPage, starterBlocks,
+  merkhet, merkhetProblems, canvasToHtml, optOf, FONT_STACKS,
+  type CvOptions, emptyBlock, freshDoc, freshPage, starterBlocks,
   uid, pageHeight,
   type CvBlock, type CvDoc, type CvKind, type CvPage, type CvTransition,
-  type MerkhetMode,
+  type MerkhetMode, type MerkhetVerdict,
 } from "../engine/canvas";
 import { contentFor } from "../engine/sites";
 import { FALLBACK, GRID_PRESETS, blockSpan, layBelow, type GridPreset, type GridSeed } from "../engine/grids";
@@ -85,6 +86,14 @@ function minDim(kind: CvKind) {
 }
 const bandKind = (k: CvKind) => k === "nav" || k === "footer";
 
+/** Paint order. A card or a stat is a *surface* — the pieces drawn on it must
+ *  stay clickable, or a block you can see is a block you cannot select. Content
+ *  sits above surfaces by default; ⇤ /  in the inspector (or [ ]) still lets you
+ *  overrule it when you really want something behind. */
+const STACK_BASE: Partial<Record<CvKind, number>> = {
+  nav: 0, footer: 0, spacer: 0, card: 1, stat: 1, divider: 1,
+};
+
 export default function Studio() {
   const { current, setCurrent, purposeId, go, say, setCedalionOpen, resumeId, setResumeId, sites, upsertSite, setCanvasCtx } = useApp();
   const purpose = purposeId ? getPurpose(purposeId) : undefined;
@@ -116,8 +125,10 @@ export default function Studio() {
   const [editId, setEditId] = useState<string | null>(null);
   const [devW, setDevW] = useState(1200);
   const [preview, setPreview] = useState(false);
+  const [previewHtml, setPreviewHtml] = useState<string | null>(null);
   const [showMerq, setShowMerq] = useState(false);
   const [report, setReport] = useState<string[]>([]);
+  const [merq, setMerq] = useState<MerkhetVerdict | null>(null);
   const [showGrids, setShowGrids] = useState(false);
   const [showGuides, setShowGuides] = useState(true);
   const [zoom, setZoom] = useState<number | null>(null);
@@ -311,12 +322,20 @@ export default function Studio() {
       }
       return;
     }
-    setEditId(null);
-    setSel(b.id);
-    if (bandKind(b.kind)) return;
     const pt = toPage(e);
+    // ⌥/alt-click: take the block *under* this one — the escape hatch for
+    // anything that ends up behind something else
+    let target = b;
+    if (e.altKey && pt) {
+      const stack = pageRef.current!.blocks.filter((o) => o.x <= pt.x && pt.x <= o.x + o.w && o.y <= pt.y && pt.y <= o.y + Math.max(o.h, 24));
+      const i = stack.findIndex((o) => o.id === b.id);
+      if (i > 0) target = stack[i - 1];
+    }
+    setEditId(null);
+    setSel(target.id);
+    if (bandKind(target.kind)) return;
     if (!pt) return;
-    gestureRef.current = { mode: "move", id: b.id, ix: pageIx, sx: pt.x, sy: pt.y, ox: b.x, oy: b.y, moved: false };
+    gestureRef.current = { mode: "move", id: target.id, ix: pageIx, sx: pt.x, sy: pt.y, ox: target.x, oy: target.y, moved: false };
   };
 
   const onHandleDown = (b: CvBlock, ax: Axis, e: React.PointerEvent) => {
@@ -369,6 +388,16 @@ export default function Studio() {
     const b = page.blocks.find((x) => x.id === sel);
     if (!b) return;
     if (e.key === "Delete" || e.key === "Backspace") { e.preventDefault(); removeBlock(sel); return; }
+    if (e.key === "Tab") {
+      e.preventDefault();
+      const list = page.blocks.filter((x) => !bandKind(x.kind) && x.kind !== "spacer");
+      if (!list.length) return;
+      const i = list.findIndex((x) => x.id === sel);
+      const nx = list[(i + (e.shiftKey ? -1 : 1) + list.length) % list.length];
+      setSel(nx.id);
+      reveal(nx.id);
+      return;
+    }
     if (e.key === "[") { moveZ(b, -1); return; }
     if (e.key === "]") { moveZ(b, 1); return; }
     const step = e.shiftKey ? 10 : 1;
@@ -458,14 +487,28 @@ export default function Studio() {
     commit(pageMap((p) => ({ ...p, blocks: [...p.blocks, nb] })));
     setSel(nb.id); reveal(nb.id);
   };
+  /** the order a block sits at when nobody has touched it */
+  const zBase = (k: CvKind) => STACK_BASE[k] ?? 2;
+  /** ⇤ / ⇥ (or [ ]) swap layers with the neighbour as it is actually painted,
+   *  not with the neighbour next in the array — otherwise "send back" can be a
+   *  no-op on a block whose kind already decides its layer. */
   const moveZ = (b: CvBlock, dir: -1 | 1) => {
     commit(pageMap((p) => {
       const arr = [...p.blocks];
-      const i = arr.findIndex((x) => x.id === b.id);
-      const j = i + dir;
-      if (i < 0 || j < 0 || j >= arr.length) return p;
-      [arr[i], arr[j]] = [arr[j], arr[i]];
-      return { ...p, blocks: arr };
+      const zof = (x: CvBlock) => x.z ?? zBase(x.kind);
+      const painted = arr.map((x, i) => ({ x, i })).sort((m, n) => zof(m.x) - zof(n.x) || m.i - n.i);
+      const k = painted.findIndex((o) => o.x.id === b.id);
+      const l = k + dir;
+      if (k < 0 || l < 0 || l >= painted.length) return p;
+      const me = painted[k].x, other = painted[l].x;
+      const mz = zof(me), oz = zof(other);
+      const clamp = (v: number) => Math.max(0, Math.min(9, v));
+      const next = arr.map((x) => {
+        if (x.id === me.id) return { ...x, z: mz === oz ? clamp(oz + dir) : oz };
+        if (x.id === other.id) return { ...x, z: mz === oz ? clamp(mz - dir) : mz };
+        return x;
+      });
+      return { ...p, blocks: next };
     }));
   };
   const reveal = (id: string) => {
@@ -479,16 +522,44 @@ export default function Studio() {
   const liveBlock = (id: string, mut: Partial<CvBlock> | ((b: CvBlock) => CvBlock)) => setDoc((d) => blockMap(id, mut, d));
 
   const runMerkhet = (mode: MerkhetMode) => {
-    const { page: np, report: rep } = merkhet(pageRef.current!, pal, mode);
+    const { page: np, report: rep, verdict } = merkhet(pageRef.current!, pal, mode);
     commit(pageMap(() => np));
     setReport(rep);
-    say(`merkhet · ${mode} applied`);
+    setMerq(verdict);
+    // the toast says what was measured, not what was attempted
+    say(
+      verdict.wasClean ? "merkhet · nothing to fix here"
+      : verdict.ok ? `merkhet · ${verdict.fixed} fixed and re-checked`
+      : `merkhet · ${verdict.fixed} of ${verdict.before} — ${verdict.after} left, panel says why`
+    );
+  };
+  /** measure without touching: what a mode would find, in plain words */
+  const checkMerkhet = () => {
+    const mode = merq?.mode ?? "contrast";
+    const probs = merkhetProblems(pageRef.current!, pal, mode);
+    setMerq({ mode, before: probs.length, after: probs.length, fixed: 0, reverted: 0, remaining: probs.slice(0, 4).map((x) => x.what), remainingIds: probs.slice(0, 4).map((x) => x.blockId).filter(Boolean) as string[], ok: probs.length === 0, wasClean: probs.length === 0 });
+    setReport(probs.length ? probs.slice(0, 6).map((x) => x.what) : [`nothing a “${mode}” pass could complain about on this page.`]);
   };
   const reforge = () => {
     const np = generatePalette({ prompt: purpose ? `${purpose.label} ${purpose.moodId ?? ""} site` : "modern", seed: Math.floor(Math.random() * 1e6) + 1 });
     setPal(np); setCurrent(np);
     say("palette re-forged — the whole canvas retinted");
   };
+  /** build the site the way the export builds it, then show it full size */
+  const openPreview = () => {
+    setEditId(null);
+    setSel(null);
+    setPreviewHtml(canvasToHtml(docRef.current, pal));
+    setPreview(true);
+  };
+  const closePreview = () => { setPreview(false); setPreviewHtml(null); };
+  const openInTab = () => {
+    const html = previewHtml ?? canvasToHtml(docRef.current, pal);
+    const url = URL.createObjectURL(new Blob([html], { type: "text/html" }));
+    window.open(url, "_blank", "noopener");
+    setTimeout(() => URL.revokeObjectURL(url), 60_000);
+  };
+
   const exportHtml = () => {
     const slug = (purpose?.id ?? doc.brand ?? "site").toLowerCase().replace(/[^a-z0-9-]/g, "-");
     download(`hephaestus-${slug}.html`, canvasToHtml(docRef.current, pal), "text/html");
@@ -507,6 +578,9 @@ export default function Studio() {
   }
   const H = pageHeight(page);
   const others = active.filter((p) => p.id !== page.id);
+  /** site-wide choices, resolved once and handed to every block */
+  const STY = optOf(doc);
+  const setOption = (patch: CvOptions) => commit({ ...doc, options: { ...(doc.options ?? {}), ...patch } });
   const transClass = !single && doc.transition !== "none"
     ? (doc.transition === "fade" ? "cv-fade" : doc.transition === "slide" ? "cv-slide" : "cv-scale") : "";
   const issues = audit.issues;
@@ -566,7 +640,18 @@ export default function Studio() {
         <button className="btn" style={{ fontSize: 11, padding: "4px 8px" }} onClick={undo} disabled={!past.length} title="undo (ctrl+z)">↶</button>
         <button className="btn" style={{ fontSize: 11, padding: "4px 8px" }} onClick={redo} disabled={!future.length} title="redo (ctrl+shift+z)">↷</button>
         <button className="btn" style={{ fontSize: 10, padding: "5px 9px" }} onClick={() => setCedalionOpen(true)} title="ask cedalion about this page">☖</button>
-        <button className="btn" data-active={preview} style={{ fontSize: 10, padding: "5px 9px" }} onClick={() => { setPreview((v) => !v); setEditId(null); }}>
+        <button
+          className="btn"
+          style={{ fontSize: 10, padding: "5px 9px" }}
+          onClick={() => {
+            const el = document.querySelector("[data-site-options]");
+            el?.scrollIntoView({ block: "center", behavior: "smooth" });
+            if (el) { el.animate([{ background: "var(--raise)" }, { background: "transparent" }], { duration: 700, easing: "ease-out" }); }
+            say("site options — twelve switches, and the export obeys every one");
+          }}
+          title="the site-wide switches: typeface, corners, depth, motion…"
+        >⚙ site</button>
+        <button className="btn" data-active={preview} style={{ fontSize: 10, padding: "5px 9px" }} onClick={() => openPreview()} title="open the site exactly as the export ships it">
           {preview ? "■ exit" : "▶ preview"}
         </button>
         <button className="btn btn-primary" style={{ fontSize: 10, padding: "5px 10px" }} onClick={exportHtml}>export .html</button>
@@ -694,6 +779,7 @@ export default function Studio() {
                       brand={doc.brand}
                       others={others}
                       devW={devW}
+                      sty={STY}
                       onDown={(e) => onBlockDown(b, e)}
                       onHandle={(ax, e) => onHandleDown(b, ax, e)}
                       onEdit={(id) => { setSel(id); setEditId(id); }}
@@ -705,7 +791,7 @@ export default function Studio() {
                       <div style={{ textAlign: "center", display: "flex", flexDirection: "column", gap: 10, alignItems: "center" }}>
                         <div className="label" style={{ fontSize: 13 }}>your canvas is empty</div>
                         <div className="faint" style={{ fontSize: 10.5, maxWidth: 300, lineHeight: 1.6 }}>
-                          drop a whole section from the grid library, or start with a single block from the left rail.
+                          drop a whole section from the grid library, or start with a single block from the left rail. every block takes clicks: ⌥-click reaches the one behind, tab walks the stack.
                         </div>
                         <div className="row gap-1" style={{ marginTop: 6 }}>
                           <button className="btn btn-primary" style={{ fontSize: 11, padding: "7px 14px" }} onClick={() => setShowGrids(true)}>▦ open grid library</button>
@@ -739,7 +825,7 @@ export default function Studio() {
           {/* status strip */}
           <div className="row" style={{ height: 26, borderTop: "1px solid var(--line)", background: "var(--surface)", padding: "0 14px", gap: 14, flexShrink: 0 }}>
             <span className="mono-sm faint" style={{ fontSize: 9 }}>
-              {preview ? "▶ previewing — clicks navigate" : single ? "▤ single page" : `▥ ${active.length} page${active.length === 1 ? "" : "s"}`} · {doc.transition}
+              {preview ? "▶ live preview of the export — links and pages work inside it" : single ? "▤ single page" : `▥ ${active.length} page${active.length === 1 ? "" : "s"}`} · {doc.transition}
             </span>
             <span className="mono-sm faint" style={{ fontSize: 9 }}>
               {selBlock ? `sel ${selBlock.kind} · ${selBlock.x},${selBlock.y} · ${selBlock.w}×${selBlock.h}` : page.blocks.length + " blocks"}
@@ -754,6 +840,8 @@ export default function Studio() {
 
         {/* ---- inspector ---- */}
         <Inspector
+          options={doc.options}
+          onOptions={setOption}
           block={selBlock}
           page={page}
           pageIx={pageIx}
@@ -780,6 +868,17 @@ export default function Studio() {
       {/* grid library */}
       {showGrids && <GridLibrary onClose={() => setShowGrids(false)} onPick={addPreset} />}
 
+      {preview && previewHtml !== null && (
+        <SitePreview
+          html={previewHtml}
+          brand={doc.brand || "untitled"}
+          pages={active.length}
+          onRefresh={() => { setPreviewHtml(canvasToHtml(docRef.current, pal)); say("re-rendered from the canvas as it stands now"); }}
+          onOpenTab={openInTab}
+          onClose={closePreview}
+        />
+      )}
+
       {/* merkhet */}
       {!showMerq ? (
         <button
@@ -789,7 +888,15 @@ export default function Studio() {
           ✦ merkhet — fix
         </button>
       ) : (
-        <MerkhetPanel issues={issues} report={report} onClose={() => setShowMerq(false)} onRun={runMerkhet} />
+        <MerkhetPanel
+          issues={issues}
+          report={report}
+          verdict={merq}
+          onRun={runMerkhet}
+          onCheck={checkMerkhet}
+          onReveal={reveal}
+          onClose={() => setShowMerq(false)}
+        />
       )}
     </div>
   );
@@ -816,8 +923,9 @@ const HANDLE_AXES: { ax: Axis; style: React.CSSProperties; cursor: string }[] = 
   { ax: { ex: 1, ey: 1 }, style: { right: -5, bottom: -5 }, cursor: "nwse-resize" },
 ];
 
-function BlockView({ b, pal, selected, editing, preview, brand, others, devW, onDown, onHandle, onEdit, onText }: {
+function BlockView({ b, pal, selected, editing, preview, brand, others, devW, sty, onDown, onHandle, onEdit, onText }: {
   b: CvBlock; pal: Palette; selected: boolean; editing: boolean; preview: boolean;
+  sty: ReturnType<typeof optOf>;
   brand: string; others: CvPage[]; devW: number;
   onDown: (e: React.PointerEvent) => void;
   onHandle: (ax: Axis, e: React.PointerEvent) => void;
@@ -830,33 +938,46 @@ function BlockView({ b, pal, selected, editing, preview, brand, others, devW, on
   const handles = selected && !preview && !band && b.kind !== "spacer";
   const style: React.CSSProperties = {
     position: "absolute", left: b.x, top: b.y, width: b.w, minHeight: b.h,
-    borderRadius: b.radius ?? (b.kind === "card" ? 16 : b.kind === "stat" ? 14 : b.kind === "chip" ? 999 : 10),
-    zIndex: selected ? 3 : 1,
+    borderRadius: b.kind === "chip" ? 999 : Math.max(0, (b.radius ?? (b.kind === "card" ? 16 : b.kind === "stat" ? 14 : 10)) + sty.radius),
+    fontFamily: sty.font,
+    zIndex: selected ? 6 : b.z ?? STACK_BASE[b.kind] ?? 2,
     cursor: preview ? (b.kind === "nav" || b.kind === "button" ? "pointer" : "default") : band ? "default" : "move",
   };
   if (band) { style.width = devW; style.height = b.h; style.minHeight = undefined; style.left = 0; }
   if (b.kind === "spacer") { style.height = b.h; }
-  if (b.kind === "image") style.background = `linear-gradient(135deg, ${roleHex(pal, "primary")}, ${roleHex(pal, "secondary")})`;
+  if (b.kind === "image") {
+    style.background = b.bg
+      ? b.bg
+      : sty.imageFill === "flat" ? roleHex(pal, "primary")
+      : sty.imageFill === "duotone" ? `linear-gradient(165deg, ${roleHex(pal, "primary")} 0%, ${roleHex(pal, "accent")} 100%)`
+      : sty.imageFill === "hatched" ? `repeating-linear-gradient(135deg, ${roleHex(pal, "primary")} 0 9px, ${roleHex(pal, "secondary")} 9px 18px)`
+      : `linear-gradient(135deg, ${roleHex(pal, "primary")}, ${roleHex(pal, "secondary")})`;
+    style.height = b.h;
+  }
   else if (b.kind === "card" || b.kind === "stat") style.background = roleHex(pal, "surface", b.bg);
   else if (b.bg) style.background = b.bg;
 
   const inner = (() => {
     switch (b.kind) {
       case "heading":
-        return <div style={{ fontWeight: b.weight ?? 800, fontSize: b.size ?? 52, lineHeight: 1.08, letterSpacing: "-.02em", color: fg, textAlign: b.align ?? "left", width: "100%" }}>{b.text}</div>;
+        return (
+          <div style={{ fontWeight: b.weight ?? 800, fontSize: Math.round((b.size ?? 52) * sty.typeScale), lineHeight: 1.08, letterSpacing: `${sty.headingTrack}em`, textTransform: sty.headingCase === "upper" ? "uppercase" : "none", color: fg, textAlign: b.align ?? "left", width: "100%" }}>
+            {b.text}
+          </div>
+        );
       case "text":
-        return <div style={{ fontSize: b.size ?? 18, lineHeight: 1.65, color: fg, textAlign: b.align ?? "left" }}>{b.text}</div>;
+        return <div style={{ fontSize: Math.round((b.size ?? 18) * sty.typeScale), lineHeight: 1.65, color: fg, textAlign: b.align ?? "left" }}>{b.text}</div>;
       case "quote":
         return (
           <div style={{ height: "100%", padding: "2px 0 2px 26px", borderLeft: `3px solid ${roleHex(pal, "accent")}`, display: "flex", flexDirection: "column", justifyContent: "center" }}>
-            <div style={{ fontSize: b.size ?? 26, lineHeight: 1.4, fontWeight: 600, letterSpacing: "-.01em", color: fg }}>{b.text}</div>
+            <div style={{ fontSize: Math.round((b.size ?? 26) * sty.typeScale), lineHeight: 1.4, fontWeight: 600, letterSpacing: "-.01em", color: fg }}>{b.text}</div>
             {b.sub && <div style={{ marginTop: 8, color: roleHex(pal, "muted"), fontSize: 13.5 }}>{b.sub}</div>}
           </div>
         );
       case "list": {
         const lines = (b.text ?? "").split("\n").map((t) => t.trim()).filter(Boolean).map((t) => t.replace(/^[•▪◦–—-]\s*/, ""));
         return (
-          <div style={{ display: "flex", flexDirection: "column", gap: 7, fontSize: b.size ?? 17, lineHeight: 1.5, color: fg, justifyContent: "center", minHeight: "100%" }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 7, fontSize: Math.round((b.size ?? 17) * sty.typeScale), lineHeight: 1.5, color: fg, justifyContent: "center", minHeight: "100%" }}>
             {lines.map((t, i) => (
               <div key={i} className="row gap-1" style={{ alignItems: "flex-start" }}>
                 <span style={{ color: roleHex(pal, "accent"), fontSize: ".8em", marginTop: ".4em" }}>▸</span>
@@ -878,7 +999,8 @@ function BlockView({ b, pal, selected, editing, preview, brand, others, devW, on
                 background: solid ? accentHex : variant === "outline" ? "transparent" : "transparent",
                 color: solid ? readableOn(accentHex, roleHex(pal, "text")) : fg,
                 border: variant === "outline" ? `2px solid ${b.line ?? roleHex(pal, "text")}` : variant === "ghost" ? "2px solid transparent" : "2px solid transparent",
-                borderRadius: b.radius ?? 10, fontWeight: b.weight ?? 700, fontSize: b.size ?? 17, whiteSpace: "nowrap",
+                borderRadius: sty.buttonShape === "pill" ? 999 : sty.buttonShape === "square" ? 0 : Math.max(0, (b.radius ?? 10) + sty.radius),
+                fontWeight: b.weight ?? 700, fontSize: Math.round((b.size ?? 17) * sty.typeScale), whiteSpace: "nowrap",
                 opacity: variant === "ghost" ? 0.92 : 1,
               }}
             >
@@ -889,15 +1011,15 @@ function BlockView({ b, pal, selected, editing, preview, brand, others, devW, on
       }
       case "card":
         return (
-          <div style={{ height: "100%", background: roleHex(pal, "surface", b.bg), border: `1px solid ${b.line ?? roleHex(pal, "border")}`, borderRadius: b.radius ?? 16, padding: "20px 22px", display: "flex", flexDirection: "column", gap: 8 }}>
-            <div style={{ fontWeight: 700, fontSize: (b.size ?? 17) + 4, color: b.fg ?? roleHex(pal, "text") }}>{b.text}</div>
-            <div style={{ fontSize: b.size ?? 15, lineHeight: 1.55, color: roleHex(pal, "muted"), whiteSpace: "pre-line" }}>{b.sub}</div>
+          <div style={{ height: "100%", background: roleHex(pal, "surface", b.bg), border: sty.cardBorder ? `1px solid ${b.line ?? roleHex(pal, "border")}` : "none", borderRadius: Math.max(0, (b.radius ?? 16) + sty.radius), padding: Math.round(20 * sty.airiness), display: "flex", flexDirection: "column", gap: Math.round(8 * sty.airiness) }}>
+            <div style={{ fontWeight: 700, fontSize: Math.round(((b.size ?? 17) + 4) * sty.typeScale), color: b.fg ?? roleHex(pal, "text") }}>{b.text}</div>
+            <div style={{ fontSize: Math.round((b.size ?? 15) * sty.typeScale), lineHeight: 1.55, color: roleHex(pal, "muted"), whiteSpace: "pre-line" }}>{b.sub}</div>
           </div>
         );
       case "stat":
         return (
-          <div style={{ height: "100%", background: roleHex(pal, "surface", b.bg), border: `1px solid ${b.line ?? roleHex(pal, "border")}`, borderRadius: b.radius ?? 14, padding: "14px 18px", display: "flex", flexDirection: "column", justifyContent: "center", gap: 3 }}>
-            <div style={{ fontSize: b.size ?? 40, fontWeight: 800, letterSpacing: "-.02em", color: b.fg ?? roleHex(pal, "accent") }}>{b.text}</div>
+          <div style={{ height: "100%", background: roleHex(pal, "surface", b.bg), border: sty.cardBorder ? `1px solid ${b.line ?? roleHex(pal, "border")}` : "none", borderRadius: Math.max(0, (b.radius ?? 14) + sty.radius), padding: `${Math.round(14 * sty.airiness)}px ${Math.round(18 * sty.airiness)}px`, display: "flex", flexDirection: "column", justifyContent: "center", gap: 3 }}>
+            <div style={{ fontSize: Math.round((b.size ?? 40) * sty.typeScale), fontWeight: 800, letterSpacing: "-.02em", color: b.fg ?? roleHex(pal, "accent") }}>{b.text}</div>
             <div style={{ color: roleHex(pal, "muted"), fontSize: 13 }}>{b.sub}</div>
           </div>
         );
@@ -1152,6 +1274,8 @@ function Inspector(props: {
   onClearSel: () => void;
   onChat: () => void; onMerkhet: () => void; onRunMerkhet: (m: MerkhetMode) => void;
   onMode: () => void;
+  options?: CvOptions;
+  onOptions: (patch: CvOptions) => void;
 }) {
   const b = props.block;
   const pal = props.pal;
@@ -1276,8 +1400,8 @@ function Inspector(props: {
               {!bandKind(b.kind) && b.kind !== "spacer" && (
                 <>
                   <button className="btn" style={{ fontSize: 9.5, padding: "5px 8px" }} onClick={() => props.onDuplicate(b)}>⧉ dup</button>
-                  <button className="btn" style={{ fontSize: 9.5, padding: "5px 8px" }} onClick={() => props.onMoveZ(b, -1)} title="send back ([)">⇤</button>
-                  <button className="btn" style={{ fontSize: 9.5, padding: "5px 8px" }} onClick={() => props.onMoveZ(b, 1)} title="bring forward (])">⇥</button>
+                  <button className="btn" style={{ fontSize: 9.5, padding: "5px 8px" }} onClick={() => props.onMoveZ(b, -1)} title="send back — drops it below the block it overlaps ( [ )">⇤</button>
+                  <button className="btn" style={{ fontSize: 9.5, padding: "5px 8px" }} onClick={() => props.onMoveZ(b, 1)} title="bring forward — lifts it above the block it overlaps ( ] )">⇥</button>
                 </>
               )}
               <button className="btn" style={{ fontSize: 9.5, padding: "5px 8px", color: "var(--bad)" }} onClick={() => props.onDeleteBlock(b.id)}>✕ delete</button>
@@ -1357,7 +1481,159 @@ function Inspector(props: {
           </div>
         </>
       )}
+      <SiteOptions options={props.options} onOptions={props.onOptions} />
     </aside>
+  );
+}
+
+/** The site-wide choices. One component, so the inspector and the page panel can
+ *  never offer two different sets of knobs. Everything here is honoured by the
+ *  exporter too — it is not editor decoration. */
+function SiteOptions({ options, onOptions }: { options?: CvOptions; onOptions: (patch: CvOptions) => void }) {
+  const o = options ?? {};
+  return (
+    <div data-site-options style={{ padding: "12px 14px", borderTop: "1px solid var(--line)", background: "var(--raise)", display: "flex", flexDirection: "column", gap: 9 }}>
+      <div className="row" style={{ justifyContent: "space-between" }}>
+        <span className="label">site options</span>
+        <button className="faint mono-sm" style={{ fontSize: 8.5 }} title="back to the defaults"
+          onClick={() => onOptions({ typeScale: 1, radius: 0, depth: 0, fontStack: "modern", motionMs: 420, imageFill: "gradient", airiness: 1, headingCase: "none", headingTrack: -0.02, buttonShape: "soft", cardBorder: true })}>
+          reset
+        </button>
+      </div>
+      <div className="faint mono-sm" style={{ fontSize: 8.5, lineHeight: 1.55 }}>
+        not editor decoration — the exported .html changes with every one of these.
+      </div>
+
+      <OptRow label="typeface">
+        {([["modern", "modern sans"], ["editorial", "serif"], ["technical", "mono"]] as const).map(([id, lb]) => (
+          <button key={id} className="btn" style={{ fontSize: 9.5, padding: "3px 7px", fontFamily: FONT_STACKS[id] }}
+            data-active={(o.fontStack ?? "modern") === id} onClick={() => onOptions({ fontStack: id })}>{lb}</button>
+        ))}
+      </OptRow>
+
+      <OptRow label={`text size · ×${(o.typeScale ?? 1).toFixed(2)}`}>
+        <input type="range" min={0.85} max={1.25} step={0.05} value={o.typeScale ?? 1} style={{ flex: 1 }}
+          onChange={(e) => onOptions({ typeScale: +e.target.value })} />
+      </OptRow>
+
+      <OptRow label={`corners · ${(o.radius ?? 0) > 0 ? "+" : ""}${o.radius ?? 0}px`}>
+        <input type="range" min={-8} max={28} step={1} value={o.radius ?? 0} style={{ flex: 1 }}
+          onChange={(e) => onOptions({ radius: +e.target.value })} />
+      </OptRow>
+
+      <OptRow label="card depth">
+        {([[0, "flat"], [1, "soft"], [2, "raised"], [3, "floating"]] as const).map(([v, lb]) => (
+          <button key={v} className="btn" style={{ fontSize: 9.5, padding: "3px 7px" }} data-active={(o.depth ?? 0) === v} onClick={() => onOptions({ depth: v })}>{lb}</button>
+        ))}
+      </OptRow>
+
+      <OptRow label="image fill">
+        {([["gradient", "blend"], ["flat", "flat"], ["duotone", "duotone"], ["hatched", "hatch"]] as const).map(([v, lb]) => (
+          <button key={v} className="btn" style={{ fontSize: 9.5, padding: "3px 7px" }} data-active={(o.imageFill ?? "gradient") === v} onClick={() => onOptions({ imageFill: v })}>{lb}</button>
+        ))}
+      </OptRow>
+
+      <OptRow label={`motion · ${o.motionMs ?? 420}ms`}>
+        <input type="range" min={0} max={900} step={20} value={o.motionMs ?? 420} style={{ flex: 1 }}
+          onChange={(e) => onOptions({ motionMs: +e.target.value })} />
+        {(o.motionMs ?? 420) === 0 && <span className="faint mono-sm" style={{ fontSize: 8 }}>instant</span>}
+      </OptRow>
+
+      <OptRow label="headings">
+        {([["none", "as written"], ["upper", "ALL CAPS"]] as const).map(([v, lb]) => (
+          <button key={v} className="btn" style={{ fontSize: 9.5, padding: "3px 7px" }} data-active={(o.headingCase ?? "none") === v} onClick={() => onOptions({ headingCase: v })}>{lb}</button>
+        ))}
+      </OptRow>
+
+      <OptRow label={`heading tracking · ${(o.headingTrack ?? -0.02).toFixed(3)}em`}>
+        <input type="range" min={-0.05} max={0.12} step={0.005} value={o.headingTrack ?? -0.02} style={{ flex: 1 }}
+          onChange={(e) => onOptions({ headingTrack: +e.target.value })} />
+      </OptRow>
+
+      <OptRow label="button shape">
+        {([["square", "square"], ["soft", "soft"], ["pill", "pill"]] as const).map(([v, lb]) => (
+          <button key={v} className="btn" style={{ fontSize: 9.5, padding: "3px 7px" }} data-active={(o.buttonShape ?? "soft") === v} onClick={() => onOptions({ buttonShape: v })}>{lb}</button>
+        ))}
+      </OptRow>
+
+      <OptRow label="card outline">
+        {([[true, "hairline"], [false, "none"]] as const).map(([v, lb]) => (
+          <button key={String(v)} className="btn" style={{ fontSize: 9.5, padding: "3px 7px" }} data-active={(o.cardBorder ?? true) === v} onClick={() => onOptions({ cardBorder: v })}>{lb}</button>
+        ))}
+      </OptRow>
+
+      <OptRow label={`airiness · ×${(o.airiness ?? 1).toFixed(2)}`}>
+        <input type="range" min={0.7} max={1.6} step={0.05} value={o.airiness ?? 1} style={{ flex: 1 }}
+          onChange={(e) => onOptions({ airiness: +e.target.value })} />
+      </OptRow>
+    </div>
+  );
+}
+
+function OptRow({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+      <span className="label" style={{ fontSize: 9 }}>{label}</span>
+      <span className="row" style={{ gap: 4, flexWrap: "wrap", alignItems: "center" }}>{children}</span>
+    </div>
+  );
+}
+
+/** Full-size preview of the site as the export builds it — the same HTML string,
+ *  in a frame, at the width you pick. Esc or “back to editing” closes it. */
+function SitePreview({ html, brand, pages, onRefresh, onOpenTab, onClose }: {
+  html: string; brand: string; pages: number;
+  onRefresh: () => void; onOpenTab: () => void; onClose: () => void;
+}) {
+  const [w, setW] = useState<number | null>(null);
+  const boxRef = useRef<HTMLDivElement>(null);
+  const [box, setBox] = useState({ w: 1200, h: 800 });
+  useEffect(() => {
+    const el = boxRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(() => setBox({ w: el.clientWidth, h: el.clientHeight }));
+    ro.observe(el);
+    setBox({ w: el.clientWidth, h: el.clientHeight });
+    return () => ro.disconnect();
+  }, []);
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  const frameW = w ?? box.w;
+  const scale = w ? Math.min(1, (box.w - 8) / w) : 1;
+  return (
+    <div className="fade-in" style={{ position: "fixed", inset: 0, zIndex: 88, background: "var(--bg)", display: "flex", flexDirection: "column", padding: "10px 14px 14px", gap: 9 }}
+      onPointerDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="row" style={{ justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+        <div className="row gap-2" style={{ alignItems: "baseline", minWidth: 0 }}>
+          <span style={{ fontSize: 12.5, fontWeight: 700, letterSpacing: "-.01em" }}>{brand}</span>
+          <span className="faint mono-sm" style={{ fontSize: 8.5, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+            the exported site · {pages > 1 ? `${pages} pages` : "one page"} · links work · esc closes
+          </span>
+        </div>
+        <div className="row gap-1" style={{ flexWrap: "wrap" }}>
+          <span className="label" style={{ fontSize: 8.5, paddingRight: 2 }}>view</span>
+          <button className="btn" style={{ fontSize: 9.5, padding: "4px 9px" }} data-active={w === null} onClick={() => setW(null)}>fit</button>
+          {[[1440, "wide"], [1200, "desktop"], [834, "tablet"], [390, "phone"]].map(([px, lb]) => (
+            <button key={px} className="btn" style={{ fontSize: 9.5, padding: "4px 9px" }} data-active={w === px} onClick={() => setW(px as number)}>{lb}</button>
+          ))}
+          <span className="mono-sm faint" style={{ fontSize: 8.5, paddingLeft: 4, borderLeft: "1px solid var(--line)", marginLeft: 4 }}>
+            {Math.round(scale * 100)}%
+          </span>
+          <button className="btn" style={{ fontSize: 9.5, padding: "4px 9px" }} onClick={onRefresh} title="re-build from the canvas as it stands">↻ refresh</button>
+          <button className="btn" style={{ fontSize: 9.5, padding: "4px 9px" }} onClick={onOpenTab} title="opens a real file in a new tab">open in browser ↗</button>
+          <button className="btn btn-primary" style={{ fontSize: 9.5, padding: "4px 11px" }} onClick={onClose}>■ back to editing</button>
+        </div>
+      </div>
+      <div ref={boxRef} style={{ flex: 1, minHeight: 0, display: "grid", placeItems: "start center", overflow: "hidden", background: "color-mix(in srgb, var(--bg) 82%, #000)", border: "1px solid var(--line)", borderRadius: 10 }}>
+        <div style={{ width: frameW, height: box.h, transform: `scale(${scale})`, transformOrigin: "top left", marginLeft: w ? Math.max(0, (box.w - w * scale) / 2) : 0 }}>
+          <iframe title={`preview of ${brand}`} srcDoc={html} style={{ width: frameW, height: box.h / scale, border: 0, display: "block", background: "#fff" }} />
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -1388,15 +1664,16 @@ function Swatch({ hex, role, active, onPick }: { hex?: string; role: string; act
 /* ================= merkhet panel ================= */
 
 const MERKHET_MODES: { id: MerkhetMode; icon: string; name: string; desc: string; note: string }[] = [
-  { id: "theme", icon: "◐", name: "harmonise colours", desc: "clear hand-picked tints so the page follows the palette again", note: "one accent voice · tints from one family" },
-  { id: "contrast", icon: "▤", name: "fix readability", desc: "lift low-contrast text to WCAG floors", note: "7:1 body & headings · 4.5:1 buttons" },
-  { id: "layout", icon: "⊞", name: "align layout", desc: "snap to the 12-column grid, 8px rhythm, unpile overlaps", note: "x on column edges · y on 8px beats" },
-  { id: "rhythm", icon: "≋", name: "even the rhythm", desc: "group rows into 32px bands, equalise gutters", note: "consistent gaps read as composed" },
+  { id: "theme", icon: "◐", name: "put the colours back on one family", desc: "takes out the one-off colours you picked by hand, so the page matches your palette again", note: "it will not do this if the colour was the only thing keeping the text readable" },
+  { id: "contrast", icon: "▤", name: "make everything readable", desc: "finds words you'd struggle to read where they sit, and darkens or lightens just those", note: "headings and paragraphs get checked against the card they're actually on, not the page behind it" },
+  { id: "layout", icon: "⊞", name: "straighten the page", desc: "lines blocks up with the columns and pulls apart anything sitting on top of something else", note: "blocks inside a card follow the card — they don't get yanked out of it" },
+  { id: "rhythm", icon: "≋", name: "even the spacing", desc: "rows that belong together get the same top line, and the gaps between them get equal", note: "only blocks that really overlap count as one row, so a heading never lands on its paragraph" },
 ];
 
-function MerkhetPanel({ issues, report, onRun, onClose }: {
+function MerkhetPanel({ issues, report, verdict, onRun, onCheck, onReveal, onClose }: {
   issues: { sev: string; what: string; fix?: string }[]; report: string[];
-  onRun: (m: MerkhetMode) => void; onClose: () => void;
+  verdict: MerkhetVerdict | null;
+  onRun: (m: MerkhetMode) => void; onCheck: () => void; onReveal: (id: string) => void; onClose: () => void;
 }) {
   const [about, setAbout] = useState(false);
   return (
@@ -1413,7 +1690,9 @@ function MerkhetPanel({ issues, report, onRun, onClose }: {
         <div className="faint" style={{ fontSize: 9.5, lineHeight: 1.5 }}>
           {about ? (
             <span>
-              mer·khet — the ancient Egyptian shadow-clock: an instrument that measured time nobody could see. in hephaestus, merkhet is the build-area physician. it reads the page you're composing — spacing, contrast, colour discipline, grid — and repairs what drifts off, using fixed colour science (WCAG contrast floors, harmonic palette roles, a 12-column & 8px rhythm). it never generates: it measures, then fixes <i>your</i> work, and reports exactly what changed. pick a discipline below.
+              mer·khet was a shadow-clock: it measured something nobody could see by looking at where the light fell. this does the same with a page. it looks at what you built, finds the things that would make someone else's visit harder — words too faint, blocks stacked on each other, a row that doesn't line up, colours that stopped matching your palette — and changes only those.
+              <br /><br />
+              it never writes your site for you, and it never says it fixed something it hasn't checked twice: every change is measured before and after, and anything that made the page worse gets put straight back.
               <button className="faint underline" style={{ fontSize: 9, display: "block", marginTop: 4 }} onClick={() => setAbout(false)}>▴ collapse</button>
             </span>
           ) : (
@@ -1442,14 +1721,38 @@ function MerkhetPanel({ issues, report, onRun, onClose }: {
             </span>
           </button>
         ))}
-        {report.length > 0 && (
-          <div style={{ border: "1px solid var(--ok)", borderRadius: 10, padding: "8px 10px", background: "color-mix(in srgb, var(--ok) 8%, transparent)" }}>
-            <div style={{ fontSize: 9.5, fontWeight: 800, color: "var(--ok)", marginBottom: 4 }}>✓ last fix applied</div>
-            {report.map((r, i) => (
-              <div key={i} className="mono-sm" style={{ fontSize: 8.5, lineHeight: 1.6, color: "var(--fg-dim)" }}>· {r}</div>
-            ))}
-          </div>
-        )}
+        <button className="btn" style={{ fontSize: 9.5, padding: "4px 8px" }} onClick={onCheck} title="look at the page without changing anything">
+          just check, don't change
+        </button>
+
+        {report.length > 0 && (() => {
+          const clean = !verdict || verdict.ok;
+          const nothing = verdict?.wasClean;
+          const tone = nothing ? "var(--line)" : clean ? "var(--ok)" : "var(--warn)";
+          const head = nothing
+            ? "nothing to repair"
+            : clean
+              ? `checked twice: ${verdict!.fixed} of ${verdict!.before} fixed, nothing left`
+              : `partial — ${verdict!.fixed} of ${verdict!.before}, ${verdict!.after} still open`;
+          return (
+            <div style={{ border: `1px solid ${tone}`, borderRadius: 10, padding: "8px 10px", background: `color-mix(in srgb, ${tone} 8%, transparent)` }}>
+              <div className="row" style={{ justifyContent: "space-between", marginBottom: 4 }}>
+                <span style={{ fontSize: 9.5, fontWeight: 800, color: tone }}>{clean ? "✓" : "◐"} {head}</span>
+                {verdict && !verdict.ok && verdict.remainingIds.length > 0 && (
+                  <button className="faint underline" style={{ fontSize: 8.5 }} onClick={() => onReveal(verdict.remainingIds[0])}>show me →</button>
+                )}
+              </div>
+              {report.map((r, i) => (
+                <div key={i} style={{ fontSize: 9, lineHeight: 1.65, color: "var(--fg-dim)" }}>· {r}</div>
+              ))}
+              {verdict && verdict.reverted > 0 && (
+                <div className="faint mono-sm" style={{ fontSize: 8, marginTop: 4 }}>
+                  {verdict.reverted} change{verdict.reverted === 1 ? "" : "s"} tried and put back
+                </div>
+              )}
+            </div>
+          );
+        })()}
       </div>
     </div>
   );

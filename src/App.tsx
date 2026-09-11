@@ -10,13 +10,14 @@ import Studio from "./screens/Studio";
 import Settings from "./screens/Settings";
 
 export default function App() {
-  const { ready, screen, settings, toast, init } = useApp();
+  const { ready, screen, settings, toast, init, cedalionOpen } = useApp();
 
   useEffect(() => { void init(); }, [init]);
 
   useEffect(() => {
     const root = document.documentElement;
     root.dataset.theme = settings.theme;
+    root.dataset.claudeStyle = settings.theme === "claude" ? settings.claudeStyle ?? "ambrosia" : "off";
     root.dataset.density = settings.density;
     root.dataset.motion = settings.motion ? "on" : "off";
     root.style.setProperty("--accent", settings.accent);
@@ -24,7 +25,7 @@ export default function App() {
       "--accent-fg",
       pickReadable(settings.accent)
     );
-  }, [settings.theme, settings.density, settings.motion, settings.accent]);
+  }, [settings.theme, settings.claudeStyle, settings.density, settings.motion, settings.accent]);
 
   if (!ready) {
     return (
@@ -45,7 +46,9 @@ export default function App() {
         {screen === "build" && <Studio />}
         {screen === "settings" && <Settings />}
       </main>
-      {screen !== "settings" && settings.cedalionDock && <CedalionDock />}
+      {/* the setting decides whether the pill is on screen; asking Cedalion from any
+          screen always gets a window, or the button would be a lie */}
+      {screen !== "settings" && (settings.cedalionDock || cedalionOpen) && <CedalionDock />}
       {toast && (
         <div
           className="fade-in"

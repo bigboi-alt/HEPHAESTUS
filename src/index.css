@@ -34,8 +34,15 @@
   --line-soft: #e3ded2; --fg: #1a1812; --fg-dim: #6d675a; --fg-faint: #a49c8b;
   --accent: #1a1812; --accent-fg: #f6f4ef;
 }
-/* claude · warm cream shell, dusted-orange voice */
-[data-theme="claude"] {
+/* claude · two skins, one voice.
+   ambrosia = the warm cream shell it has always worn.
+   nyx      = the same orange on dusted black, for people who work at night. */
+[data-theme="claude"][data-claude-style="nyx"] {
+  --bg: #141210; --surface: #1b1817; --raise: #232019; --line: #35302a;
+  --line-soft: #26221d; --fg: #f0e9e1; --fg-dim: #a89a8d; --fg-faint: #6d6257;
+  --accent: #d97757; --accent-fg: #16100c; --ok: #4ec98a; --warn: #e0a33c; --bad: #e2705d;
+}
+[data-theme="claude"]:not([data-claude-style="nyx"]) {
   --bg: #f4efe4; --surface: #fcf9f1; --raise: #ece4d2; --line: #d5c9b0;
   --line-soft: #e6ddca; --fg: #221b10; --fg-dim: #7b6d53; --fg-faint: #b1a488;
   --accent: #c4562a; --accent-fg: #fff6ea; --ok: #2f9e63; --warn: #b97a17; --bad: #c2452f;
@@ -71,10 +78,15 @@ body {
 
 ::selection { background: var(--fg); color: var(--bg); }
 
-::-webkit-scrollbar { width: 9px; height: 9px; }
-::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: var(--line); border-radius: 0; }
-::-webkit-scrollbar-thumb:hover { background: var(--fg-faint); }
+/* Scrollbars are hidden, not scrolling: the shell is a workbench and a 9px grey
+   gutter on every pane is visual noise. Wheel, trackpad, touch and keyboard all
+   still work — nothing about scrolling behaviour changes, only the chrome. */
+html { scrollbar-width: none; }
+html::-webkit-scrollbar { width: 0; height: 0; background: transparent; }
+* { scrollbar-width: none; }
+*::-webkit-scrollbar { width: 0; height: 0; background: transparent; }
+*::-webkit-scrollbar-thumb { background: transparent; border: 0; }
+*::-webkit-scrollbar-track { background: transparent; }
 
 button, input, textarea, select {
   font: inherit;
@@ -142,6 +154,17 @@ a { color: inherit; }
 }
 .input::placeholder { color: var(--fg-faint); }
 .input:focus { border-color: var(--fg-faint); }
+
+/* range inputs everywhere in the app wear the shell's accent, not chrome blue,
+   and the thumb stays visible on both light and dark themes */
+input[type="range"] {
+  accent-color: var(--accent);
+  height: 18px;
+  background: transparent;
+  border: 0;
+  cursor: ew-resize;
+}
+input[type="range"]:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
 
 .row { display: flex; align-items: center; }
 .gap-1 { gap: 6px; } .gap-2 { gap: 10px; } .gap-3 { gap: 16px; } .gap-4 { gap: 24px; }
@@ -216,6 +239,6 @@ a { color: inherit; }
 .emblem img { display: block; width: 100%; height: 100%; object-fit: contain; user-select: none; }
 .emblem .emblem-ink { display: none; }
 [data-theme="paper"] .emblem .emblem-marble,
-[data-theme="claude"] .emblem .emblem-marble { display: none; }
+[data-theme="claude"]:not([data-claude-style="nyx"]) .emblem .emblem-marble { display: none; }
 [data-theme="paper"] .emblem .emblem-ink,
-[data-theme="claude"] .emblem .emblem-ink { display: block; }
+[data-theme="claude"]:not([data-claude-style="nyx"]) .emblem .emblem-ink { display: block; }

@@ -3,17 +3,33 @@ import { useApp } from "../store";
 import { auditPalette } from "../engine/cedalion";
 import { generatePalette, SPACE_SIZE } from "../engine/akmon";
 import { DIRECTION_SPACE, TRENDS, TRENDS_UPDATED } from "../data/trends";
+import { CATALOG } from "../engine/catalog";
 import PaletteCard from "../components/PaletteCard";
 import Emblem from "../components/Emblem";
+import { forgeNote, forgeVoice } from "../lib/voice";
 
 export default function Home() {
-  const { palettes, current, setCurrent, go, deletePalette, toggleFavorite, purposeId, sites, deleteSite, setResumeId } = useApp();
+  const { palettes, current, setCurrent, go, deletePalette, toggleFavorite, purposeId, sites, deleteSite, setResumeId, settings } = useApp();
   const [prompt, setPrompt] = useState("");
+  const [reroll, setReroll] = useState(0);
 
   const audit = useMemo(
     () => (current ? auditPalette(current, purposeId ?? undefined) : null),
     [current, purposeId]
   );
+
+  /* what the forge says when you walk in — state-aware, and it changes by day,
+     not by render, so the line can't flicker under your cursor */
+  const voice = useMemo(
+    () =>
+      forgeVoice(
+        { palettes: palettes.length, sites: sites.length, score: audit?.score ?? null, fresh: palettes.length === 0 && sites.length === 0 },
+        settings.displayName,
+        reroll
+      ),
+    [palettes.length, sites.length, audit?.score, settings.displayName, reroll]
+  );
+
   const rising = TRENDS.filter((t) => t.status === "rising").slice(0, 3);
 
   function forge() {
@@ -34,14 +50,33 @@ export default function Home() {
   return (
     <div style={{ padding: "36px 28px 140px", maxWidth: 1240, margin: "0 auto" }}>
       {/* ---------- header ---------- */}
-      <div className="row" style={{ justifyContent: "space-between", marginBottom: 26 }}>
-        <div className="row gap-2" style={{ alignItems: "flex-start" }}>
+      <div className="row" style={{ justifyContent: "space-between", alignItems: "flex-end", flexWrap: "wrap", gap: 14, marginBottom: 26 }}>
+        <div className="row gap-2" style={{ alignItems: "flex-start", flex: "1 1 460px", minWidth: 0, paddingRight: 8 }}>
           <Emblem size={62} alt="Hephaestus emblem" style={{ marginTop: -2 }} />
           <div>
-            <div className="label" style={{ marginBottom: 8 }}>dashboard · {TRENDS_UPDATED}</div>
+            <div className="label" style={{ marginBottom: 8 }}>
+              dashboard · {TRENDS_UPDATED}
+              {voice.who !== "forge" && (
+                <span style={{ color: "var(--accent)", marginLeft: 8 }}>
+                  {voice.who === "hephaestus" ? "· the master's bench" : "· the apprentice's ear"}
+                </span>
+              )}
+            </div>
             <h1 style={{ fontSize: 34, fontWeight: 600, letterSpacing: "-0.03em", lineHeight: 1.05, margin: 0 }}>
-              The forge is cold — heat it up.
+              {voice.line}
             </h1>
+            <div className="row gap-2" style={{ marginTop: 7, alignItems: "baseline" }}>
+              <span className="faint" style={{ fontSize: 11.5 }}>{voice.sub}</span>
+              <button
+                className="faint mono-sm"
+                onClick={() => setReroll((r) => r + 1)}
+                title="say something else"
+                aria-label="say something else"
+                style={{ fontSize: 10, border: "1px solid var(--line)", padding: "1px 7px", background: "transparent" }}
+              >
+                ↻ again
+              </button>
+            </div>
           </div>
         </div>
         <div className="row gap-1" style={{ alignSelf: "flex-end" }}>
@@ -57,7 +92,7 @@ export default function Home() {
         <Stat label="sites on the bench" value={String(sites.length)} note="autosaved as you build" />
         <Stat label="current palette" value={audit ? `${audit.score} · ${audit.grade}` : "—"} note="cedalion grade, live" />
         <Stat label="colour space" value={SPACE_SIZE.pretty} note="palettes to forge" />
-        <Stat label="direction space" value={DIRECTION_SPACE.toLocaleString("en-US")} note="trend combinations" />
+        <Stat label="trend library" value={CATALOG.length.toLocaleString("en-US")} note={`${DIRECTION_SPACE.toLocaleString("en-US")} directions behind it`} />
       </div>
 
       <div style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) 320px", gap: 26, alignItems: "start" }}>
@@ -125,7 +160,7 @@ export default function Home() {
           <section className="panel" style={{ padding: 16 }}>
             <div className="row" style={{ justifyContent: "space-between", marginBottom: 10 }}>
               <span className="label">rising now</span>
-              <span className="faint mono-sm" style={{ fontSize: 8.5 }}>trend library · {TRENDS_UPDATED}</span>
+              <span className="faint mono-sm" style={{ fontSize: 8.5 }}>trend library · {TRENDS_UPDATED} · {CATALOG.length.toLocaleString("en-US")} entries</span>
             </div>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(200px,1fr))", gap: 14 }}>
               {rising.map((t) => (
@@ -206,6 +241,11 @@ export default function Home() {
             <button className="btn btn-ghost" style={{ fontSize: 10 }} onClick={() => go("settings")}>settings</button>
           </div>
         </div>
+      </div>
+
+      <div className="row" style={{ justifyContent: "space-between", marginTop: 30, paddingTop: 14, borderTop: "1px solid var(--line-soft)" }}>
+        <span className="faint mono-sm" style={{ fontSize: 9.5, letterSpacing: ".04em" }}>{forgeNote(reroll)}</span>
+        <span className="faint mono-sm" style={{ fontSize: 9.5 }}>local only · no account · no network</span>
       </div>
     </div>
   );

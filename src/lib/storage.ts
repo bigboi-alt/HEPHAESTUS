@@ -11,8 +11,17 @@ import type { CvDoc } from "../engine/canvas";
 
 export type ThemeId = "obsidian" | "graphite" | "paper" | "claude" | "blueprint" | "ember";
 
+/**
+ * Claude ships in two skins. `ambrosia` is the cream shell it has always had;
+ * `nyx` is the same voice on dusted black with orange coals. Only the claude
+ * theme reads this — every other theme ignores it.
+ */
+export type ClaudeStyle = "ambrosia" | "nyx";
+
 export type Settings = {
   theme: ThemeId;
+  /** which Claude the shell is wearing; ignored by every other theme */
+  claudeStyle?: ClaudeStyle;
   accent: string;
   density: "compact" | "comfortable";
   colorFormat: "hex" | "rgb" | "hsl" | "oklch";
@@ -30,6 +39,7 @@ export type Settings = {
 
 export const DEFAULT_SETTINGS: Settings = {
   theme: "obsidian",
+  claudeStyle: "ambrosia",
   accent: "#F5F5F5",
   density: "comfortable",
   colorFormat: "hex",
