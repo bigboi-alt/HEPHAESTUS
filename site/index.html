@@ -152,6 +152,37 @@
   .note { margin: 20px 0 0; padding: 16px 18px; border-left: 3px solid var(--brown); background: var(--paper-2); border-radius: 0 var(--r-sm) var(--r-sm) 0; font-size: 14.5px; color: var(--ink-2); line-height: 1.55; }
   .note b { color: var(--ink); }
 
+  /* ── ascii art forge ─────────────────────────────────────────────────── */
+  .forge-ascii-wrap {
+    margin: 22px 0 26px;
+    background: #1a100a;
+    color: #df8a48;
+    border: 1px solid #452816;
+    border-radius: var(--r);
+    padding: 24px 16px 20px;
+    box-shadow: inset 0 2px 12px rgba(0, 0, 0, 0.55), var(--lift);
+    overflow-x: auto;
+    text-align: center;
+  }
+  .forge-ascii {
+    display: inline-block;
+    font-family: var(--mono);
+    font-size: 11px;
+    line-height: 1.16;
+    letter-spacing: 0;
+    margin: 0;
+    white-space: pre;
+    color: #e89857;
+    text-shadow: 0 0 10px rgba(232, 152, 87, 0.45);
+    user-select: none;
+  }
+  @media (max-width: 680px) {
+    .forge-ascii { font-size: 8.5px; line-height: 1.12; }
+  }
+  @media (max-width: 480px) {
+    .forge-ascii { font-size: 7px; line-height: 1.08; }
+  }
+
   /* ── feature grid ────────────────────────────────────────────────────── */
   .grid-3 { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 18px; }
   .feat { background: var(--card); border: 1px solid var(--line); border-radius: var(--r); padding: 22px 20px; box-shadow: var(--lift); display: flex; flex-direction: column; gap: 8px; }
@@ -184,15 +215,11 @@
 
 <header>
   <div class="wrap bar">
-    <a class="mark" href="#top"><b>Hephaestus</b><span class="pill" id="versionPill">v0.3.0 · MIT</span></a>
+    <a class="mark" href="#top"><b>Hephaestus</b></a>
     <nav aria-label="Navigation">
       <a href="#features">features</a>
       <a href="#get" class="hot">download</a>
       <a href="#specs">specifications</a>
-      <a href="https://github.com/bigboi-alt/HEPHAESTUS" target="_blank" rel="noopener" class="gh-badge">
-        <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
-        GitHub
-      </a>
     </nav>
   </div>
 </header>
@@ -245,8 +272,51 @@
 
   <!-- Downloads Section -->
   <section class="wrap" id="get">
-    <div class="sechead"><h2>Download Hephaestus</h2><span class="leader"></span><span class="no">§ 01 — releases</span></div>
-    <p class="sub">Direct, stand-alone installers for every major operating system. Automatically fetched and verified from our official releases.</p>
+    <div class="sechead"><h2>Download Hephaestus</h2><span class="leader"></span><span class="no">§ 01 — forge</span></div>
+    <p class="sub">Direct, stand-alone installers for Windows, macOS, and Linux. Built from source, 100% offline and local-first.</p>
+
+    <!-- ASCII Art of Hephaestus at the Forge -->
+    <div class="forge-ascii-wrap reveal">
+      <pre class="forge-ascii" aria-label="ASCII art of Hephaestus at the forge" role="img">
+                                  .---.
+                               _.'     '._
+                             .'           '.
+                            /   _       _   \
+                           |   (o)     (o)   |
+                           |        ^        |
+                            \     '---'     /
+                             '.           .'
+                               '._     _.'
+                                  `---`
+                                 /|   |\
+                                / |   | \
+              __               /  |   |  \               __
+            .'  `'.           /   |   |   \           .'`  '.
+           /  /\   \         /    |   |    \         /   /\  \
+          |  |  \   \       |     |   |     |       /   /  |  |
+          |  |   \   \     /      |   |      \     /   /   |  |
+ [HAMMER] |  |    \   '.  /      /     \      \  .'   /    |  | [FORGE]
+          |  |     \    `'      /       \      `'    /     |  |
+          |  |      \          /    _    \          /      |  |
+          |  |       \________|    / \    |________/       |  |
+          |  |       |        |   |   |   |        |       |  |
+          \  \       |        |    \_/    |        |       /  /
+           \  \      |         \         /         |      /  /
+            \  \     |          `'-----'`          |     /  /
+             \  `'--'|                             |'--'`  /
+              `------'       .-------------.       '------`
+                 ||         /               \         ||
+                 ||        /   .---------.   \        ||
+                _||_      |   |   ANVIL   |   |      _||_
+               [====]     |   |  =======  |   |     [====]
+              /______\     \   \         /   /     /______\
+             | SPARK  |     '.  '-------'  .'     | FLAME  |
+             |  * .   |       `'---------'`       |  ( ) ) |
+             | . *  . |      /             \      | ( ( () |
+            /__________\    (_______________)    /__________\
+             H E P H A E S T U S  ·  G O D   O F   F O R G E
+      </pre>
+    </div>
 
     <p class="status" id="status"><span class="dot"></span><i id="statusText">Checking latest releases…</i></p>
 
@@ -415,7 +485,7 @@
 <footer>
   <div class="wrap fbar">
     <span><b>Hephaestus</b> <span data-check="version">v0.3.0</span> · Open Source (MIT)</span>
-    <span><a href="#get">Downloads</a> · <a href="#features">Features</a> · <a href="https://github.com/bigboi-alt/HEPHAESTUS" target="_blank" rel="noopener">GitHub Repository</a></span>
+    <span><a href="#get">Downloads</a> · <a href="#features">Features</a> · <a href="#specs">Specifications</a></span>
     <span>Crafted with precision for builders, designers, and developers.</span>
   </div>
 </footer>
@@ -432,7 +502,6 @@
     var hashBody = document.getElementById("hashBody");
     var hero = document.getElementById("heroGet");
     var heroSize = document.getElementById("heroSize");
-    var versionPill = document.getElementById("versionPill");
 
     function say(state, tone, text) {
       if (band) { band.dataset.state = state; band.className = "status " + tone; }
@@ -493,61 +562,6 @@
 
     revealAll();
 
-    // Mapping GitHub Release assets to slots
-    function mapGithubRelease(ghRelease) {
-      var assets = ghRelease.assets || [];
-      var files = [];
-      assets.forEach(function (asset) {
-        var name = asset.name || "";
-        var url = asset.browser_download_url || "";
-        var size = asset.size || 0;
-        var id = null;
-        var label = "";
-
-        if (name.endsWith(".exe")) {
-          id = "windows-x64";
-          label = "Windows Installer (.exe)";
-        } else if (name.endsWith(".msi")) {
-          id = "windows-x64-msi";
-          label = "Windows Package (.msi)";
-        } else if (name.endsWith(".dmg")) {
-          if (/aarch64|arm64/i.test(name)) {
-            id = "macos-arm64";
-            label = "macOS Apple Silicon (.dmg)";
-          } else {
-            id = "macos-x64";
-            label = "macOS Intel (.dmg)";
-          }
-        } else if (name.endsWith(".AppImage")) {
-          id = "linux-x64-appimage";
-          label = "Linux AppImage";
-        } else if (name.endsWith(".deb")) {
-          id = "linux-x64-deb";
-          label = "Linux Debian (.deb)";
-        }
-
-        if (id) {
-          files.push({
-            id: id,
-            label: label,
-            file: name,
-            url: url,
-            size: size,
-            sha256: null
-          });
-        }
-      });
-
-      return {
-        schema: 1,
-        status: "ready",
-        product: "Hephaestus",
-        version: (ghRelease.tag_name || "latest").replace(/^v/, ""),
-        publishedAt: ghRelease.published_at,
-        files: files
-      };
-    }
-
     function applyReleaseDoc(doc) {
       if (!doc || typeof doc !== "object") return false;
       var files = (doc.files || []).filter(function (f) { return f && f.id; });
@@ -558,10 +572,6 @@
         var slot = c.getAttribute("data-slot");
         if (fill(c, byId[slot])) ok++;
       });
-
-      if (versionPill && doc.version) {
-        versionPill.textContent = "v" + doc.version + " · MIT";
-      }
 
       if (mine && byId[mine] && isValidUrl(byId[mine].url) && hero) {
         hero.href = byId[mine].url;
@@ -598,45 +608,21 @@
       return ok > 0;
     }
 
-    // Pipeline: 1) Try GitHub Releases API live, 2) Fallback to release.json
-    var ghApiUrl = "https://api.github.com/repos/bigboi-alt/HEPHAESTUS/releases/latest";
-    fetch(ghApiUrl, { headers: { accept: "application/vnd.github+json" } })
-      .then(function (res) {
-        if (!res.ok) throw new Error("GitHub API " + res.status);
-        return res.json();
+    // Direct standalone release manifest loader
+    fetch("release.json", { cache: "no-store", headers: { accept: "application/json" } })
+      .then(function (r) {
+        if (!r.ok) throw new Error("HTTP " + r.status);
+        return r.json();
       })
-      .then(function (ghRelease) {
-        var mapped = mapGithubRelease(ghRelease);
-        if (mapped.files.length > 0) {
-          applyReleaseDoc(mapped);
-          return;
+      .then(function (doc) {
+        if (doc && doc.status === "ready" && doc.files && doc.files.length) {
+          applyReleaseDoc(doc);
+        } else {
+          say("preparing", "warn", "Builds are actively assembling. Direct downloads available shortly.");
         }
-        throw new Error("No assets found in GitHub release");
       })
       .catch(function () {
-        // Fallback to local release.json
-        fetch("release.json", { cache: "no-store", headers: { accept: "application/json" } })
-          .then(function (r) {
-            if (!r.ok) throw new Error("HTTP " + r.status);
-            return r.json();
-          })
-          .then(function (doc) {
-            if (doc && doc.status === "ready" && doc.files && doc.files.length) {
-              applyReleaseDoc(doc);
-            } else {
-              say("preparing", "warn", "Builds are actively assembling. Direct downloads available on GitHub.");
-            }
-          })
-          .catch(function () {
-            say("live", "ok", "Download binaries directly from GitHub Releases");
-            // Set default link to GitHub releases
-            cards.forEach(function (c) {
-              c.className = "ready";
-              c.href = "https://github.com/bigboi-alt/HEPHAESTUS/releases";
-              var label = c.querySelector(".state span");
-              if (label) label.textContent = "View Releases on GitHub →";
-            });
-          });
+        say("live", "ok", "Release packages available across Windows, macOS, and Linux");
       });
 
     function revealAll() {

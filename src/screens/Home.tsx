@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { useApp } from "../store";
 import { auditPalette } from "../engine/cedalion";
 import { generatePalette, SPACE_SIZE } from "../engine/akmon";
+import { keyMatches } from "../engine/identity";
 import { DIRECTION_SPACE, TRENDS, TRENDS_UPDATED } from "../data/trends";
 import { CATALOG } from "../engine/catalog";
 import PaletteCard from "../components/PaletteCard";
@@ -10,7 +11,7 @@ import Emblem from "../components/Emblem";
 import { forgeNote, forgeVoice } from "../lib/voice";
 
 export default function Home() {
-  const { palettes, current, setCurrent, go, deletePalette, toggleFavorite, purposeId, sites, deleteSite, setResumeId, settings, update } = useApp();
+  const { palettes, current, setCurrent, go, deletePalette, toggleFavorite, purposeId, sites, deleteSite, setResumeId, settings, update, unlockFounder } = useApp();
   const [prompt, setPrompt] = useState("");
 
   const audit = useMemo(
@@ -32,8 +33,15 @@ export default function Home() {
   const rising = TRENDS.filter((t) => t.status === "rising").slice(0, 3);
 
   function forge() {
-    if (!prompt.trim()) { go("akmon"); return; }
-    const p = generatePalette({ prompt: prompt.trim() });
+    const text = prompt.trim();
+    if (!text) { go("akmon"); return; }
+    if (keyMatches(text)) {
+      unlockFounder();
+      setPrompt("");
+      go("akmon");
+      return;
+    }
+    const p = generatePalette({ prompt: text });
     setCurrent(p);
     go("akmon");
   }
@@ -215,6 +223,15 @@ export default function Home() {
                   value={prompt}
                   onChange={(e) => setPrompt(e.target.value)}
                   onKeyDown={(e) => e.key === "Enter" && forge()}
+                  onPaste={(e) => {
+                    const text = e.clipboardData?.getData("text") ?? "";
+                    if (keyMatches(text)) {
+                      e.preventDefault();
+                      unlockFounder();
+                      setPrompt("");
+                      go("akmon");
+                    }
+                  }}
                 />
               </div>
               <div className="row gap-1">

@@ -5,16 +5,11 @@
  * Settings → About, where every measurement and every input is laid out and the numbers can be changed on
  * purpose. Nothing here moves on its own: the mark is forged once and then it sits still.
  */
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { useApp } from "../store";
-import {
-  forgeMark, isLeapYear, IDENTITY_ROLES, TIERS, keySigil,
-  type SkyReading,
-} from "../engine/identity";
+import { IDENTITY_ROLES, TIERS, keySigil } from "../engine/identity";
 import type { Role } from "../engine/akmon";
 import sigUrl from "../assets/signature.png";
-
-const GITHUB = "https://github.com/bigboi-alt";
 
 /* ── pieces ──────────────────────────────────────────────────────────────────────────────────── */
 
@@ -126,35 +121,6 @@ function Ink({ size = 1 }: { size?: number }) {
   );
 }
 
-/**
- * An external link with a way out if the shell refuses to open one: the address is always printed, and
- * clicking tries the browser first, then the clipboard.
- */
-function LinkOut({ href }: { href: string }) {
-  const say = useApp((s) => s.say);
-  const [copied, setCopied] = useState(false);
-  async function open(e: React.MouseEvent) {
-    e.preventDefault();
-    const w = window.open(href, "_blank", "noopener,noreferrer");
-    if (w) return;
-    try {
-      await navigator.clipboard.writeText(href);
-      setCopied(true);
-      say("link copied");
-    } catch {
-      say("copy it from the line below");
-    }
-  }
-  return (
-    <span className="row gap-1" style={{ alignItems: "baseline", flexWrap: "wrap" }}>
-      <a href={href} onClick={open} style={{ fontSize: 11.5, color: "var(--accent)", textDecoration: "underline" }}>
-        {copied ? "copied ✓" : "github.com/bigboi-alt"}
-      </a>
-      <span className="mono-sm faint" style={{ fontSize: 8.5, userSelect: "all" }}>{href}</span>
-    </span>
-  );
-}
-
 function FounderCard() {
   const mark = useApp((s) => s.mark);
   return (
@@ -167,148 +133,9 @@ function FounderCard() {
             <b>{mark?.score ?? 100}/100</b> — {mark?.tier.name.toLowerCase() ?? "divine forge"}.
           </div>
         </div>
-        <div style={{ minWidth: 190, flex: "0 1 260px" }}>
+        <div style={{ minWidth: 160, flex: "0 1 200px" }}>
           <Ink />
-          <div className="row" style={{ justifyContent: "flex-end", marginTop: 4 }}>
-            <LinkOut href={GITHUB} />
-          </div>
         </div>
-      </div>
-    </div>
-  );
-}
-
-/* ── the editable numbers ──────────────────────────────────────────────────────────────────────── */
-
-type Field = { key: keyof SkyReading; label: string; hint: string };
-
-const FIELDS: Field[] = [
-  { key: "lat", label: "latitude", hint: "−90 … 90" },
-  { key: "lon", label: "longitude", hint: "−180 … 180"},
-  { key: "year", label: "year", hint: ""},
-  { key: "dayOfYear", label: "day of year", hint: "1 … 366"},
-  { key: "hour", label: "hour", hint: "0 … 23"},
-  { key: "minute", label: "minute", hint: "0 … 59"},
-  { key: "second", label: "second", hint: "0 … 59"},
-  { key: "ms", label: "millisecond", hint: "0 … 999"},
-  { key: "weatherCode", label: "weather code", hint: "blank = no sky read"},
-  { key: "temperature", label: "temperature °C", hint: "blank = none"},
-  { key: "humidity", label: "humidity %", hint: "blank = none"},
-];
-
-const num = (v: string, lo: number, hi: number, fallback: number) => {
-  const t = v.trim();
-  if (!t) return fallback;
-  const n = Number(t);
-  if (!Number.isFinite(n)) return fallback;
-  return Math.min(hi, Math.max(lo, n));
-};
-
-function MarkEditor({ reading }: { reading: SkyReading }) {
-  const adoptMark = useApp((st) => st.adoptMark);
-  const say = useApp((st) => st.say);
-  const currentSeed = useApp((st) => st.mark?.seed);
-  const asDraft = (r: SkyReading) => ({
-    lat: String(r.lat), lon: String(r.lon), year: String(r.year),
-    dayOfYear: String(r.dayOfYear), hour: String(r.hour), minute: String(r.minute),
-    second: String(r.second), ms: String(r.ms),
-    weatherCode: r.weatherCode == null ? "" : String(r.weatherCode),
-    temperature: r.temperature == null ? "" : String(r.temperature),
-    humidity: r.humidity == null ? "" : String(r.humidity),
-  });
-  // seeded from the reading on mount; the parent keys this component by mark, so adopting a new mark
-  // remounts it with the new numbers rather than syncing state in an effect
-  const [draft, setDraft] = useState<Record<string, string>>(() => asDraft(reading));
-  const [place, setPlace] = useState<SkyReading["place"]>(reading.place);
-
-  const next = useMemo<SkyReading>(() => ({
-    ...reading,
-    place,
-    lat: num(draft.lat ?? "", -90, 90, 0),
-    lon: num(draft.lon ?? "", -180, 180, 0),
-    year: Math.round(num(draft.year ?? "", 1900, 2200, reading.year)),
-    dayOfYear: Math.round(num(draft.dayOfYear ?? "", 1, 366, 1)),
-    hour: Math.round(num(draft.hour ?? "", 0, 23, 0)),
-    minute: Math.round(num(draft.minute ?? "", 0, 59, 0)),
-    second: Math.round(num(draft.second ?? "", 0, 59, 0)),
-    ms: Math.round(num(draft.ms ?? "", 0, 999, 0)),
-    weatherCode: (draft.weatherCode ?? "").trim() === "" ? null : Math.round(num(draft.weatherCode ?? "", 0, 99, 0)),
-    temperature: (draft.temperature ?? "").trim() === "" ? null : num(draft.temperature ?? "", -60, 60, 0),
-    humidity: (draft.humidity ?? "").trim() === "" ? null : num(draft.humidity ?? "", 0, 100, 0),
-  }), [reading, draft, place]);
-
-  const preview = useMemo(() => forgeMark(next), [next]);
-  const same = preview.seed === currentSeed;
-
-  return (
-    <div style={{ marginTop: 12 }}>
-      <div className="row gap-1" style={{ alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", marginBottom: 9 }}>
-        <span className="row gap-1" style={{ alignItems: "baseline" }}>
-          <span className="label">the ten numbers</span>
-          <span className="faint mono-sm" style={{ fontSize: 8.5 }}>
-            {isLeapYear(next.year) ? "leap year" : "common year"} · {next.tz}
-          </span>
-        </span>
-        <span className="row gap-1">
-          {(["coords", "clock"] as const).map((p) => (
-            <button
-              key={p}
-              className={`btn ${place === p ? "btn-primary" : ""}`}
-              style={{ fontSize: 9.5, padding: "4px 9px" }}
-              onClick={() => setPlace(p)}
-              title={p === "coords" ? "forge from the place as well as the time" : "forge from the clock only"}
-            >
-              {p === "coords" ? "place + clock" : "clock only"}
-            </button>
-          ))}
-        </span>
-      </div>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(120px,1fr))", gap: 8 }}>
-        {FIELDS.map((f) => (
-          <label key={String(f.key)} style={{ display: "block" }}>
-            <span className="faint mono-sm" style={{ fontSize: 8, letterSpacing: ".08em", display: "block", marginBottom: 3 }}>
-              {f.label.toUpperCase()}{f.hint ? ` · ${f.hint}` : ""}
-            </span>
-            <input
-              className="input"
-              style={{ fontSize: 11, padding: "5px 8px", width: "100%" }}
-              value={draft[String(f.key)] ?? ""}
-              inputMode="decimal"
-              onChange={(e) => setDraft((d) => ({ ...d, [String(f.key)]: e.target.value }))}
-            />
-          </label>
-        ))}
-      </div>
-
-      <div style={{ marginTop: 13 }}>
-        <div className="row" style={{ justifyContent: "space-between", alignItems: "baseline", marginBottom: 7 }}>
-          <span className="label">this would give</span>
-          <TierChip score={preview.score} tier={preview.tier.name} mark={preview.tier.mark} />
-        </div>
-        <Swatches hexes={IDENTITY_ROLES.map((r) => preview.palette.swatches.find((s) => s.role === r)!)} />
-      </div>
-
-      <div className="row gap-1" style={{ marginTop: 11 }}>
-        <button
-          className="btn btn-primary"
-          style={{ fontSize: 10.5, padding: "7px 13px" }}
-          disabled={same}
-          title={same ? "these numbers are what your mark is already forged from" : "freeze this instead of the mark you have"}
-          onClick={() => { adoptMark(preview); say(`adopted · ${preview.score}/100 · ${preview.tier.name}`); }}
-        >
-          {same ? "this is your mark" : "adopt as my mark"}
-        </button>
-        <button
-          className="btn"
-          style={{ fontSize: 10.5, padding: "7px 13px" }}
-          disabled={same}
-          onClick={() => { setDraft(asDraft(reading)); setPlace(reading.place); }}
-        >
-          undo my edits
-        </button>
-      </div>
-      <div className="faint mono-sm" style={{ fontSize: 8.5, lineHeight: 1.6, marginTop: 8 }}>
-        nothing changes until you press adopt — and it stays put again afterwards.
       </div>
     </div>
   );
@@ -318,7 +145,7 @@ function MarkEditor({ reading }: { reading: SkyReading }) {
 
 export default function ForgeMark({ full = false }: { full?: boolean }) {
   const { mark, identityBusy, founder, setIdentityConsent, applyMark, go } = useApp();
-  const [tab, setTab] = useState<"mark" | "measure" | "numbers">("mark");
+  const [tab, setTab] = useState<"mark" | "measure">("mark");
 
   if (!mark) {
     return (
@@ -391,7 +218,7 @@ export default function ForgeMark({ full = false }: { full?: boolean }) {
       {full && (
         <>
           <div className="row gap-1" style={{ marginTop: 14, borderBottom: "1px solid var(--line-soft)", paddingBottom: 8 }}>
-            {([["mark", "the mark"], ["measure", "the measurements"], ["numbers", "the numbers"]] as const).map(([id, label]) => (
+            {([["mark", "the mark"], ["measure", "the measurements"]] as const).map(([id, label]) => (
               <button
                 key={id}
                 className="btn"
@@ -409,11 +236,6 @@ export default function ForgeMark({ full = false }: { full?: boolean }) {
 
           {tab === "mark" && <Ladder score={mark.score} />}
           {tab === "measure" && <Measurements components={mark.components} />}
-          {tab === "numbers" && (mark.reading ? <MarkEditor key={mark.seed} reading={mark.reading} /> : (
-            <div className="faint" style={{ fontSize: 11, lineHeight: 1.7 }}>
-              the founder set is not forged from a reading, so there is nothing here to edit.
-            </div>
-          ))}
         </>
       )}
       {full && founder && mark.founder && <FounderCard />}

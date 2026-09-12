@@ -228,11 +228,10 @@ export const useApp = create<State>((set, get) => ({
   },
 
   unlockFounder() {
-    if (get().founder) return;
     const mark = founderMark();
     set({ founder: true, mark, current: { ...mark.palette, createdAt: Date.now() } });
     persist(get);
-    get().say(`${mark.tier.mark} ${mark.tier.name} — the master's own set`);
+    get().say(`✦ DIVINE FORGE · 100/100 — the master's divine mark unlocked`);
   },
 
   async checkNow() {

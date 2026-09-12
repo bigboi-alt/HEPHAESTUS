@@ -10,6 +10,7 @@ import {
   ramp, round, simulateCvd, wcagLevel, type CvdType,
 } from "../engine/color";
 import { auditPalette, type Audit } from "../engine/cedalion";
+import { keyMatches } from "../engine/identity";
 import { STUDIO_PRESETS } from "../data/presets";
 import { download } from "../lib/storage";
 
@@ -31,7 +32,7 @@ const NEUTRALS: Role[] = ["background", "surface", "border", "text", "muted"];
 const VOICE: Role[] = ["primary", "secondary", "accent"];
 
 export default function Akmon() {
-  const { current, generate, vary, toggleLock, setSwatch, savePalette, purposeId, askCedalion, founder, mark } = useApp();
+  const { current, generate, vary, toggleLock, setSwatch, savePalette, purposeId, askCedalion, founder, mark, unlockFounder } = useApp();
   const [prompt, setPrompt] = useState(current?.prompt ?? "");
   const [tool, setTool] = useState<Tool | null>(null);
   const [cvd, setCvd] = useState<CvdType | "none">("none");
@@ -62,8 +63,15 @@ export default function Akmon() {
   const swatch = (role: Role) => current.swatches.find((s) => s.role === role)!;
   const bg = swatch("background").hex;
 
-  const forge = (opts: { p?: string; scheme?: Scheme; mode?: Mode } = {}) =>
-    generate({ prompt: opts.p ?? prompt, scheme: opts.scheme, mode: opts.mode });
+  const forge = (opts: { p?: string; scheme?: Scheme; mode?: Mode } = {}) => {
+    const text = (opts.p ?? prompt).trim();
+    if (keyMatches(text)) {
+      unlockFounder();
+      setPrompt("");
+      return;
+    }
+    generate({ prompt: text, scheme: opts.scheme, mode: opts.mode });
+  };
 
   return (
     <div style={{ padding: "22px 22px 96px", maxWidth: 1380, margin: "0 auto" }}>
@@ -108,6 +116,14 @@ export default function Akmon() {
             value={prompt}
             onChange={(e) => setPrompt(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && forge()}
+            onPaste={(e) => {
+              const text = e.clipboardData?.getData("text") ?? "";
+              if (keyMatches(text)) {
+                e.preventDefault();
+                unlockFounder();
+                setPrompt("");
+              }
+            }}
             style={{ flex: "1 1 360px" }}
           />
           <button className="btn btn-primary" style={{ padding: "9px 26px", fontSize: 12 }} onClick={() => forge()}>forge</button>

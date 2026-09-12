@@ -394,13 +394,13 @@ export function founderMark(): Mark {
   }));
   const palette: Palette = {
     id: "mark-founder",
-    name: "Founder set · Divine Forge",
-    prompt: "NØX · the master's own anvil",
+    name: "Divine Dark Forge · 100/100",
+    prompt: "NØX::VΞR::ΛRT::DΞI::GΛD::KΛL · Divine Dark Forge",
     scheme: "analogous",
     mode: "dark",
     seed: 0,
     swatches,
-    createdAt: 0,
+    createdAt: Date.now(),
   };
   const grade = gradeMark(palette);
   return {
@@ -412,7 +412,7 @@ export function founderMark(): Mark {
     place: "coords",
     reading: null,
     founder: true,
-    inputs: [{ label: "source", value: "the founder's key — this set is not forged from a reading" }],
+    inputs: [{ label: "source", value: "the founder's key — NØX::VΞR::ΛRT::DΞI::GΛD::KΛL" }],
   };
 }
 
