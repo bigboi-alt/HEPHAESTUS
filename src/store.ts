@@ -44,6 +44,13 @@ export type CanvasCtx = {
   hasFooter: boolean;
 };
 
+export type CedalionAction = {
+  id: string;
+  label: string;
+  kind: "fix-contrast" | "harmonize-neutrals" | "switch-theme" | "make-pop" | "insert-section" | "copy-tokens" | "open-screen";
+  payload?: any;
+};
+
 export type ChatTurn = {
   id: string;
   role: "you" | "cedalion";
@@ -51,6 +58,7 @@ export type ChatTurn = {
   bullets?: string[];
   refs?: string[];
   suggestions?: string[];
+  actions?: CedalionAction[];
   at: number;
 };
 

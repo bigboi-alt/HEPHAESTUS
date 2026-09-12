@@ -52,7 +52,7 @@ on:
         description: "Allow re-deploying a version that is already live (bumping is normally the better answer)"
 
 permissions:
-  contents: read
+  contents: write
 
 # the same lock site.yml takes, so a docs deploy and a release deploy can never interleave
 concurrency:
@@ -273,8 +273,9 @@ jobs:
           node tools/prepare-site.mjs --into site-built --files-only --carry-from "$LIVE_URL"
           node tools/release-manifest.mjs --scan artifacts \
             --version "${{ needs.gate.outputs.version }}" \
+            --github-release "${{ github.repository }}" \
             --out site-built/release.json \
-            --downloads site-built/downloads \
+            --no-copy \
             --carry-from "$LIVE_URL"
           echo "- \`site-built/release.json\`: $(node -p "const r=require('./site-built/release.json'); r.status+' '+r.version+' · '+r.files.length+' files · '+(r.previous||[]).length+' previous')" 2>/dev/null || echo '(unreadable)')" >> "$GITHUB_STEP_SUMMARY"
 
@@ -288,9 +289,20 @@ jobs:
           echo "  · this job's site-built/ is discarded with the run; it is never uploaded anywhere"
           exit 0
 
-      # Everything below runs only on a publish. Secrets are checked here rather than at the start
-      # so a preflight build needs none of them, and so a missing secret can never be the reason a
-      # live deployment half-updates: the deploy step is simply never reached.
+      # Everything below runs only on a publish.
+      - name: publish packages to GitHub release
+        if: needs.gate.outputs.publish == 'true'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ needs.gate.outputs.version }}
+          name: Hephaestus v${{ needs.gate.outputs.version }}
+          files: artifacts/**/*
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
       - name: cloudflare credentials present?
         if: needs.gate.outputs.publish == 'true'
         run: |

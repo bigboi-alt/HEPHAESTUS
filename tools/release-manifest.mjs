@@ -138,7 +138,7 @@ function walk(dir, prefix = "") {
  * One function, all the rules. Returns { errors, warnings, release } — and `release` is only
  * meaningful when errors is empty, because a manifest is never written for a broken batch.
  */
-export function build({ scanned, version, date, productName, carry = null, slots = null }) {
+export function build({ scanned, version, date, productName, carry = null, slots = null, githubRepo = null, baseUrl = null }) {
   const errors = [];
   const warnings = [];
   const want = slots ?? slotsFor("all");
@@ -167,10 +167,18 @@ export function build({ scanned, version, date, productName, carry = null, slots
     bySlot.set(slot.id, best);
   }
 
+  const effectiveRepo = githubRepo || (process.env.GITHUB_REPOSITORY || null);
+  const urlPrefix = effectiveRepo
+    ? `https://github.com/${effectiveRepo}/releases/download/v${version}/`
+    : baseUrl
+      ? `${baseUrl.replace(/\/$/, "")}/`
+      : "/downloads/";
+  const isExternal = urlPrefix.startsWith("http://") || urlPrefix.startsWith("https://");
+
   for (const f of files) {
     if (f.size < MIN_BYTES) errors.push(`${f.file} is ${f.size} bytes — below the ${MIN_BYTES / 1024} KiB floor for a real bundle. Empty or truncated upload.`);
     if (f.size > MAX_BYTES) errors.push(`${f.size / 1048576 | 0} MB for ${f.file} is past the ${MAX_BYTES / 1048576} MB ceiling — a build glob probably swept the target dir`);
-    if (f.size > PAGES_MAX_FILE) errors.push(OVER_PAGES(f));
+    if (!isExternal && f.size > PAGES_MAX_FILE) errors.push(OVER_PAGES(f));
     if (version && f.version && f.version !== version)
       errors.push(`${f.file} carries version ${f.version} while the config says ${version} — a stale artifact would have shipped`);
     if (version && !f.version) warnings.push(`${f.file} has no version in its filename; trusting the build's config check`);
@@ -184,11 +192,12 @@ export function build({ scanned, version, date, productName, carry = null, slots
 
   const list = want.filter((s) => bySlot.has(s.id)).map((s) => {
     const f = bySlot.get(s.id);
+    const fileUrl = isExternal ? `${urlPrefix}${basename(f.file)}` : `/downloads/${basename(f.file)}`;
     return {
       id: s.id, os: s.os, arch: s.arch, label: s.label, hint: s.hint ?? null,
       required: !!s.required, signing: s.signing ?? "unsigned",
       advisory: s.advisory ?? null,
-      file: basename(f.file), url: `/downloads/${basename(f.file)}`,
+      file: basename(f.file), url: fileUrl,
       size: f.size, sha256: f.sha256, kind: KIND[`.${s.ext}`] ?? "installer",
     };
   });
@@ -272,32 +281,38 @@ export async function fetchLiveFile(base, urlPath, intoDir) {
  * file that can't be fetched is only a note: an old installer going missing must never block a new
  * release, and it never deletes anything, because nothing is deleted here.
  */
-export async function writeRelease({ release, out, downloads, bySlot, carry }) {
+export async function writeRelease({ release, out, downloads, bySlot, carry, noCopy = false }) {
   mkdirSync(resolve(out, ".."), { recursive: true });
-  mkdirSync(downloads, { recursive: true });
   const placed = [];
-  for (const [, f] of bySlot) {
-    copyFileSync(resolve(f.dir, f.file), join(downloads, basename(f.file)));
-    placed.push(basename(f.file));
-  }
   const kept = [];
   const lost = [];
-  if (carry?.ok) {
-    for (const f of carry.keep) {
-      const name = basename(f.url || f.file);
-      const dest = join(downloads, name);
-      if (existsSync(dest)) { kept.push(name); continue; }
-      if (carry.dir) {
-        const src = join(carry.dir, "downloads", name);
-        if (existsSync(src)) { copyFileSync(src, dest); kept.push(name); continue; }
-      }
-      if (carry.base) {
-        try { await fetchLiveFile(carry.base, f.url || `/${name}`, downloads); kept.push(name); continue; }
-        catch (e) { lost.push(`${name} (${e.message})`); continue; }
-      }
-      lost.push(name);
+
+  if (!noCopy && downloads) {
+    mkdirSync(downloads, { recursive: true });
+    for (const [, f] of bySlot) {
+      copyFileSync(resolve(f.dir, f.file), join(downloads, basename(f.file)));
+      placed.push(basename(f.file));
     }
+    if (carry?.ok) {
+      for (const f of carry.keep) {
+        const name = basename(f.url || f.file);
+        const dest = join(downloads, name);
+        if (existsSync(dest)) { kept.push(name); continue; }
+        if (carry.dir) {
+          const src = join(carry.dir, "downloads", name);
+          if (existsSync(src)) { copyFileSync(src, dest); kept.push(name); continue; }
+        }
+        if (carry.base) {
+          try { await fetchLiveFile(carry.base, f.url || `/${name}`, downloads); kept.push(name); continue; }
+          catch (e) { lost.push(`${name} (${e.message})`); continue; }
+        }
+        lost.push(name);
+      }
+    }
+  } else {
+    for (const [, f] of bySlot) placed.push(basename(f.file));
   }
+
   writeFileSync(resolve(out), JSON.stringify(release, null, 2) + "\n");
   return { placed, kept, lost };
 }
@@ -348,8 +363,13 @@ async function main() {
   const version = val("--version") || (cfg.npm === cfg.cargo && cfg.npm === cfg.tauri ? cfg.npm : null);
   const scanned = scanDirs.flatMap((d) => classify(resolve(d)).map((f) => ({ ...f, dir: resolve(d) })));
   const carry = await readCarry(val("--carry-from"));
+  const githubRepoVal = val("--github-release") || (flag("--github-release") ? "bigboi-alt/HEPHAESTUS" : undefined);
+  const baseUrlVal = val("--base-url");
+  const noCopy = flag("--no-copy") || Boolean(githubRepoVal || baseUrlVal);
+
   const { errors, warnings, release, bySlot } = build({
     scanned, version, date: val("--date"), productName: cfg.productName, carry, slots: slotsFor(cfg.targets),
+    githubRepo: githubRepoVal, baseUrl: baseUrlVal,
   });
   if (carry && !carry.ok) warnings.push(`carry-forward skipped: ${carry.why} — the live site's older files will not be re-uploaded, so nothing is deleted either`);
 
@@ -369,9 +389,13 @@ async function main() {
     if (flag("--json")) console.log(JSON.stringify(release, null, 2));
     process.exit(0);
   }
-  const { placed, kept, lost } = await writeRelease({ release, out, downloads, bySlot, carry });
+  const { placed, kept, lost } = await writeRelease({ release, out, downloads, bySlot, carry, noCopy });
   console.log(`wrote ${out} (${release.files.length} files, ${release.previous.length} previous release${release.previous.length === 1 ? "" : "s"})`);
-  console.log(`downloads: ${placed.length} new${kept.length ? `, ${kept.length} carried forward` : ""} in ${downloads}`);
+  if (!noCopy) {
+    console.log(`downloads: ${placed.length} new${kept.length ? `, ${kept.length} carried forward` : ""} in ${downloads}`);
+  } else {
+    console.log(`downloads: ${placed.length} files referenced via external release host`);
+  }
   if (lost.length) console.log(`  note  ${lost.length} older file${lost.length === 1 ? "" : "s"} could not be carried and stays only on its own deployment: ${lost.join(", ")}`);
   if (flag("--json")) console.log(JSON.stringify(release, null, 2));
 }

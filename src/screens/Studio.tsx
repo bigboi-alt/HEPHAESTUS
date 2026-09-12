@@ -13,7 +13,7 @@ import { generatePalette, type Palette } from "../engine/akmon";
 import { auditPalette, canvasProblems } from "../engine/cedalion";
 import {
   FRAME_W, activePages, blockColors, roleHex, readableOn, auditCanvas,
-  merkhet, merkhetProblems, canvasToHtml, optOf, FONT_STACKS,
+  merkhet, merkhetProblems, canvasToHtml, canvasToTailwind, optOf, FONT_STACKS,
   type CvOptions, emptyBlock, freshDoc, freshPage, starterBlocks,
   uid, pageHeight,
   type CvBlock, type CvDoc, type CvKind, type CvPage, type CvTransition,
@@ -136,6 +136,9 @@ export default function Studio() {
   const [past, setPast] = useState<CvDoc[]>([]);
   const [future, setFuture] = useState<CvDoc[]>([]);
   const [savedTick, setSavedTick] = useState(0);
+  const [showExportModal, setShowExportModal] = useState(false);
+  const [exportTab, setExportTab] = useState<"html" | "tailwind">("html");
+  const [copiedCode, setCopiedCode] = useState(false);
 
   const rootRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<HTMLDivElement>(null);
@@ -145,6 +148,18 @@ export default function Studio() {
   const docRef = useRef(doc);
   docRef.current = doc;
   const pageRef = useRef<CvPage | null>(null);
+
+  /* listen for Cedalion 1-click section insert requests */
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const presetId = (e as CustomEvent)?.detail?.presetId;
+      if (!presetId) return;
+      const preset = GRID_PRESETS.find((p) => p.id === presetId);
+      if (preset) addPreset(preset);
+    };
+    window.addEventListener("hephaestus-insert-preset", handler);
+    return () => window.removeEventListener("hephaestus-insert-preset", handler);
+  });
 
   /* content-rich boot from purpose (once, and only for fresh docs) */
   useEffect(() => {
@@ -521,6 +536,19 @@ export default function Studio() {
   const liveText = (id: string, text: string) => setDoc((d) => blockMap(id, { text }, d));
   const liveBlock = (id: string, mut: Partial<CvBlock> | ((b: CvBlock) => CvBlock)) => setDoc((d) => blockMap(id, mut, d));
 
+  const alignBlock = (dir: "left" | "center" | "right") => {
+    if (!sel || !selBlock) return;
+    let nextX = selBlock.x;
+    if (dir === "left") nextX = 60;
+    else if (dir === "center") nextX = Math.max(0, Math.round((devW - selBlock.w) / 2));
+    else if (dir === "right") nextX = Math.max(0, devW - selBlock.w - 60);
+    commit(pageMap((p) => ({
+      ...p,
+      blocks: p.blocks.map((b) => (b.id === sel ? { ...b, x: nextX } : b)),
+    })));
+    say(`Aligned block to ${dir}`);
+  };
+
   const runMerkhet = (mode: MerkhetMode) => {
     const { page: np, report: rep, verdict } = merkhet(pageRef.current!, pal, mode);
     commit(pageMap(() => np));
@@ -560,11 +588,6 @@ export default function Studio() {
     setTimeout(() => URL.revokeObjectURL(url), 60_000);
   };
 
-  const exportHtml = () => {
-    const slug = (purpose?.id ?? doc.brand ?? "site").toLowerCase().replace(/[^a-z0-9-]/g, "-");
-    download(`hephaestus-${slug}.html`, canvasToHtml(docRef.current, pal), "text/html");
-    say("exported — open it in any browser");
-  };
 
   /* ---------------- render ---------------- */
   if (!page) {
@@ -623,6 +646,21 @@ export default function Studio() {
             <button key={d.id} className="btn" data-active={devW === d.w} style={{ border: 0, fontSize: 9.5, padding: "5px 9px", borderRadius: 0 }} onClick={() => { setDevW(d.w); setSel(null); }}>{d.label}</button>
           ))}
         </div>
+        {selBlock && (
+          <div className="row" style={{ border: "1px solid var(--line)" }} title="Align selected block">
+            <button className="btn" style={{ border: 0, fontSize: 10, padding: "4px 7px", borderRadius: 0 }} onClick={() => alignBlock("left")} title="Align Left">⇤</button>
+            <button className="btn" style={{ border: 0, fontSize: 10, padding: "4px 7px", borderRadius: 0 }} onClick={() => alignBlock("center")} title="Center Horizontally">⇋</button>
+            <button className="btn" style={{ border: 0, fontSize: 10, padding: "4px 7px", borderRadius: 0 }} onClick={() => alignBlock("right")} title="Align Right">⇥</button>
+          </div>
+        )}
+        <button
+          className="btn"
+          style={{ fontSize: 10, padding: "5px 9px", color: "var(--accent)", borderColor: "var(--accent)" }}
+          onClick={() => setShowGrids(true)}
+          title="Add Pre-built Section Template"
+        >
+          + section
+        </button>
         {!single ? (
           <select className="input" style={{ width: 112, fontSize: 10, padding: "5px 6px" }} value={doc.transition} title="page transition — plays on page switches and in the export"
             onChange={(e) => commit({ ...doc, transition: e.target.value as CvTransition })}>
@@ -654,7 +692,15 @@ export default function Studio() {
         <button className="btn" data-active={preview} style={{ fontSize: 10, padding: "5px 9px" }} onClick={() => openPreview()} title="open the site exactly as the export ships it">
           {preview ? "■ exit" : "▶ preview"}
         </button>
-        <button className="btn btn-primary" style={{ fontSize: 10, padding: "5px 10px" }} onClick={exportHtml}>export .html</button>
+        <button
+          className="btn btn-primary"
+          style={{ fontSize: 10, padding: "5px 12px", display: "inline-flex", alignItems: "center", gap: 5 }}
+          onClick={() => setShowExportModal(true)}
+          title="Export production-ready HTML, CSS, or Tailwind JSX"
+        >
+          <span>export code</span>
+          <span style={{ fontSize: 8 }}>▼</span>
+        </button>
       </div>
 
       {/* ================= body ================= */}
@@ -703,11 +749,36 @@ export default function Studio() {
           </div>
           <div className="rule" />
           <div style={{ padding: "10px 12px 4px", overflowY: "auto", flex: 1 }}>
-            <button className="row gap-1" style={{ width: "100%", justifyContent: "space-between", border: "1px solid var(--accent)", background: "color-mix(in srgb, var(--accent) 8%, var(--raise))", padding: "8px 10px", borderRadius: 8, fontSize: 11, fontWeight: 700, marginBottom: 10 }}
+            <button className="row gap-1" style={{ width: "100%", justifyContent: "space-between", border: "1px solid var(--accent)", background: "color-mix(in srgb, var(--accent) 8%, var(--raise))", padding: "8px 10px", borderRadius: 8, fontSize: 11, fontWeight: 700, marginBottom: 8 }}
               onClick={() => setShowGrids(true)}>
               <span>▦ grid library</span>
               <span className="mono-sm" style={{ fontSize: 8.5, opacity: 0.7 }}>{GRID_PRESETS.length} layouts</span>
             </button>
+            <div className="row gap-1" style={{ flexWrap: "wrap", marginBottom: 12 }}>
+              {[
+                { id: "hero-split", label: "hero" },
+                { id: "bento", label: "bento" },
+                { id: "features-3", label: "features" },
+                { id: "pricing-3", label: "pricing" },
+                { id: "stats-4", label: "stats" },
+                { id: "quotes-3", label: "quotes" },
+                { id: "faq-accordion", label: "faq" },
+                { id: "cta-band", label: "cta" },
+              ].map((qs) => {
+                const p = GRID_PRESETS.find((x) => x.id === qs.id);
+                return (
+                  <button
+                    key={qs.id}
+                    className="btn"
+                    style={{ fontSize: 8.5, padding: "3px 6px", textTransform: "none", borderRadius: 4 }}
+                    onClick={() => p && addPreset(p)}
+                    title={`Add ${qs.label} section below canvas`}
+                  >
+                    +{qs.label}
+                  </button>
+                );
+              })}
+            </div>
             {KIND_GROUPS.map((g) => (
               <div key={g.label} style={{ marginBottom: 10 }}>
                 <div className="label" style={{ fontSize: 8, marginBottom: 4, letterSpacing: "0.14em" }}>{g.label}</div>
@@ -897,6 +968,109 @@ export default function Studio() {
           onReveal={reveal}
           onClose={() => setShowMerq(false)}
         />
+      )}
+
+      {/* Code Export Modal */}
+      {showExportModal && (
+        <div
+          style={{
+            position: "fixed", inset: 0, zIndex: 100,
+            background: "rgba(0,0,0,.75)", backdropFilter: "blur(6px)",
+            display: "flex", alignItems: "center", justifyContent: "center", padding: 24,
+          }}
+          onClick={() => setShowExportModal(false)}
+        >
+          <div
+            className="fade-in"
+            style={{
+              width: "100%", maxWidth: 880, maxHeight: "90vh",
+              background: "var(--surface)", border: "1px solid var(--line)",
+              borderRadius: 12, display: "flex", flexDirection: "column",
+              boxShadow: "0 32px 80px -20px rgba(0,0,0,.8)",
+              overflow: "hidden",
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="row" style={{ height: 52, padding: "0 20px", borderBottom: "1px solid var(--line)", justifyContent: "space-between", alignItems: "center" }}>
+              <div className="row gap-2" style={{ alignItems: "center" }}>
+                <span style={{ fontWeight: 700, fontSize: 13, letterSpacing: "-.01em" }}>Export Production Code</span>
+                <span className="mono-sm faint" style={{ fontSize: 10 }}>· {doc.brand || "untitled"}</span>
+              </div>
+              <div className="row gap-1">
+                <button
+                  className="btn"
+                  data-active={exportTab === "html"}
+                  style={{ fontSize: 11, padding: "5px 12px" }}
+                  onClick={() => setExportTab("html")}
+                >
+                  HTML + CSS
+                </button>
+                <button
+                  className="btn"
+                  data-active={exportTab === "tailwind"}
+                  style={{ fontSize: 11, padding: "5px 12px" }}
+                  onClick={() => setExportTab("tailwind")}
+                >
+                  React + Tailwind
+                </button>
+                <button className="btn" style={{ marginLeft: 8, fontSize: 12, padding: "4px 9px" }} onClick={() => setShowExportModal(false)}>✕</button>
+              </div>
+            </div>
+
+            {/* Body / Code View */}
+            <div style={{ flex: 1, overflow: "auto", padding: 16, background: "var(--bg)" }}>
+              <pre
+                className="mono-sm"
+                style={{
+                  margin: 0, padding: 16, fontSize: 11, lineHeight: 1.6,
+                  color: "var(--fg)", background: "var(--raise)", borderRadius: 8,
+                  overflowX: "auto", whiteSpace: "pre-wrap", wordBreak: "break-word",
+                  maxHeight: "56vh",
+                }}
+              >
+                {exportTab === "html" ? canvasToHtml(doc, pal) : canvasToTailwind(doc, pal)}
+              </pre>
+            </div>
+
+            {/* Footer */}
+            <div className="row" style={{ height: 56, padding: "0 20px", borderTop: "1px solid var(--line)", justifyContent: "space-between", alignItems: "center" }}>
+              <div className="faint mono-sm" style={{ fontSize: 10 }}>
+                {exportTab === "html" ? "Standalone, zero dependencies. Single-file ready to deploy." : "Clean React JSX component ready for Next.js, Vite, or Tailwind projects."}
+              </div>
+              <div className="row gap-2">
+                <button
+                  className="btn"
+                  style={{ fontSize: 11, padding: "6px 14px" }}
+                  onClick={() => {
+                    const code = exportTab === "html" ? canvasToHtml(doc, pal) : canvasToTailwind(doc, pal);
+                    navigator.clipboard.writeText(code);
+                    setCopiedCode(true);
+                    setTimeout(() => setCopiedCode(false), 2000);
+                    say("Code copied to clipboard!");
+                  }}
+                >
+                  {copiedCode ? "✓ Copied!" : "Copy to Clipboard"}
+                </button>
+                <button
+                  className="btn btn-primary"
+                  style={{ fontSize: 11, padding: "6px 16px" }}
+                  onClick={() => {
+                    const slug = (purpose?.id ?? doc.brand ?? "site").toLowerCase().replace(/[^a-z0-9-]/g, "-");
+                    if (exportTab === "html") {
+                      download(`hephaestus-${slug}.html`, canvasToHtml(doc, pal), "text/html");
+                    } else {
+                      download(`hephaestus-${slug}.jsx`, canvasToTailwind(doc, pal), "text/javascript");
+                    }
+                    say(`Downloaded ${exportTab === "html" ? ".html" : ".jsx"} file`);
+                  }}
+                >
+                  Download {exportTab === "html" ? ".html" : ".jsx"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

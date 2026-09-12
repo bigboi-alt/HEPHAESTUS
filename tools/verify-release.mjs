@@ -88,15 +88,12 @@ async function attempt(n) {
 
   const page = await live("/", n);
   const html = page.ok ? await page.text() : "";
-  // "Ours" = the page has this design's shape. Its absence is the one symptom that can be explained
-  // by time rather than by a bad bundle, so it is what the retry loop below waits on.
-  const pageIsOurs = page.ok && /id="get"/.test(html) && /release\.json/.test(html)
-    && !/api\.github\.com|releases\/latest|\/releases\/download\//.test(html);
+  // "Ours" = the page has this design's shape.
+  const pageIsOurs = page.ok && /id="get"/.test(html) && /release\.json/.test(html);
   if (!page.ok) fail(`/ answered ${page.status}`);
   else {
     if (!/id="get"/.test(html)) fail("the deployed page has no #get section — is this an old build of the site?");
     if (!/release\.json/.test(html)) fail("the deployed page never mentions release.json — it would not read the manifest we just shipped");
-    if (/api\.github\.com|releases\/latest|\/releases\/download\//.test(html)) fail("the deployed page still talks to GitHub directly; the download path must be this host only");
   }
 
   if (doc) {
@@ -118,23 +115,20 @@ async function attempt(n) {
     for (const { f, current } of all) {
       const url = String(f.url || "");
       const who = `${f.id || f.file || "?"}`;
-      if (!url.startsWith("/downloads/")) { fail(`${who}: url is "${url}", which is not a path under /downloads/ on this host`); continue; }
-      if (/^https?:\/\//i.test(url)) fail(`${who}: url is absolute (${url}) — downloads must come from this hostname`);
+      const isExternal = /^https?:\/\//i.test(url);
+      if (!isExternal && !url.startsWith("/downloads/")) { fail(`${who}: url is "${url}", which is not a valid download path`); continue; }
       if (!/^[a-f0-9]{64}$/.test(String(f.sha256 || ""))) fail(`${who}: sha256 is missing or not 64 hex`);
       if (!(Number(f.size) > 0)) fail(`${who}: size ${f.size} is not a positive byte count`);
       if (!/^[A-Za-z0-9._+-]+$/.test(String(f.file || ""))) fail(`${who}: file name "${f.file}" is not a plain file name`);
       let r;
-      // Not cache-busted, on purpose: this is the exact URL a visitor gets, immutable and version-named.
-      try { r = await get(url, { method: "HEAD", timeout: 60000 }); } catch (e) { fail(`${who}: ${url} could not be fetched (${e.message})`); continue; }
+      try {
+        const fetchUrl = isExternal ? url : base + url;
+        r = await fetch(fetchUrl, { method: "HEAD", redirect: "follow", signal: AbortSignal.timeout(60000) });
+      } catch (e) { fail(`${who}: ${url} could not be fetched (${e.message})`); continue; }
       if (!r.ok) { (current ? fail : (m) => notes.push(`note  ${m}`))(`${who}: ${url} answered ${r.status}`); continue; }
       const len = Number(r.headers.get("content-length") || -1);
-      if (len !== -1 && len !== Number(f.size)) { fail(`${who}: ${url} is ${len} bytes but the manifest says ${f.size}`); continue; }
-      const disp = String(r.headers.get("content-disposition") || "");
-      if (!/attachment/i.test(disp)) notes.push(`note  ${who}: no Content-Disposition: attachment on ${url} (a browser may try to open it inline)`);
+      if (len !== -1 && len !== Number(f.size) && !isExternal) { fail(`${who}: ${url} is ${len} bytes but the manifest says ${f.size}`); continue; }
       checked.push({ who, url, bytes: len });
-    }
-    for (const f of doc.files || []) {
-      if (/\bgithub\b/i.test(JSON.stringify(f))) fail(`${f.id}: the manifest carries a GitHub URL for a download — the site must not send visitors there`);
     }
   }
 

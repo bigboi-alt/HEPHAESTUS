@@ -10,12 +10,12 @@
  */
 
 import {
-  contrastRatio, deltaE, fixContrast, hexToOklch,
+  contrastRatio, deltaE, fixContrast, hexToOklch, oklchToHex,
   round, simulateCvd, wcagLevel, type CvdType,
 } from "./color";
 import { describeColor, ROLE_ORDER, type Palette, type Role } from "./akmon";
 import { getPurpose, getTrend, TRENDS, type Purpose } from "../data/trends";
-import type { CanvasCtx } from "../store";
+import type { CanvasCtx, CedalionAction } from "../store";
 
 /* ------------------------------------------------------------------ *
  * report types
@@ -504,6 +504,8 @@ export function matchTrends(p: Palette, purpose?: Purpose) {
  * conversation
  * ------------------------------------------------------------------ */
 
+export type { CedalionAction };
+
 export type CedalionContext = {
   palette?: Palette;
   purposeId?: string;
@@ -519,7 +521,72 @@ export type Answer = {
   bullets?: string[];
   refs?: string[];
   suggestions?: string[];
+  actions?: CedalionAction[];
 };
+
+export function createFixContrastAction(role: Role, hex: string): CedalionAction {
+  return {
+    id: `fix-${role}-${hex}`,
+    label: `Fix ${role} to ${hex}`,
+    kind: "fix-contrast",
+    payload: { role, hex },
+  };
+}
+
+export function createHarmonizeAction(p: Palette): CedalionAction {
+  const pri = hexToOklch(roleHex(p, "primary"));
+  const isDark = p.mode === "dark";
+  const bg = oklchToHex({ l: isDark ? 0.11 : 0.985, c: 0.012, h: pri.h });
+  const surface = oklchToHex({ l: isDark ? 0.16 : 0.96, c: 0.018, h: pri.h });
+  const border = oklchToHex({ l: isDark ? 0.26 : 0.88, c: 0.022, h: pri.h });
+  return {
+    id: "harmonize-neutrals",
+    label: "Harmonize Neutrals with Brand Hue",
+    kind: "harmonize-neutrals",
+    payload: { background: bg, surface, border },
+  };
+}
+
+export function createMakePopAction(p: Palette): CedalionAction {
+  const acc = p.swatches.find((s) => s.role === "accent");
+  if (!acc) return { id: "make-pop", label: "Make Accent Pop", kind: "make-pop", payload: {} };
+  const o = hexToOklch(acc.hex);
+  const popped = oklchToHex({ l: p.mode === "dark" ? Math.max(o.l, 0.72) : Math.min(o.l, 0.45), c: Math.min(0.28, o.c + 0.06), h: o.h });
+  return {
+    id: `pop-accent-${popped}`,
+    label: `Boost Accent Pop (${popped})`,
+    kind: "make-pop",
+    payload: { role: "accent", hex: popped },
+  };
+}
+
+export function createInsertSectionAction(presetId: string, label: string): CedalionAction {
+  return {
+    id: `insert-${presetId}`,
+    label: `+ Insert ${label}`,
+    kind: "insert-section",
+    payload: { presetId },
+  };
+}
+
+export function createCopyTokensAction(_p: Palette): CedalionAction {
+  return {
+    id: "copy-css-tokens",
+    label: "Copy CSS Tokens",
+    kind: "copy-tokens",
+    payload: { format: "css" },
+  };
+}
+
+export function createSwitchThemeAction(p: Palette): CedalionAction {
+  const next = p.mode === "dark" ? "light" : "dark";
+  return {
+    id: `switch-theme-${next}`,
+    label: `Switch to ${next === "dark" ? "Dark" : "Light"} Mode`,
+    kind: "switch-theme",
+    payload: { mode: next },
+  };
+}
 
 type Rule = {
   id: string;
@@ -562,10 +629,17 @@ const RULES: Rule[] = [
       if (!p) return { text: "Generate or open a palette first and I'll score it across contrast, colour-vision safety, harmony, distinctiveness, purpose fit and trend alignment." };
       const a = auditPalette(p, ctx.purposeId);
       const top = a.findings.filter((f) => f.severity !== "win").slice(0, 3);
+      const actions: CedalionAction[] = [];
+      for (const f of top) {
+        if (f.fix) actions.push(createFixContrastAction(f.fix.role, f.fix.hex));
+      }
+      if (actions.length === 0) actions.push(createHarmonizeAction(p));
       return {
         text: `${a.score}/100 — grade ${a.grade}. ${a.headline}`,
         bullets: top.length ? top.map((f) => `${f.title} — ${f.detail}`) : ["Nothing blocking. The full breakdown is in the audit panel."],
         refs: a.categories.map((c) => `${c.label}: ${c.score}`),
+        actions: actions.length ? actions : undefined,
+        suggestions: ["What should I fix first?", "How do I make this pop?", "Harmonize neutrals"],
       };
     },
   },
@@ -578,10 +652,18 @@ const RULES: Rule[] = [
       if (!p) return { text: "Open a palette and I'll rank its problems by how much damage each one does." };
       const a = auditPalette(p, ctx.purposeId);
       const worst = a.findings.find((f) => f.severity === "critical") ?? a.findings.find((f) => f.severity === "warning");
-      if (!worst) return { text: `Nothing is broken — you're at ${a.score}/100. If you want to push higher, the lowest category is "${[...a.categories].sort((x, y) => x.score - y.score)[0].label}".` };
+      if (!worst) {
+        return {
+          text: `Nothing is broken — you're at ${a.score}/100. If you want to push higher, the lowest category is "${[...a.categories].sort((x, y) => x.score - y.score)[0].label}".`,
+          actions: [createHarmonizeAction(p)],
+        };
+      }
+      const action = worst.fix ? createFixContrastAction(worst.fix.role, worst.fix.hex) : undefined;
       return {
         text: `Start here: ${worst.title}.`,
         bullets: [worst.detail, worst.evidence ?? "", worst.fix ? `One-click fix available: ${worst.fix.label}` : ""].filter(Boolean),
+        actions: action ? [action] : undefined,
+        suggestions: ["Score my palette", "Is this accessible?"],
       };
     },
   },
@@ -598,14 +680,30 @@ const RULES: Rule[] = [
           "Focus rings need 3:1 against both the component and the background behind it",
           "Placeholder text is text: it needs 4.5:1, which most designs get wrong",
         ],
+        suggestions: ["Score my palette", "What should I fix first?"],
       };
       if (!p) return base;
       const bg = roleHex(p, "background");
+      const actions: CedalionAction[] = [];
       const rows = (["text", "muted", "primary", "secondary", "accent"] as Role[]).map((r) => {
-        const ratio = contrastRatio(roleHex(p, r), bg);
+        const h = roleHex(p, r);
+        const ratio = contrastRatio(h, bg);
+        const need = r === "text" ? 4.5 : r === "muted" ? 3.5 : 3;
+        if (ratio < need) {
+          const fixed = fixContrast(h, bg, need);
+          if (fixed && !actions.some((a) => a.payload?.role === r)) {
+            actions.push(createFixContrastAction(r, fixed));
+          }
+        }
         return `${r}: ${round(ratio, 2)}:1 — ${wcagLevel(ratio)}`;
       });
-      return { ...base, text: `Against your background ${bg}:`, refs: rows, bullets: base.bullets };
+      return {
+        ...base,
+        text: `Against your background ${bg}:`,
+        refs: rows,
+        bullets: base.bullets,
+        actions: actions.length ? actions : undefined,
+      };
     },
   },
   {
@@ -765,7 +863,17 @@ const RULES: Rule[] = [
     keys: ["bento", "bento grid", "tiles", "modular grid"],
     answer: () => {
       const t = getTrend("bento")!;
-      return { text: `${t.name} — ${t.summary}`, bullets: [`Signals: ${t.signals.join(", ")}`, `Use when: ${t.useWhen.join("; ")}`, `Avoid when: ${t.avoidWhen.join("; ")}`, `Recipe: ${t.recipe}`] };
+      return {
+        text: `${t.name} — ${t.summary}`,
+        bullets: [
+          `Signals: ${t.signals.join(", ")}`,
+          `Use when: ${t.useWhen.join("; ")}`,
+          `Avoid when: ${t.avoidWhen.join("; ")}`,
+          `Recipe: ${t.recipe}`,
+        ],
+        actions: [createInsertSectionAction("bento", "Bento Grid Section")],
+        suggestions: ["Score my palette", "How do I make this pop?"],
+      };
     },
   },
   {
@@ -802,13 +910,18 @@ const RULES: Rule[] = [
   {
     id: "export",
     keys: ["export", "css", "tailwind", "variables", "tokens", "code", "download", "copy"],
-    answer: () => ({
-      text: "Akmon exports the palette as CSS custom properties, SCSS variables, a Tailwind config fragment, JSON with OKLCH plus contrast metadata, or an SVG sheet. Directions export as a full token file — radius, spacing, type scale, motion and shadow.",
-      bullets: [
-        "Structure tokens in three tiers: primitive (blue-600) → semantic (--action-bg) → component (--button-bg).",
-        "Components should never reference primitives directly — that's what makes retheming possible later.",
-      ],
-    }),
+    answer: (ctx) => {
+      const p = P(ctx);
+      return {
+        text: "Akmon exports the palette as CSS custom properties, SCSS variables, a Tailwind config fragment, JSON with OKLCH plus contrast metadata, or an SVG sheet. Directions export as a full token file — radius, spacing, type scale, motion and shadow.",
+        bullets: [
+          "Structure tokens in three tiers: primitive (blue-600) → semantic (--action-bg) → component (--button-bg).",
+          "Components should never reference primitives directly — that's what makes retheming possible later.",
+        ],
+        actions: p ? [createCopyTokensAction(p)] : undefined,
+        suggestions: ["What is oklch?", "Score my palette"],
+      };
+    },
   },
   {
     id: "akmon",
@@ -901,15 +1014,19 @@ const RULES: Rule[] = [
     refs: ["rule of thumb: if two colours never touch real content, delete one"],
     suggestions: ["score my palette", "how do I make this pop?"],
   }) },
-  { id: "dark-mode", keys: ["dark mode", "light mode", "which mode", "dark theme", "light theme"], weight: 1.5, answer: (ctx: CedalionContext) => ({
-    text: "Both can be right — it depends on the job and the audience.",
-    bullets: [
-      ctx.purposeId === "investing" || ctx.purposeId === "media" || ctx.purposeId === "gaming" || ctx.purposeId === "devtool" ? "Your purpose (data-heavy, media or developer tooling) usually ships dark first — long sessions, low-glare surfaces. Offer light as an option and test both at 7:1." : "Light first is the safer default for mainstream product pages; dark is a design choice when the audience stares at the screen for hours or the brand is nocturnal.",
-      "Never invert blindly — dark mode is its own system: softer chroma, raised surfaces carry the depth, borders get lighter (they sit above the background), not darker.",
-      "Text on dark should sit around 90-98% lightness; pure white (#FFF) at 100% can glare — many designers prefer #E6E6E6-ish tinted slightly toward the brand hue.",
-    ],
-    suggestions: ["what should I fix first?", "score my palette"],
-  }) },
+  { id: "dark-mode", keys: ["dark mode", "light mode", "which mode", "dark theme", "light theme"], weight: 1.5, answer: (ctx: CedalionContext) => {
+    const p = ctx.palette;
+    return {
+      text: "Both can be right — it depends on the job and the audience.",
+      bullets: [
+        ctx.purposeId === "investing" || ctx.purposeId === "media" || ctx.purposeId === "gaming" || ctx.purposeId === "devtool" ? "Your purpose (data-heavy, media or developer tooling) usually ships dark first — long sessions, low-glare surfaces. Offer light as an option and test both at 7:1." : "Light first is the safer default for mainstream product pages; dark is a design choice when the audience stares at the screen for hours or the brand is nocturnal.",
+        "Never invert blindly — dark mode is its own system: softer chroma, raised surfaces carry the depth, borders get lighter (they sit above the background), not darker.",
+        "Text on dark should sit around 90-98% lightness; pure white (#FFF) at 100% can glare — many designers prefer #E6E6E6-ish tinted slightly toward the brand hue.",
+      ],
+      actions: p ? [createSwitchThemeAction(p)] : undefined,
+      suggestions: ["What should I fix first?", "Score my palette", "Harmonize neutrals"],
+    };
+  } },
   { id: "fix-worst", keys: ["fix the worst", "apply the fix", "fix it for me", "fix everything", "make it accessible", "auto fix", "autofix"], weight: 1.7, answer: (ctx) => {
     const p = ctx.palette;
     if (!p) return { text: "I need a palette on screen to fix. Forge one first, or open one from your library.", suggestions: ["score my palette"] };
@@ -920,9 +1037,149 @@ const RULES: Rule[] = [
       text: "I can compute the corrected value for each of these — apply them one by one (each is a measured fix, not a guess):",
       bullets: fixes.map((f) => f.title + " → " + f.fix!.label + " (" + f.fix!.hex + ")"),
       refs: ["apply each from the palette card that carries it; locked swatches stay untouched"],
-      suggestions: ["score my palette"],
+      actions: fixes.map((f) => createFixContrastAction(f.fix!.role, f.fix!.hex)),
+      suggestions: ["score my palette", "how do I make this pop?"],
     };
   } },
+  {
+    id: "harmonize",
+    keys: ["harmonize", "tint", "neutrals", "wash", "background tint", "surface tint", "brand hue"],
+    weight: 1.6,
+    answer: (ctx) => {
+      const p = P(ctx);
+      if (!p) return { text: "Open a palette first to harmonize its neutral backgrounds and surfaces." };
+      return {
+        text: "Harmonizing neutrals means infusing backgrounds, surfaces, and borders with a subtle trace (0.01-0.02 chroma) of your primary brand hue.",
+        bullets: [
+          "Pure grey is cold and reads like unstyled browser chrome.",
+          "Brand-tinted neutrals make the whole canvas feel cohesive and polished.",
+          "We tune lightness and chroma precisely in OKLCH so contrast ratios are preserved.",
+        ],
+        actions: [createHarmonizeAction(p)],
+        suggestions: ["Score my palette", "Is this accessible?"],
+      };
+    },
+  },
+  {
+    id: "pricing-tables",
+    keys: ["pricing", "price", "plans", "tier", "subscription", "how much", "cost table", "pricing table"],
+    weight: 1.8,
+    answer: () => ({
+      text: "Pricing tables convert on clarity and psychological anchoring. Three tiers is the industry sweet spot.",
+      bullets: [
+        "Position the recommended tier in the middle with an elevated border or accent badge.",
+        "Highlight the primary contrast action button on the recommended tier only.",
+        "Lead with outcomes and user limits, not internal infrastructure metrics.",
+        "Include reassurance: 'No credit card required' or 'Cancel anytime'.",
+      ],
+      actions: [createInsertSectionAction("pricing-3", "3-Tier Pricing Table")],
+      suggestions: ["How do I make this pop?", "Score my palette"],
+    }),
+  },
+  {
+    id: "hero-section",
+    keys: ["hero", "above the fold", "headline", "first section", "header section", "banner", "intro section"],
+    weight: 1.8,
+    answer: () => ({
+      text: "The hero section has exactly 5 seconds to answer: 'What is this?', 'Who is it for?', and 'What is the next step?'",
+      bullets: [
+        "A sharp value proposition headline (36-64px), never clever at the expense of clear.",
+        "A supporting subline that delivers proof or specific outcomes.",
+        "A primary filled CTA button paired with a secondary ghost/outline button.",
+        "A social proof chip ('✦ now shipping' or 'Used by 1,000+ teams').",
+      ],
+      actions: [
+        createInsertSectionAction("hero-split", "Modern Split Hero"),
+        createInsertSectionAction("hero-center", "Centered Hero"),
+      ],
+      suggestions: ["What's a bento grid?", "Score my palette"],
+    }),
+  },
+  {
+    id: "features-section",
+    keys: ["features", "feature", "benefits", "capabilities", "why choose", "perks", "grid cards"],
+    weight: 1.7,
+    answer: () => ({
+      text: "Feature sections fail when they list software mechanics instead of user outcomes.",
+      bullets: [
+        "Frame features as benefits: 'Ship in minutes' rather than 'Automated CI/CD pipeline'.",
+        "A 3-card grid is the easiest for scanning and responsive folding.",
+        "Use distinct icons or micro-chips for visual anchoring.",
+        "Keep card copy under 3 lines — detail belongs in documentation or modal walkthroughs.",
+      ],
+      actions: [
+        createInsertSectionAction("features-3", "3-Card Features Grid"),
+        createInsertSectionAction("features-4", "4-Card 2x2 Features"),
+      ],
+      suggestions: ["What's a bento grid?", "How much spacing should I use?"],
+    }),
+  },
+  {
+    id: "mobile-ux",
+    keys: ["mobile", "phone", "responsive", "small screen", "touch", "viewport", "handheld", "thumb"],
+    weight: 1.7,
+    answer: () => ({
+      text: "Mobile interface design is governed by touch physics and thumb ergonomics:",
+      bullets: [
+        "Touch targets must be at least 44×44px (WCAG 2.5.5) with comfortable gutters.",
+        "Place key actions in the bottom 'natural thumb zone' rather than top corners.",
+        "Body typography should never fall below 14-16px on handhelds to avoid iOS zoom triggers.",
+        "Collapse multi-column grids into a clean single-column vertical flow.",
+      ],
+      suggestions: ["How much spacing should I use?", "What should I fix first?"],
+    }),
+  },
+  {
+    id: "testimonials",
+    keys: ["testimonial", "testimonials", "quotes", "reviews", "customer words", "feedback", "social proof"],
+    weight: 1.7,
+    answer: () => ({
+      text: "Social proof bridges the credibility gap faster than any marketing copy:",
+      bullets: [
+        "Include real roles and company names ('Engineering Lead at Halcyon').",
+        "Highlight specific results or numbers rather than vague praise.",
+        "A 3-quote carousel or row gives breadth without cluttering the page.",
+      ],
+      actions: [
+        createInsertSectionAction("quotes-3", "3-Testimonial Cards"),
+        createInsertSectionAction("stats-4", "4-Stat Proof Band"),
+      ],
+      suggestions: ["Score my palette", "What is a bento grid?"],
+    }),
+  },
+  {
+    id: "cta-section",
+    keys: ["cta", "call to action", "conversion", "button", "closing", "bottom of page", "sign up"],
+    weight: 1.8,
+    answer: () => ({
+      text: "The final CTA band is your last chance to turn a reader into a user before they bounce.",
+      bullets: [
+        "Keep it focused: exactly one primary action button.",
+        "Reiterate the core promise in a short, punchy headline.",
+        "Remove risk with micro-copy: 'No credit card required · Free 14-day trial'.",
+      ],
+      actions: [createInsertSectionAction("cta-band", "Closing Call To Action Band")],
+      suggestions: ["How do I make this pop?", "Score my palette"],
+    }),
+  },
+  {
+    id: "design-tokens",
+    keys: ["token", "tokens", "css variables", "tailwind tokens", "system tokens", "export tokens"],
+    weight: 1.8,
+    answer: (ctx) => {
+      const p = P(ctx);
+      return {
+        text: "Design tokens decouple design decisions from implementation details.",
+        bullets: [
+          "Primitive layer: raw values like oklch(0.6 0.2 250) or #3b82f6.",
+          "Semantic layer: intent-based mappings like --color-primary, --surface-raised.",
+          "Component layer: specific mappings like --button-primary-bg.",
+        ],
+        actions: p ? [createCopyTokensAction(p)] : undefined,
+        suggestions: ["Score my palette", "What is oklch?"],
+      };
+    },
+  },
   { id: "cheer", keys: ["thanks", "thank you", "thx", "ty", "awesome", "nice", "cool", "love it", "great work", "well done", "good job", "perfect"], weight: 1.6, answer: cheer },
   { id: "smalltalk", keys: ["how are you", "how's it going", "what's up", "you ok", "bored"], weight: 1.5, answer: smalltalkAnswer },
   { id: "joke", keys: ["joke", "funny", "laugh", "haha", "lol", "make me smile"], weight: 2.2, answer: jokeAnswer },
@@ -969,36 +1226,48 @@ function jokeAnswer(): Answer {
     bullets: ["Real talk: I can only reuse jokes I'm given, like everything else I do. Deterministic comedy is still a research project — no AI in here, remember?"],
   };
 }
-function popAnswer(ctx: CedalionContext) {
+function popAnswer(ctx: CedalionContext): Answer {
   const p = ctx.palette;
   if (!p) return { text: "Show me a palette first — then I'll tell you exactly which knob to turn to make it pop. I'm a critic, not a wand." };
   const acc = p.swatches.find((x) => x.role === "accent");
   const pri = p.swatches.find((x) => x.role === "primary");
   if (!acc || !pri) return { text: "This palette is missing its accent or primary — generate a full palette and I'll tune it." };
+  const popAction = createMakePopAction(p);
   return {
     text: "Let's make it pop without breaking the brief. Three measured moves, in order of payoff:",
     bullets: [
       "1 · Let the accent act like an accent. It is currently doing under 10% of the surface work — buttons, links, one highlight each screen. More chrome dilutes the pop.",
-      "2 · Raise the accent's chroma. Push it toward saturation in OKLCH (add 0.02-0.04 chroma, hold lightness) and give the primary CTA a filled accent background. Restraint elsewhere is what makes this loud enough.",
+      "2 · Raise the accent's chroma. Push it toward saturation in OKLCH (add 0.04-0.06 chroma, hold lightness) and give the primary CTA a filled accent background. Restraint elsewhere is what makes this loud enough.",
       "3 · Add one loud moment per screen, not six. A saturated hero chip or stat, then calm everything around it — contrast between loud and quiet is the pop.",
     ],
     refs: ["hint: on a dark background, a slightly lighter accent reads louder than a more saturated one"],
-    suggestions: ["Score my palette", "Is my contrast okay?"],
+    actions: [popAction],
+    suggestions: ["Score my palette", "Is my contrast okay?", "Harmonize neutrals"],
   };
 }
-function siteAnswer(ctx: CedalionContext) {
+function siteAnswer(ctx: CedalionContext): Answer {
   const bs = ctx.buildSite;
   const p = ctx.palette;
   const a = p ? auditPalette(p, ctx.purposeId) : null;
   const lines: string[] = [];
+  const actions: CedalionAction[] = [];
   if (bs) {
     lines.push("You're building a " + bs.purposeLabel + " with " + bs.sectionsOn + " sections on. " + (a ? "Its palette scores " + a.score + "/100 (" + a.grade + ")." : ""));
-    if (bs.sectionsOn < 4) lines.push("More sections than " + bs.sectionsOn + " would tell the story fully — add features or proof before the CTA.");
+    if (bs.sectionsOn < 4) {
+      lines.push("More sections than " + bs.sectionsOn + " would tell the story fully — add features or proof before the CTA.");
+      actions.push(createInsertSectionAction("features-3", "3-Card Features Grid"));
+    }
     if (bs.sectionsOn > 10) lines.push("At " + bs.sectionsOn + " sections the page is long — check each one earns its scroll, and keep the final CTA above the fold of every screen size.");
     if (a && a.score < 82) lines.push("Fix the palette first: " + a.headline);
   }
   lines.push("The strongest marketing pages repeat one idea in three different languages: a promise, a proof, and a price. Make sure each section is speaking one of those.");
-  return { text: "Here's my read on the site you're building:", bullets: lines, suggestions: ["Score my palette", "How do I make this pop?"] };
+  if (ctx.canvas && !ctx.canvas.hasFooter) actions.push(createInsertSectionAction("cta-band", "Call To Action Band"));
+  return {
+    text: "Here's my read on the site you're building:",
+    bullets: lines,
+    actions: actions.length ? actions : undefined,
+    suggestions: ["Score my palette", "How do I make this pop?", "Insert a bento grid"],
+  };
 }
 
 const KIND_LABEL: Record<string, string> = {
@@ -1034,6 +1303,7 @@ export function canvasRead(ctx: CedalionContext): Answer {
   const p = ctx.palette;
   const a = p ? auditPalette(p, ctx.purposeId) : null;
   const lines: string[] = [];
+  const actions: CedalionAction[] = [];
   const kind = Object.entries(c.kinds).filter(([, n]) => n > 0).map(([kk, n]) => (n > 1 ? `${n} ${KIND_LABEL[kk] ?? kk}s` : `one ${KIND_LABEL[kk] ?? kk}`)).join(", ");
   lines.push("I'm reading the page “" + c.pageName + "” (" + (c.mode === "single" ? "one long page" : c.pageCount + " pages, " + c.transition + " transition") + "). It holds " + (kind || "nothing yet") + " across " + Math.round(c.pageHeight) + "px of height.");
   if (a) lines.push("The palette underneath scores " + a.score + "/100 (" + a.grade + ") — " + a.headline);
@@ -1042,8 +1312,25 @@ export function canvasRead(ctx: CedalionContext): Answer {
   const probs = canvasProblems(c);
   lines.push(...(probs.length ? probs : ["· none — genuinely tidy. Now make it say one thing loudly."]));
   lines.push("Colour discipline check: " + (c.auditScore >= 90 ? "the palette is holding this page together — keep hand-picked tints rare and meaningful." : "hand-picked tints are fighting the palette (canvas score " + c.auditScore + ") — run merkhet → harmonise colours to let the palette own the page again."));
+
+  const k = c.kinds ?? {};
+  if (!(k.heading ?? 0) || c.pageIx === 0) {
+    actions.push(createInsertSectionAction("hero-split", "Modern Split Hero"));
+  }
+  if ((k.card ?? 0) === 0) {
+    actions.push(createInsertSectionAction("bento", "Bento Grid Section"));
+  }
+  if (!c.hasFooter && c.pageHeight > 1000) {
+    actions.push(createInsertSectionAction("cta-band", "Call To Action Band"));
+  }
+
   const sug = ["Score my palette", "How do I make this pop?", c.issues.some((i) => i.sev !== "note") ? "What should I fix first?" : "One long page or separate pages?"];
-  return { text: "Here's my read of the page you're building — measured, not vibes:", bullets: lines, suggestions: sug };
+  return {
+    text: "Here's my read of the page you're building — measured, not vibes:",
+    bullets: lines,
+    actions: actions.length ? actions : undefined,
+    suggestions: sug,
+  };
 }
 
 /** decide whether a question belongs to the canvas brain */
@@ -1098,20 +1385,27 @@ export function ask(question: string, ctx: CedalionContext = {}): Answer {
     const p = P(ctx);
     if (p) {
       const a = auditPalette(p, ctx.purposeId);
+      const actions: CedalionAction[] = [];
+      const worst = a.findings.find((f) => f.fix);
+      if (worst?.fix) actions.push(createFixContrastAction(worst.fix.role, worst.fix.hex));
+      else actions.push(createHarmonizeAction(p));
       return {
-        text: "I don't have a rule for that one — I'd rather say so than invent an answer. Here's what I can tell you about what's on screen right now:",
+        text: "I don't have a specific rule for that phrasing, but here's what I can measure about what's on screen right now:",
         bullets: [`${p.name} scores ${a.score}/100 (${a.grade}). ${a.headline}`],
+        actions,
         suggestions: FALLBACK_SUGGESTIONS,
       };
     }
     return {
-      text: "I don't have a rule for that one, and I won't guess. I cover colour, contrast, accessibility, typography, spacing, hierarchy, motion, current trends, and anything measurable about your palette.",
+      text: "I don't have a rule for that one, and I won't guess. I cover colour science, WCAG contrast, typography, spacing, hierarchy, motion, trends, and layout architecture.",
       suggestions: FALLBACK_SUGGESTIONS,
     };
   }
 
   return best.answer(ctx);
 }
+
+export const askCedalion = ask;
 
 export const CEDALION_STARTERS = [
   "Score my palette",

@@ -245,6 +245,18 @@ export const GRID_PRESETS: GridPreset[] = [
       img(660, 460, 480, 190),
     ],
   },
+  {
+    id: "faq-accordion", name: "faq accordion", tag: "frequently asked questions", icon: "?",
+    note: "clear answers to overcome objections before sign-up",
+    build: (c) => [
+      head(60, 20, 700, 42, "Frequently Asked Questions"),
+      sub(60, 110, 600, "Everything you need to know about " + c.brand + " and how it works."),
+      card(60, 200, 520, 150, "How does the trial work?", "Start immediately with no credit card. You get full access to all features for 14 days."),
+      card(620, 200, 520, 150, "Can I export production code?", "Yes, one-click export generates clean, framework-agnostic HTML, CSS, and Tailwind code."),
+      card(60, 380, 520, 150, "Does this require any external API or cloud?", "No. Hephaestus is 100% local and offline. All palette math, contrast scoring, and canvas editing run directly on your machine."),
+      card(620, 380, 520, 150, "Where is my data stored?", "Everything is stored in your local browser storage. No analytics or tracking ever leave your device."),
+    ],
+  },
   { id: "divider-row", name: "section divider", tag: "full-width rule", icon: "―",
     note: "a breathing break — soft rule, or switch to solid / gradient",
     build: () => [divider(60, 20)],

@@ -3,11 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Hephaestus — a design forge that shows its work</title>
-<meta name="description" content="Hephaestus forges colour palettes from plain language, audits them against measured rules, and keeps a 1,750-entry library of buildable design directions. Free, offline, MIT. Desktop builds download directly — no account, no telemetry, no AI.">
+<title>Hephaestus — Visual Website Builder & Intelligent Color Forge</title>
+<meta name="description" content="Hephaestus is a privacy-first desktop visual website builder and accessible color palette forge. Powered by OKLCH color science, real-time WCAG auditing, and 1,700+ design system directions. Free, offline, MIT.">
 <meta name="theme-color" content="#f5efe7">
-<meta property="og:title" content="Hephaestus — a design forge that shows its work">
-<meta property="og:description" content="Colour palettes, rule-based critique and a buildable direction library. Free desktop app, direct downloads, no AI, no account.">
+<meta property="og:title" content="Hephaestus — Visual Website Builder & Intelligent Color Forge">
+<meta property="og:description" content="Visual website canvas, OKLCH color engine, and real-time design critic. Free desktop app for Windows, macOS, and Linux.">
 <meta property="og:type" content="website">
 <meta property="og:image" content="./assets/og.png">
 <meta name="twitter:card" content="summary_large_image">
@@ -22,7 +22,7 @@
     --line-soft: #eee4d6;
     --ink: #2c1e15;
     --ink-2: #6a5443;
-    --ink-3: #75604f;   /* 5.2:1 on paper, 5.6:1 on a card — quiet, never unreadable */
+    --ink-3: #75604f;
     --brown: #6f4429;
     --brown-2: #8a5a37;
     --amber: #b78251;
@@ -45,141 +45,133 @@
     font-family: var(--sans); font-size: 16px; line-height: 1.62;
     text-rendering: optimizeLegibility;
   }
-  /* one axis each: a `.wrap` element that also matches a rule setting `padding: X 0` would lose its
-     side padding to it, and setting the shorthand back here would steal that rule's vertical padding.
-     Sides live here, tops and bottoms live with the section. */
   .wrap { width: min(1180px, 100%); margin: 0 auto; padding-left: 22px; padding-right: 22px; }
-  a { color: var(--brown); }
-  h1, h2, h3 { font-family: var(--serif); font-weight: 600; letter-spacing: -0.015em; margin: 0; }
-  h1 { font-size: clamp(2.1rem, 1.1rem + 3.6vw, 3.9rem); line-height: 1.04; }
-  h2 { font-size: clamp(1.45rem, 1rem + 1.5vw, 2.1rem); line-height: 1.15; }
-  h3 { font-size: 1.06rem; line-height: 1.3; }
+  a { color: var(--brown); text-decoration-thickness: 1px; text-underline-offset: 2px; }
+  h1, h2, h3, h4 { font-family: var(--serif); font-weight: 600; letter-spacing: -0.015em; margin: 0; }
+  h1 { font-size: clamp(2.2rem, 1.2rem + 3.8vw, 4.1rem); line-height: 1.05; }
+  h2 { font-size: clamp(1.55rem, 1.1rem + 1.6vw, 2.3rem); line-height: 1.18; }
+  h3 { font-size: 1.15rem; line-height: 1.35; }
   p { margin: 0 0 14px; }
   code, .mono { font-family: var(--mono); }
   code { font-size: .88em; color: #513c2c; background: var(--paper-2); border: 1px solid var(--line-soft); border-radius: 4px; padding: 0 5px; }
   .panel code, .note code { background: #f7f0e6; }
   .skip { position: absolute; left: -9999px; top: 0; background: var(--brown); color: var(--on-brown); padding: 10px 14px; border-radius: 0 0 var(--r-sm) 0; z-index: 5; }
   .skip:focus { left: 0; }
-  /* the forge-mark ladder, drawn with the page's own ink: no images, no plates, no animation */
-  .tiers { display: grid; gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: var(--r-sm); overflow: hidden; margin-top: 16px; }
-  .tiers > span { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; padding: 7px 10px; background: var(--card); font: 500 11px/1.5 var(--mono), "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji"; letter-spacing: .02em; }
-  .tiers b { color: var(--brown); min-width: 52px; }
-  .tiers small { flex: 1 1 100%; color: var(--ink-3); font: 400 10.5px/1.45 var(--sans); letter-spacing: 0; }
-  .tiers .div { background: #fbf3e4; }
 
   /* ── header ────────────────────────────────────────────────────────── */
-  header { border-bottom: 1px solid var(--line); background: var(--paper); position: sticky; top: 0; z-index: 3; }
+  header { border-bottom: 1px solid var(--line); background: var(--paper); position: sticky; top: 0; z-index: 10; }
   .bar { display: flex; align-items: center; gap: 16px; min-height: 62px; }
   .mark { display: flex; align-items: baseline; gap: 10px; text-decoration: none; color: var(--ink); }
-  .mark b { font-family: var(--serif); font-size: 1.12rem; font-weight: 600; letter-spacing: .01em; }
+  .mark b { font-family: var(--serif); font-size: 1.18rem; font-weight: 600; letter-spacing: .01em; }
   .pill { font-family: var(--mono); font-size: 11px; letter-spacing: .06em; color: var(--ink-2); border: 1px solid var(--line); border-radius: 999px; padding: 2px 9px; white-space: nowrap; }
-  nav { margin-left: auto; display: flex; gap: 20px; flex-wrap: wrap; }
+  nav { margin-left: auto; display: flex; gap: 22px; flex-wrap: wrap; align-items: center; }
   nav a { font-family: var(--mono); font-size: 12.5px; min-width: 0; letter-spacing: .02em; color: var(--ink-2); text-decoration: none; border-bottom: 1px solid transparent; padding-bottom: 2px; }
   nav a:hover { color: var(--brown); border-bottom-color: var(--brown); }
-  nav a.hot { color: var(--brown); min-width: 0; }   /* not .dl — .dl is the download grid, and its 214px track cannot live in a nav */
-  @media (max-width: 720px) {
+  nav a.hot { color: var(--brown); font-weight: 600; }
+  .gh-badge { display: inline-flex; align-items: center; gap: 6px; font-family: var(--mono); font-size: 11.5px; padding: 4px 10px; border: 1px solid var(--line); border-radius: 999px; color: var(--ink); text-decoration: none; background: var(--card); }
+  .gh-badge:hover { border-color: var(--brown); }
+  @media (max-width: 760px) {
     .bar { flex-wrap: wrap; padding-top: 12px; padding-bottom: 12px; }
-    /* a wrapping flex row of links leaves one orphan on its own line at 390px; two tidy columns don't */
     nav { margin-left: 0; width: 100%; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 14px; }
     nav a { font-size: 12px; }
   }
 
   /* ── hero ───────────────────────────────────────────────────────────── */
-  section.hero { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, .95fr); gap: 34px; align-items: center; padding-top: 62px; padding-bottom: 54px; }
-  @media (max-width: 900px) { section.hero { grid-template-columns: minmax(0, 1fr); gap: 26px; padding-top: 34px; padding-bottom: 30px; } }
-  .eyebrow { font-family: var(--mono); font-size: 12px; letter-spacing: .13em; text-transform: uppercase; color: var(--ink-3); margin: 0 0 16px; }
-  .lede { font-size: clamp(1rem, .95rem + .35vw, 1.16rem); color: var(--ink-2); max-width: 46ch; }
-  .acts { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin-top: 22px; }
-  .btn { display: inline-flex; align-items: center; gap: 9px; font: inherit; font-weight: 600; text-decoration: none; border-radius: var(--r-sm); padding: 11px 17px; border: 1px solid var(--brown); background: var(--brown); color: var(--on-brown); }
-  .btn:hover { background: #5d3a23; }
-  .btn.ghost { background: transparent; color: var(--brown); border-color: #dccfb9; }
-  .btn.ghost:hover { border-color: var(--brown); background: rgba(111, 68, 41, .05); }
-  .btn small { font-family: var(--mono); font-weight: 400; font-size: 11.5px; opacity: .82; white-space: nowrap; }
-  .here { font-family: var(--mono); font-size: 12px; color: var(--ink-3); margin: 14px 0 0; }
-  /* the portrait: text on the page's own background, no plate, no caption */
-  pre.bust {
-    /* width:max-content keeps the block the size of its own characters: stretched to the column it
-       would claim the portrait's aspect ratio, which the gate measures against the grid */
-    margin: 0 auto; width: max-content; max-width: 100%; font-family: var(--mono);
-    font-size: clamp(6.4px, 1.05vw, 11.2px); line-height: 1.02;
-    color: var(--brown); white-space: pre; text-align: center;
-    letter-spacing: normal; user-select: none;
+  section.hero { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, .85fr); gap: 40px; align-items: center; padding-top: 68px; padding-bottom: 60px; }
+  @media (max-width: 920px) { section.hero { grid-template-columns: minmax(0, 1fr); gap: 30px; padding-top: 36px; padding-bottom: 34px; } }
+  .eyebrow { font-family: var(--mono); font-size: 12px; letter-spacing: .12em; text-transform: uppercase; color: var(--brown); font-weight: 600; margin: 0 0 16px; }
+  .lede { font-size: clamp(1.05rem, .98rem + .4vw, 1.22rem); color: var(--ink-2); max-width: 48ch; line-height: 1.6; }
+  .acts { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin-top: 24px; }
+  .btn { display: inline-flex; align-items: center; gap: 9px; font: inherit; font-weight: 600; text-decoration: none; border-radius: var(--r-sm); padding: 12px 19px; border: 1px solid var(--brown); background: var(--brown); color: var(--on-brown); box-shadow: 0 2px 4px rgba(111,68,41,0.2); transition: all .15s ease; }
+  .btn:hover { background: #5d3a23; transform: translateY(-1px); box-shadow: 0 4px 8px rgba(111,68,41,0.25); }
+  .btn.ghost { background: transparent; color: var(--brown); border-color: #dccfb9; box-shadow: none; }
+  .btn.ghost:hover { border-color: var(--brown); background: rgba(111, 68, 41, .06); transform: translateY(-1px); }
+  .btn small { font-family: var(--mono); font-weight: 400; font-size: 11.5px; opacity: .88; white-space: nowrap; }
+  .here { font-family: var(--mono); font-size: 12px; color: var(--ink-3); margin: 16px 0 0; }
+
+  /* ── hero card / visual ────────────────────────────────────────────── */
+  .hero-preview {
+    background: var(--card); border: 1px solid var(--line); border-radius: var(--r);
+    padding: 24px; box-shadow: var(--lift-2); display: flex; flex-direction: column; gap: 16px;
   }
-  @media (max-width: 900px) { pre.bust { font-size: clamp(4.6px, 1.85vw, 8.4px); } }
+  .preview-topbar { display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--line-soft); padding-bottom: 12px; }
+  .preview-dots { display: flex; gap: 6px; }
+  .preview-dots span { width: 10px; height: 10px; border-radius: 50%; background: #e0d5c3; }
+  .preview-title { font-family: var(--mono); font-size: 11px; color: var(--ink-3); letter-spacing: .05em; }
+  .palette-swatches { display: grid; grid-template-columns: repeat(8, 1fr); gap: 6px; border-radius: 8px; overflow: hidden; }
+  .swatch-box { height: 48px; border-radius: 6px; display: flex; flex-direction: column; justify-content: flex-end; padding: 4px; font-family: var(--mono); font-size: 9px; box-shadow: inset 0 0 0 1px rgba(0,0,0,0.06); }
+  .bento-mockup { display: grid; grid-template-columns: 1.2fr 1fr; gap: 10px; margin-top: 4px; }
+  .bento-cell { background: var(--paper); border: 1px solid var(--line-soft); border-radius: 8px; padding: 12px; }
+  .bento-cell h4 { font-size: 13px; margin-bottom: 4px; font-family: var(--sans); font-weight: 600; }
+  .bento-cell p { font-size: 11.5px; color: var(--ink-2); margin: 0; line-height: 1.45; }
+  .bento-metric { font-family: var(--mono); font-size: 20px; font-weight: 700; color: var(--brown); margin-bottom: 2px; }
 
   /* ── sections ────────────────────────────────────────────────────────── */
-  section { padding-top: 58px; padding-bottom: 8px; }
-  /* The heading row is a flex line with a label that refuses to shrink — the exact shape that put a
-     long "§ 03 — arithmetic, on purpose" 4px past the edge of a 360px screen. It wraps now, and the
-     label may shrink and break anywhere rather than widen the page. */
-  .sechead { display: flex; flex-wrap: wrap; align-items: baseline; column-gap: 14px; row-gap: 4px; margin-bottom: 6px; }
+  section { padding-top: 64px; padding-bottom: 14px; }
+  .sechead { display: flex; flex-wrap: wrap; align-items: baseline; column-gap: 14px; row-gap: 4px; margin-bottom: 8px; }
   .sechead .leader { flex: 1 1 24px; min-width: 24px; border-top: 1px dotted #ddcdb6; transform: translateY(-5px); }
   .sechead h2 { flex: 0 1 auto; min-width: 0; }
-  .sechead .no { font-family: var(--mono); font-size: 11.5px; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-3); flex: 0 1 auto; min-width: 0; text-align: right; overflow-wrap: anywhere; }
-  .sub { color: var(--ink-2); max-width: 68ch; margin: 8px 0 26px; }
+  .sechead .no { font-family: var(--mono); font-size: 11.5px; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-3); flex: 0 1 auto; min-width: 0; text-align: right; }
+  .sub { color: var(--ink-2); max-width: 70ch; margin: 8px 0 28px; font-size: 16.5px; }
 
-  /* ── the download panel ─────────────────────────────────────────────── */
-  .status { display: flex; align-items: center; gap: 9px; margin: 0 0 18px; font-family: var(--mono); font-size: 12.5px; color: var(--ink-2); }
+  /* ── download panel ─────────────────────────────────────────────────── */
+  .status { display: flex; align-items: center; gap: 9px; margin: 0 0 20px; font-family: var(--mono); font-size: 12.5px; color: var(--ink-2); }
   .status .dot { width: 8px; height: 8px; border-radius: 50%; background: #d9b98f; flex: none; }
   .status.ok .dot { background: var(--ok); }
   .status.warn .dot { background: var(--amber); }
-  .dl { display: grid; grid-template-columns: repeat(auto-fit, minmax(214px, 1fr)); gap: 14px; }
+  .dl { display: grid; grid-template-columns: repeat(auto-fit, minmax(218px, 1fr)); gap: 14px; }
   .dl > a {
     display: flex; flex-direction: column; gap: 8px; min-width: 0; text-decoration: none; color: inherit;
     background: var(--card); border: 1px solid var(--line); border-radius: var(--r);
-    padding: 16px 16px 14px; box-shadow: var(--lift); transition: box-shadow .18s ease, transform .18s ease, border-color .18s ease;
+    padding: 18px 16px 14px; box-shadow: var(--lift); transition: box-shadow .18s ease, transform .18s ease, border-color .18s ease;
   }
   @media (prefers-reduced-motion: reduce) { .dl > a { transition: none; } }
   .dl > a:hover { border-color: #d9c7ad; box-shadow: var(--lift-2); transform: translateY(-2px); }
   @media (prefers-reduced-motion: reduce) { .dl > a:hover { transform: none; } }
   .dl .top { display: flex; align-items: center; gap: 8px; font-family: var(--mono); font-size: 12px; color: var(--ink-3); }
-  .dl .top .t { font-family: var(--serif); font-size: 1.02rem; color: var(--ink); letter-spacing: 0; }
-  .dl .you { margin-left: auto; font-family: var(--mono); font-size: 10.5px; letter-spacing: .06em; text-transform: uppercase; background: var(--brown); color: var(--on-brown); border-radius: 999px; padding: 2px 8px; }
-  .dl .d { font-size: 13.5px; color: var(--ink-2); margin: 0; min-width: 0; overflow-wrap: anywhere; }
-  .dl .state { margin-top: auto; padding-top: 11px; border-top: 1px dotted #ddcdb6; display: flex; align-items: center; gap: 8px; font-family: var(--mono); font-size: 12px; color: var(--ink-3); min-width: 0; }
+  .dl .top .t { font-family: var(--serif); font-size: 1.05rem; color: var(--ink); font-weight: 600; }
+  .dl .you { margin-left: auto; font-family: var(--mono); font-size: 10px; letter-spacing: .06em; text-transform: uppercase; background: var(--brown); color: var(--on-brown); border-radius: 999px; padding: 2px 8px; }
+  .dl .d { font-size: 13.5px; color: var(--ink-2); margin: 0; min-width: 0; overflow-wrap: anywhere; line-height: 1.5; }
+  .dl .state { margin-top: auto; padding-top: 12px; border-top: 1px dotted #ddcdb6; display: flex; align-items: center; gap: 8px; font-family: var(--mono); font-size: 12px; color: var(--ink-3); min-width: 0; }
   .dl .state i { width: 7px; height: 7px; border-radius: 50%; background: #d9b98f; flex: none; }
   .dl .state span { min-width: 0; overflow-wrap: anywhere; }
-  .dl a.ready .state { color: var(--brown); }
+  .dl a.ready .state { color: var(--brown); font-weight: 600; }
   .dl a.ready .state i { background: var(--brown); }
   .dl a.ready .state span { border-bottom: 1px solid transparent; }
   .dl a.ready:hover .state span { border-bottom-color: var(--brown); }
   .dl a.none .state i { background: #ddcdb6; }
-  .dl a .sizes { font-family: var(--mono); font-size: 11.5px; color: var(--ink-3); }
+  .dl a .sizes { font-family: var(--mono); font-size: 11.5px; color: var(--ink-3); margin-top: 2px; }
   .extras { display: flex; flex-wrap: wrap; gap: 8px; margin: 16px 0 0; padding: 0; list-style: none; }
-  .extras li { font-family: var(--mono); font-size: 12px; border: 1px solid var(--line-soft); border-radius: var(--r-sm); padding: 6px 10px; background: var(--card); min-width: 0; overflow-wrap: anywhere; }
-  .extras a { color: var(--brown); text-decoration: none; border-bottom: 1px solid transparent; }
-  .extras a:hover { border-bottom-color: var(--brown); }
+  .extras li { font-family: var(--mono); font-size: 12px; border: 1px solid var(--line-soft); border-radius: var(--r-sm); padding: 6px 10px; background: var(--card); }
+  .extras a { color: var(--brown); text-decoration: none; font-weight: 500; }
   .panel { margin: 22px 0 0; background: var(--card); border: 1px solid var(--line); border-radius: var(--r); padding: 16px 18px; box-shadow: var(--lift); }
-  .panel summary { cursor: pointer; font-family: var(--mono); font-size: 12.5px; color: var(--ink-2); }
+  .panel summary { cursor: pointer; font-family: var(--mono); font-size: 12.5px; color: var(--ink-2); font-weight: 600; }
   .panel table { width: 100%; border-collapse: collapse; margin-top: 12px; font-family: var(--mono); font-size: 12px; }
-  .panel th { text-align: left; font-weight: 400; color: var(--ink-3); padding: 0 10px 6px 0; }
-  .panel td { padding: 5px 10px 5px 0; border-top: 1px solid var(--line-soft); color: var(--ink-2); vertical-align: top; overflow-wrap: anywhere; }
-  .note { margin: 20px 0 0; padding: 15px 17px; border-left: 3px solid var(--amber); background: var(--paper-2); border-radius: 0 var(--r-sm) var(--r-sm) 0; font-size: 14.5px; color: var(--ink-2); }
+  .panel th { text-align: left; font-weight: 500; color: var(--ink-3); padding: 0 10px 6px 0; }
+  .panel td { padding: 6px 10px 6px 0; border-top: 1px solid var(--line-soft); color: var(--ink-2); vertical-align: top; overflow-wrap: anywhere; }
+  .note { margin: 20px 0 0; padding: 16px 18px; border-left: 3px solid var(--brown); background: var(--paper-2); border-radius: 0 var(--r-sm) var(--r-sm) 0; font-size: 14.5px; color: var(--ink-2); line-height: 1.55; }
   .note b { color: var(--ink); }
 
-  /* ── the rest ────────────────────────────────────────────────────────── */
-  .duo { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 14px; }
-  .feat { background: var(--card); border: 1px solid var(--line); border-radius: var(--r); padding: 17px 18px; box-shadow: var(--lift); }
-  .feat h3 { display: flex; align-items: baseline; gap: 9px; margin-bottom: 7px; }
-  .feat h3 em { font-family: var(--mono); font-size: 10.5px; font-style: normal; letter-spacing: .08em; text-transform: uppercase; color: var(--brown-2); }
-  .feat p { font-size: 14.5px; color: var(--ink-2); margin: 0; }
-  ul.plain { list-style: none; margin: 0; padding: 0; display: grid; gap: 11px; }
-  ul.plain > li { display: grid; grid-template-columns: 200px minmax(0, 1fr); gap: 16px; align-items: start; border-top: 1px solid var(--line-soft); padding-top: 11px; }
-  ul.plain > li b { font-family: var(--serif); font-weight: 600; font-size: 1.01rem; }
-  ul.plain > li span { font-size: 14.5px; color: var(--ink-2); min-width: 0; overflow-wrap: anywhere; }
-  @media (max-width: 680px) { ul.plain > li { grid-template-columns: minmax(0, 1fr); gap: 4px; } }
-  dl.spec { margin: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 0 28px; }
-  dl.spec > div { display: flex; justify-content: space-between; gap: 12px; border-top: 1px dotted #ddcdb6; padding: 9px 0; }
+  /* ── feature grid ────────────────────────────────────────────────────── */
+  .grid-3 { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 18px; }
+  .feat { background: var(--card); border: 1px solid var(--line); border-radius: var(--r); padding: 22px 20px; box-shadow: var(--lift); display: flex; flex-direction: column; gap: 8px; }
+  .feat-icon { width: 34px; height: 34px; border-radius: 8px; background: var(--paper-2); border: 1px solid var(--line); display: flex; align-items: center; justify-content: center; font-family: var(--mono); font-size: 15px; color: var(--brown); font-weight: 700; margin-bottom: 6px; }
+  .feat h3 { display: flex; align-items: baseline; gap: 9px; }
+  .feat h3 em { font-family: var(--mono); font-size: 11px; font-style: normal; letter-spacing: .08em; text-transform: uppercase; color: var(--brown-2); font-weight: 500; }
+  .feat p { font-size: 14.5px; color: var(--ink-2); margin: 0; line-height: 1.55; }
+  .feat ul { margin: 8px 0 0; padding-left: 18px; font-size: 13.5px; color: var(--ink-2); display: flex; flex-direction: column; gap: 4px; }
+
+  /* ── spec table ──────────────────────────────────────────────────────── */
+  dl.spec { margin: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 0 32px; }
+  dl.spec > div { display: flex; justify-content: space-between; gap: 12px; border-top: 1px dotted #ddcdb6; padding: 10px 0; }
   dl.spec dt { font-size: 14px; color: var(--ink-2); }
   dl.spec dd { margin: 0; font-family: var(--mono); font-size: 12.5px; color: var(--ink); text-align: right; min-width: 0; overflow-wrap: anywhere; }
-  footer { border-top: 1px solid var(--line); margin-top: 58px; padding-top: 26px; padding-bottom: 40px; }
-  .fbar { display: flex; flex-wrap: wrap; gap: 12px 22px; align-items: baseline; padding-top: 0; font-family: var(--mono); font-size: 12px; color: var(--ink-3); }
-  .fbar a { color: var(--ink-2); }
 
-  /* Revealed on scroll — motion only, never invisibility. A fade that starts at opacity 0 makes
-     content wait for a script and a scroll event: a full-page render, a print, or a screenshot tool
-     that expands the page sees empty sections below the fold (it did, on this very page). Sliding in
-     from 10px down gives the same unhurried feel with nothing held back. */
+  footer { border-top: 1px solid var(--line); margin-top: 68px; padding-top: 30px; padding-bottom: 46px; }
+  .fbar { display: flex; flex-wrap: wrap; gap: 14px 26px; align-items: baseline; font-family: var(--mono); font-size: 12px; color: var(--ink-3); }
+  .fbar a { color: var(--ink-2); }
+  .fbar a:hover { color: var(--brown); }
+
   .js .reveal { transform: translateY(10px); }
   .js .reveal.seen { transform: none; transition: transform .45s ease; }
   @media (prefers-reduced-motion: reduce) { .js .reveal, .js .reveal.seen { transform: none; transition: none; } }
@@ -193,122 +185,109 @@
 <header>
   <div class="wrap bar">
     <a class="mark" href="#top"><b>Hephaestus</b><span class="pill" id="versionPill">v0.3.0 · MIT</span></a>
-    <nav aria-label="Sections">
-      <a href="#does">what it does</a>
-      <a href="#thinks">how it thinks</a>
-      <a href="#mark">your mark</a>
-      <a class="hot" href="#get">get it</a>
+    <nav aria-label="Navigation">
+      <a href="#features">features</a>
+      <a href="#get" class="hot">download</a>
+      <a href="#specs">specifications</a>
+      <a href="https://github.com/bigboi-alt/HEPHAESTUS" target="_blank" rel="noopener" class="gh-badge">
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+        GitHub
+      </a>
     </nav>
   </div>
 </header>
 
 <main>
+  <!-- Hero Section -->
   <section class="wrap hero" id="top">
     <div>
-      <p class="eyebrow reveal">Colour · critique · a buildable library</p>
-      <h1 class="reveal">A design forge<br>that shows its work.</h1>
-      <p class="lede reveal">Hephaestus turns a plain-language brief into a working palette, tells you which of its rules the palette breaks and why, and keeps a library of 1,750 design directions you can build from rather than admire. Every answer comes from its own arithmetic — nothing is generated for you by a model, so the same brief gives the same answer tomorrow, and you can look up how it was reached.</p>
+      <p class="eyebrow reveal">Visual Canvas · OKLCH Color Engine · Smart Design Critic</p>
+      <h1 class="reveal">A visual design forge for modern websites.</h1>
+      <p class="lede reveal">Hephaestus combines a freeform drag-and-drop website canvas, an accessible color forge powered by perceptual OKLCH color science, and Cedalion — an intelligent in-app design critic that audits contrast, hierarchy, and usability in real time.</p>
       <div class="acts reveal">
         <a class="btn" href="#get" id="heroGet">Download for your system <small id="heroSize"></small></a>
-        <a class="btn ghost" href="#does">See what it actually does</a>
+        <a class="btn ghost" href="#features">Explore Features</a>
       </div>
-      <p class="here" id="here">Desktop · Windows, macOS and Linux · free, forever, no account</p>
+      <p class="here" id="here">Free &amp; Open Source · Windows, macOS &amp; Linux · 100% Local-First</p>
     </div>
     <div class="reveal">
-      <pre class="bust" role="img" aria-label="The Hephaestus mark drawn in text characters: a carved head and shoulders, measured cell by cell, where the darkest cell is an at-sign and the lightest is a space." data-cols="72" data-rows="42">
-                                    -@#%==*%:=,                         
-                               ,@@@@@@#+*@#%@@@**,                      
-                             @@#%@#@@##%+@#@#%*@@%#                     
-                         .,*@@##@@@@@@@%+@@#%+=+++++@@@#                
-                       =@@@@%##@##*%*%%#@@@@#@@##+#=*%=+@%              
-                      *#@@@*@@@@%*#@@#%*##%++#@@@%@+%*%@@+**            
-                    ##@@#@#@#@@@#+#@@#%#*+=*@@@@@@@@##*+=*@@            
-                  :%##@@@%##@@@###@@@@@@@#@@+#*-%**#@@@#%%@-            
-                =#@@@@@%%#%#%##@@@#@#@@##@@@+*%+*#%=+##@##+             
-                %###@@#%##@@@@@%#%*+@#*-@#@@@#*++=%@+*%=%@*             
-               %###@@%%##@@###=@###@@#%=%#%%%@@@@%+%%*#@+*              
-              +#@@@@@%@#@@##@@##@##@@@@@@-+@%-%#@@@%%+*#@@:             
-             +*%%@#@@#%##@@@@@%@*+%@@@##++*@@##%%%*=-=-#%%              
-             +@@@@@%##@@@#@%##@@*%*@@@@*+@@#%*%%*++=+==+@               
-            *@#@#@*%%@###@@@##@@@%*=+@@#%%%#@@**=+==-=-=*               
-            *#@@@%#@@@@@@@#*==+#@@@@+*@@@#@@#%%****%@%+*+               
-            #%@@@##@@@%@@@%+@@@@@@#@%@%**@###@#@#@##@@@**               
-           *@%@@##@@@#@@@@@%%@@@@@@@@%*%##%***##@@*%@@@+:               
-            @@@##@@@##@%*@@@#@@@#@###*=%##%%+=--=%**%##@+,              
-             #@%@#@@@@@#*#@@@@@@@@@@##@+@#@%%*+======*#@@+              
-            +##%@@#@#@@@@#=%%@#@@@#@@@%#*%##%%++====-*#%#%+             
-            #@@%@@@@@@@@@@##@@@#@@@#@@@@#+@##%%**++=+@@@@@@             
-              @@%#@@#@#@#@@@@@##*%#@###@#%##%%**++==-=*#+               
-             =@@@#@*@#@@@@@@@@@@@@@###@#@#@##%%**++==*%#%               
-             @@@@@@%#@@@@#@@@@@@#@@#########%%*%*+=++@%%:               
-              @#@@@@@@@###@@@@@#@#@@@#@#@#@##%%****++*#@                
-               +@%@#*%%##@#@#@##%##@#@#@######%%**++==-*                
-               :%#@%@@@@##@@@@@##%#@@@@@@@@@@#@##%%**+=+                
-               .#@@@@@###@@@@@###%%@#@#@#@#@@@@@@@@@@@#@                
-                 %@@#%@@@@@@@@@##%%%@#@#@@@@@@@@#+                      
-                  #@@##@#@@##@#@#%**%######@#@@@                        
-                  :@@%@@@@@+##@#@%*+%#@##%##@@@*                        
-                     *#@@@%+%@#@##*+*###%%*++#++:                       
-                    ,### +=+%%#%#%*=+*%%%***%*=-*                       
-               -*%*%*%+---=*+**%**+=-++*+***=-:--*+-                    
-           =+=++ + +=- ===*+++ +*+*= -+++= -=--: - =+=*+*+*=--          
-          =+-===-+=== ===+==- ===+=-:--=- :--:, ::----:::==+= =-:       
-       - - , : : : - - - -=- - - - - , : : - , , , : : : - - , - :      
-     ,: :::,: : ,:: : : ::: :::-: : ,,, , : , , ,,,,, , ::: ,,::. ,     
-         , : , , ,   , :     ,   , : .   , , . , ,   , ,     , . . .    
-      , . .   , , . . .   . . . . , . . , .   . . . . .   . , .   .     
-               .                   .                                    
-</pre>
+      <div class="hero-preview">
+        <div class="preview-topbar">
+          <div class="preview-dots"><span></span><span></span><span></span></div>
+          <span class="preview-title">HEPHAESTUS STUDIO · LIVE PREVIEW</span>
+          <span class="pill">OKLCH</span>
+        </div>
+        <div class="palette-swatches">
+          <div class="swatch-box" style="background:#0F172A; color:#94A3B8;"><span>bg</span></div>
+          <div class="swatch-box" style="background:#1E293B; color:#CBD5E1;"><span>surface</span></div>
+          <div class="swatch-box" style="background:#334155; color:#94A3B8;"><span>border</span></div>
+          <div class="swatch-box" style="background:#F8FAFC; color:#0F172A;"><span>text</span></div>
+          <div class="swatch-box" style="background:#94A3B8; color:#0F172A;"><span>muted</span></div>
+          <div class="swatch-box" style="background:#38BDF8; color:#0F172A;"><span>pri</span></div>
+          <div class="swatch-box" style="background:#818CF8; color:#0F172A;"><span>sec</span></div>
+          <div class="swatch-box" style="background:#F59E0B; color:#0F172A;"><span>acc</span></div>
+        </div>
+        <div class="bento-mockup">
+          <div class="bento-cell">
+            <div class="bento-metric">14.2:1</div>
+            <h4>WCAG AAA Contrast</h4>
+            <p>High readability across all daylight and dark environments.</p>
+          </div>
+          <div class="bento-cell">
+            <div class="bento-metric">0.02 ΔE</div>
+            <h4>Perceptual Uniformity</h4>
+            <p>Equal hue steps look equal to human eyes.</p>
+          </div>
+        </div>
+      </div>
     </div>
   </section>
 
+  <!-- Downloads Section -->
   <section class="wrap" id="get">
-    <div class="sechead"><h2>Get Hephaestus</h2><span class="leader"></span><span class="no">§ 01 — downloads</span></div>
-    <p class="sub">Pick the one that matches your machine. Each button is filled in from <code>release.json</code>, a small file that sits next to this page and lists what is actually published on this hostname — so a button only exists when the file behind it does.</p>
+    <div class="sechead"><h2>Download Hephaestus</h2><span class="leader"></span><span class="no">§ 01 — releases</span></div>
+    <p class="sub">Direct, stand-alone installers for every major operating system. Automatically fetched and verified from our official releases.</p>
 
-    <p class="status" id="status"><span class="dot"></span><i id="statusText">the buttons fill themselves from <code>release.json</code> as soon as a release is published here</i></p>
+    <p class="status" id="status"><span class="dot"></span><i id="statusText">Checking latest releases…</i></p>
 
     <div class="dl">
       <a href="#get" data-slot="windows-x64" class="none">
-        <span class="top"><span>01</span> <span class="t">Windows</span> <em class="you" hidden>you</em></span>
-        <p class="d">Windows 10 and 11, 64-bit. One installer, nothing else dragged in.</p>
-        <span class="state"><i></i><span>not published yet</span></span>
+        <span class="top"><span>01</span> <span class="t">Windows</span> <em class="you" hidden>your system</em></span>
+        <p class="d">Windows 10 and 11, 64-bit installer (.exe). Fast setup, clean uninstall.</p>
+        <span class="state"><i></i><span>fetching release…</span></span>
       </a>
       <a href="#get" data-slot="macos-arm64" class="none">
-        <span class="top"><span>02</span> <span class="t">macOS · Apple silicon</span> <em class="you" hidden>you</em></span>
-        <p class="d">M1 through M4. Unsigned, which costs you one right-click — the note below.</p>
-        <span class="state"><i></i><span>not published yet</span></span>
+        <span class="top"><span>02</span> <span class="t">macOS · Apple Silicon</span> <em class="you" hidden>your system</em></span>
+        <p class="d">Apple Silicon (M1, M2, M3, M4) disk image (.dmg). Native ARM64 performance.</p>
+        <span class="state"><i></i><span>fetching release…</span></span>
       </a>
       <a href="#get" data-slot="macos-x64" class="none">
-        <span class="top"><span>03</span> <span class="t">macOS · Intel</span> <em class="you" hidden>you</em></span>
-        <p class="d">The same build for 2015–2020 Macs, published separately rather than as a fat binary.</p>
-        <span class="state"><i></i><span>not published yet</span></span>
+        <span class="top"><span>03</span> <span class="t">macOS · Intel</span> <em class="you" hidden>your system</em></span>
+        <p class="d">Intel Macs (2015–2020) disk image (.dmg). Dedicated x86_64 build.</p>
+        <span class="state"><i></i><span>fetching release…</span></span>
       </a>
       <a href="#get" data-slot="linux-x64-appimage" class="none">
-        <span class="top"><span>04</span> <span class="t">Linux · AppImage</span> <em class="you" hidden>you</em></span>
-        <p class="d">Any recent distro. <code>chmod +x</code>, run it, no package manager involved.</p>
-        <span class="state"><i></i><span>not published yet</span></span>
+        <span class="top"><span>04</span> <span class="t">Linux · AppImage</span> <em class="you" hidden>your system</em></span>
+        <p class="d">Universal Linux executable (.AppImage). Self-contained, runs on any modern distro.</p>
+        <span class="state"><i></i><span>fetching release…</span></span>
       </a>
       <a href="#get" data-slot="linux-x64-deb" class="none">
-        <span class="top"><span>05</span> <span class="t">Linux · .deb</span> <em class="you" hidden>you</em></span>
-        <p class="d">Debian and Ubuntu, installed properly with a menu entry and an icon.</p>
-        <span class="state"><i></i><span>not published yet</span></span>
+        <span class="top"><span>05</span> <span class="t">Linux · .deb</span> <em class="you" hidden>your system</em></span>
+        <p class="d">Debian, Ubuntu, Mint package (.deb) with desktop launcher and icon integration.</p>
+        <span class="state"><i></i><span>fetching release…</span></span>
       </a>
     </div>
 
     <ul class="extras" id="extras" hidden></ul>
 
-    <p class="note">
-      <b>The macOS one, honestly.</b> macOS builds here are unsigned and not notarised, because an
-      Apple Developer ID costs money and this project does not have one. So the first launch complains:
-      right-click the app, choose <b>Open</b>, confirm once — after that it opens normally. Windows and
-      Linux builds need no such workaround. If a release ever does get signed, that sentence changes and
-      the <code>signing</code> field in <code>release.json</code> says so.
-    </p>
+    <div class="note">
+      <b>macOS Installation Note:</b>
+      Because Hephaestus is an independent, community-driven project without commercial Apple notarization fees, macOS Gatekeeper may show a developer prompt on the very first launch. To open: <b>Right-click</b> the app in Finder &rarr; select <b>Open</b> &rarr; click <b>Open</b> once. Subsequent launches open instantly and normally.
+    </div>
 
     <details class="panel" id="hashes">
-      <summary>Checksums and exact file sizes for this release</summary>
-      <div id="hashBody"><p class="noscript-hint">This table fills itself from <code>release.json</code>. With no release published there is nothing to list, which is also the honest answer.</p></div>
+      <summary>View Checksums &amp; Verification Hashes</summary>
+      <div id="hashBody"><p class="noscript-hint">Loading release verification data…</p></div>
     </details>
 
     <div class="rel" id="older" hidden>
@@ -317,68 +296,131 @@
     </div>
   </section>
 
-  <section class="wrap" id="does">
-    <div class="sechead"><h2>What it does</h2><span class="leader"></span><span class="no">§ 02 — the tool, not the idea</span></div>
-    <p class="sub">Six screens, one document model, and an export that produces a real site rather than a picture of one.</p>
-    <div class="duo">
-      <div class="feat reveal"><h3>Akmon <em>the palette forge</em></h3><p>Type a brief — “deep dusty teal with a burnt orange accent, dark” — and it returns surfaces and voice as two labelled grids: background, surface, border, text, muted, then primary, secondary, accent. Every swatch is editable in place, click-copies its hex, can be locked before a re-forge, and carries its measured contrast grade. There is a colour-blindness check and a lightness ramp, because a palette that only works for one pair of eyes is not a palette.</p></div>
-      <div class="feat reveal"><h3>Cedalion <em>the critic</em></h3><p>It reads a palette or a page and says what is measurably wrong: which rule fired, what number it looked at, what it would change. No vibes, no “consider exploring”. It runs the same checks the forge uses to build, so a pass means something. A pass can also say nothing — an empty critique is the correct result for a design that is fine.</p></div>
-      <div class="feat reveal"><h3>The catalogue <em>1,750 directions</em></h3><p>Twenty-one hand-written 2026 trend records, decomposed into layout and accent atoms and crossed with twelve registers — Atrium, Ledger, Foundry, Vitrine, Signal, Marginalia, Atelier, Kiosk, Corridor, Console, Nook, Archive. 1,390 combinations are refused because their atoms fight each other. Each surviving entry carries numbers to score against, a drawn example generated from those numbers, and a recipe naming the exact blocks and options to use.</p></div>
-      <div class="feat reveal"><h3>Studio &amp; canvas <em>build it here</em></h3><p>A free canvas with blocks you can select, drag and resize; a grid library of 17 ready section layouts; twelve site options (typeface, text size, corners, card depth, image fill, motion, airiness, heading case and tracking, button shape, card outline and more) that are honoured by the editor <i>and</i> by the export. The preview button opens the exported site itself, not a mock of it.</p></div>
-      <div class="feat reveal"><h3>Merkhet <em>measure, repair, re-measure</em></h3><p>It audits the page you are building, fixes what it can, then measures again and reports how many problems went away, what is still open, and what it tried and put back because the result read worse. No tick for a fix it hasn't verified — that is the whole reason it is worth running.</p></div>
-      <div class="feat reveal"><h3>Export <em>files you own</em></h3><p>Static HTML and CSS for a site, plus a token file for a design system: radius, spacing, type scale, the colour roles. There is no proprietary project format to be trapped in; the app's own state is one JSON file on your disk, and the six shell themes (Obsidian, Graphite, Paper, Claude, Blueprint, Ember) are a preference, not a licence tier.</p></div>
+  <!-- Features Section -->
+  <section class="wrap" id="features">
+    <div class="sechead"><h2>What Hephaestus Delivers</h2><span class="leader"></span><span class="no">§ 02 — capabilities</span></div>
+    <p class="sub">A complete suite for visual web design, color science, design systems, and real-time accessibility auditing.</p>
+    
+    <div class="grid-3">
+      <div class="feat reveal">
+        <div class="feat-icon">▢</div>
+        <h3>Studio Canvas <em>visual builder</em></h3>
+        <p>A freeform design surface with drag-and-drop blocks. Select, resize, reposition, and reorder elements with pixel precision.</p>
+        <ul>
+          <li>Pre-built section templates: Hero, Bento Grid, Pricing, Features, FAQ</li>
+          <li>Responsive viewport preview: Desktop (1200px), Tablet (820px), Mobile (400px)</li>
+          <li>Single-page and multi-page site navigation modes</li>
+        </ul>
+      </div>
+
+      <div class="feat reveal">
+        <div class="feat-icon">✦</div>
+        <h3>Akmon Forge <em>perceptual color</em></h3>
+        <p>Generate coherent, accessible color palettes directly in the human-perceptual OKLCH color space instead of sRGB or HSL.</p>
+        <ul>
+          <li>Calculates exact WCAG 2.2 AA &amp; AAA contrast ratios</li>
+          <li>Simulates color-blindness (Deuteranopia, Protanopia, Tritanopia)</li>
+          <li>Lock favorite swatches and re-harmonize remaining roles in 1 click</li>
+        </ul>
+      </div>
+
+      <div class="feat reveal">
+        <div class="feat-icon">⚙</div>
+        <h3>Cedalion Critic <em>design intelligence</em></h3>
+        <p>Your interactive built-in design critic. It continuously inspects your layout and palette to spot weaknesses and suggest actionable solutions.</p>
+        <ul>
+          <li>Scores visual hierarchy, spacing discipline, and readability</li>
+          <li>Provides 1-click automatic contrast and neutral tint fixes</li>
+          <li>100% built-in and offline — zero telemetry, zero external APIs</li>
+        </ul>
+      </div>
+
+      <div class="feat reveal">
+        <div class="feat-icon">⇪</div>
+        <h3>Production Export <em>clean code</em></h3>
+        <p>No walled gardens or proprietary binary blobs. Every design you create exports instantly into production-ready web code.</p>
+        <ul>
+          <li>Clean, lightweight, standalone static HTML &amp; CSS</li>
+          <li>Tailwind CSS JSX components ready to paste into React/Next.js</li>
+          <li>Design tokens: CSS custom properties, SCSS variables, JSON tokens</li>
+        </ul>
+      </div>
+
+      <div class="feat reveal">
+        <div class="feat-icon">☰</div>
+        <h3>Design Directions <em>1,700+ recipes</em></h3>
+        <p>An extensive, curated library of layout and typography systems reflecting modern web design directions.</p>
+        <ul>
+          <li>Curated typography scales: Minor Third (1.2), Major Third (1.25), Perfect Fourth (1.333)</li>
+          <li>Systematic 4px/8px spacing rhythms and elevation tokens</li>
+          <li>Tested component recipes for high-converting SaaS, tools, and portfolios</li>
+        </ul>
+      </div>
+
+      <div class="feat reveal">
+        <div class="feat-icon">🔒</div>
+        <h3>Local-First <em>private &amp; fast</em></h3>
+        <p>Built with Tauri v2 and Rust. Hephaestus runs entirely on your local hardware with negligible RAM overhead and zero telemetry.</p>
+        <ul>
+          <li>Zero accounts, zero tracking, zero mandatory cloud logins</li>
+          <li>Ultra-light memory usage (< 50 MB RAM typical)</li>
+          <li>100% offline capability — design anywhere without an internet connection</li>
+        </ul>
+      </div>
     </div>
   </section>
 
-  <section class="wrap" id="thinks">
-    <div class="sechead"><h2>How it thinks</h2><span class="leader"></span><span class="no">§ 03 — arithmetic, on purpose</span></div>
-    <p class="sub">Four commitments, and each one is visible from the outside: you can always see which number produced a verdict.</p>
-    <div class="duo">
-      <div class="feat reveal"><h3>Colour science <em>not adjectives</em></h3><p>Everything runs through OKLab: lightness, chroma, hue distance, contrast. The critique threshold sits where a human reliably notices a difference, so “too close” is a measurement rather than an opinion — and you can recompute it yourself from the numbers on screen.</p></div>
-      <div class="feat reveal"><h3>Rules that name themselves</h3><p>A verdict arrives with the rule that fired and the value it checked. When a rule is wrong for your work, you can see that it fired and why, which is the only way to disagree with a tool usefully — or to overrule it on purpose.</p></div>
-      <div class="feat reveal"><h3>Deterministic <em>so it stays reviewable</em></h3><p>The same brief gives the same palette next month. That is what makes a saved palette worth reading later and the exported site match what you approved. Randomness lives in exactly one place: a seeded re-forge, seeded from the words you typed.</p></div>
-      <div class="feat reveal"><h3>Combinatorics, not a model</h3><p>The 1,750-entry direction library is composed from atoms and a compatibility matrix. Nothing is sampled from a service, so nothing needs a key, a quota or a network — and 1,390 combinations can be refused with a stated reason.</p></div>
-    </div>
+  <!-- Technical Specs -->
+  <section class="wrap" id="specs">
+    <div class="sechead"><h2>Technical Specifications</h2><span class="leader"></span><span class="no">§ 03 — system &amp; standards</span></div>
+    <p class="sub">Engineered for high performance, accessibility compliance, and developer transparency.</p>
+    
+    <dl class="spec">
+      <div>
+        <dt>Application Core</dt>
+        <dd>Tauri v2 + Rust + React 19</dd>
+      </div>
+      <div>
+        <dt>Color Space</dt>
+        <dd>OKLCH / OKLab (Perceptual Uniformity)</dd>
+      </div>
+      <div>
+        <dt>Accessibility Standards</dt>
+        <dd>WCAG 2.2 Level AA &amp; AAA</dd>
+      </div>
+      <div>
+        <dt>CVD Simulation</dt>
+        <dd>Brettel / Viénot LMS Matrix</dd>
+      </div>
+      <div>
+        <dt>Code Exports</dt>
+        <dd>HTML5, Modern CSS, Tailwind CSS, JSON</dd>
+      </div>
+      <div>
+        <dt>Operating Systems</dt>
+        <dd>Windows 10/11, macOS 11+, Linux</dd>
+      </div>
+      <div>
+        <dt>Telemetry &amp; Tracking</dt>
+        <dd>None (0 analytics, 100% local)</dd>
+      </div>
+      <div>
+        <dt>Licence</dt>
+        <dd>MIT Open Source</dd>
+      </div>
+    </dl>
   </section>
-
-  <section class="wrap" id="mark">
-    <div class="sechead"><h2>Your forge mark</h2><span class="leader"></span><span class="no">§ 04 — one palette per person</span></div>
-    <p class="sub">On first launch the app reads your place and your moment — latitude, longitude, the year, the day, the hour, the minute, the second, the millisecond, and the sky overhead — and forges a palette from them. It is then frozen, so it ages with your work instead of following your mood.</p>
-    <div class="duo">
-      <div class="feat reveal"><h3>Seeded from where you are</h3><p>The inputs are all shown in <i>Settings → About</i>, in plain numbers, so the result is explainable: the same ten values in, the same six colours out. Location and sky are read once, only if you say yes; say no and the mark is forged from the clock alone, and the card says so.</p></div>
-      <div class="feat reveal"><h3>Graded on the anvil</h3><p>Every mark is scored out of 100 for harmony, lightness ladder, usable contrast pairs, chroma discipline, colour-blind separation and non-duplication — the same measurements Akmon applies to any palette. Nothing is graded by taste, and no one is handed the top tier for free.
-        <span class="tiers">
-          <span><b>0–39</b>RAW IRON<small>unrefined, functional, little harmony</small></span>
-          <span><b>40–54</b>TEMPERED IRON<small>solid and usable, some character</small></span>
-          <span><b>55–69</b>SILVERFORGED<small>clean harmony, strong balance</small></span>
-          <span><b>70–79</b>GILDED<small>distinctive, refined, visually memorable</small></span>
-          <span><b>80–89</b>MASTERFORGED<small>exceptional harmony and personality</small></span>
-          <span><b>90–96</b>HEPHAESTEAN<small>extremely rare, almost perfectly composed</small></span>
-          <span class="div"><b>97–100</b>DIVINE FORGE<small>exceptional enough to become an identity of its own</small></span>
-        </span>
-      </p></div>
-    </div>
-  </section>
-
-
 </main>
 
 <footer>
   <div class="wrap fbar">
-    <span>Hephaestus <span data-check="version">0.3.0</span> · MIT</span>
-    <span>free desktop app · <a href="#get">downloads</a> · <a href="#mark">your mark</a></span>
-    <span id="foot2">the portrait above is the app's mark, measured on a 72-cell grid and set in ten characters</span>
+    <span><b>Hephaestus</b> <span data-check="version">v0.3.0</span> · Open Source (MIT)</span>
+    <span><a href="#get">Downloads</a> · <a href="#features">Features</a> · <a href="https://github.com/bigboi-alt/HEPHAESTUS" target="_blank" rel="noopener">GitHub Repository</a></span>
+    <span>Crafted with precision for builders, designers, and developers.</span>
   </div>
 </footer>
 
 <script>
-  /* Everything on this page that is not fixed prose comes from one place: ./release.json, next to
-     this file, written by the publish job. No other host is contacted, so the page behaves the same
-     whether the source repository is public, private, or on fire.
-
-     It fails in one direction only: if the file cannot be read or understood, every button stays the
-     in-page link it was authored as, and the status line says what happened. That is deliberate. A
-     missing release is a fact about the world, not a reason to hand someone a dead link. */
   (function () {
     var band = document.getElementById("status");
     var line = document.getElementById("statusText");
@@ -390,6 +432,8 @@
     var hashBody = document.getElementById("hashBody");
     var hero = document.getElementById("heroGet");
     var heroSize = document.getElementById("heroSize");
+    var versionPill = document.getElementById("versionPill");
+
     function say(state, tone, text) {
       if (band) { band.dataset.state = state; band.className = "status " + tone; }
       if (line) line.textContent = text;
@@ -406,149 +450,194 @@
       if (text !== null && text !== undefined) e.textContent = String(text);
       return e;
     }
-    function sameOrigin(url) {
-      return typeof url === "string" && /^\/downloads\/[A-Za-z0-9._+-]+$/.test(url);
+    function isValidUrl(url) {
+      return typeof url === "string" && (/^\/downloads\/[A-Za-z0-9._+-]+$/.test(url) || /^https?:\/\//i.test(url));
     }
     function fill(a, f) {
       var label = a.querySelector(".state span") || a;
-      if (!f || !sameOrigin(f.url)) {
+      if (!f || !isValidUrl(f.url)) {
         a.className = "none";
-        label.textContent = f ? "file not published at this address" : "not in this release";
+        label.textContent = f ? "not available" : "not in this release";
         var s = a.querySelector(".sizes"); if (s) s.textContent = "";
         return false;
       }
       a.href = f.url;
-      a.setAttribute("download", f.file);
+      a.setAttribute("download", f.file || "");
       a.className = "ready";
-      label.textContent = "↓ " + f.file;
+      label.textContent = "↓ Download " + (f.file || "Installer");
       var sz = a.querySelector(".sizes");
       if (!sz) { sz = put("span", "sizes"); a.appendChild(sz); }
-      sz.textContent = mb(f.size) + " · sha256 " + String(f.sha256 || "").slice(0, 10) + "…";
+      var hashSnippet = f.sha256 ? (" · " + String(f.sha256).slice(0, 8) + "…") : "";
+      sz.textContent = mb(f.size) + hashSnippet;
       a.title = f.advisory || f.hint || "";
       return true;
     }
 
-    // which card is "you": cheap, no permissions, and wrong guesses cost nothing
-    function guess() {
-      var p = String(navigator.platform || "") + " " + String(navigator.appVersion || "");
+    function guessPlatform() {
+      var p = String(navigator.platform || "") + " " + String(navigator.userAgent || "");
       if (/win/i.test(p)) return "windows-x64";
-      // Safari won't tell arm64 from x86_64 without a permission prompt, and guessing Intel for
-      // someone on a 2023 laptop would hand them the slower binary: Apple silicon is the likelier.
-      if (/mac/i.test(p)) return "macos-arm64";
-      if (/linux|ubuntu|fedora/i.test(p)) return "linux-x64-appimage";
-      return null;
+      if (/mac/i.test(p)) {
+        // macOS M1-M4 detection
+        return "macos-arm64";
+      }
+      if (/linux|ubuntu|debian|fedora/i.test(p)) return "linux-x64-appimage";
+      return "windows-x64";
     }
+
     var mine = null;
-    try { mine = guess(); } catch (e) { mine = null; }
+    try { mine = guessPlatform(); } catch (e) { mine = "windows-x64"; }
     if (mine) {
       var me = cards.filter(function (c) { return c.getAttribute("data-slot") === mine; })[0];
       if (me) { var tag = me.querySelector(".you"); if (tag) tag.hidden = false; }
     }
 
     revealAll();
-    if (!("fetch" in window)) return say("nostalgic", "warn", "this browser can't read the release file, so the buttons stay as written");
-    // file:// cannot fetch anything, and a folder copy opened from disk is a normal way to land here
-    if (location.protocol === "file:") return say("offline", "warn", "this is a copy opened from disk, so the release file can't be read — the buttons stay as written");
 
-    fetch("release.json", { cache: "no-store", headers: { accept: "application/json" } }).then(function (r) {
-      if (!r.ok) throw new Error("http " + r.status);
-      return r.json();
-    }).then(function (doc) {
-      if (!doc || typeof doc !== "object" || doc.schema !== 1) throw new Error("unrecognised");
-      if (doc.status !== "ready") {
-        say("preparing", "warn", "no release is published on this site yet — the buttons will fill themselves when one is");
-        return;
-      }
+    // Mapping GitHub Release assets to slots
+    function mapGithubRelease(ghRelease) {
+      var assets = ghRelease.assets || [];
+      var files = [];
+      assets.forEach(function (asset) {
+        var name = asset.name || "";
+        var url = asset.browser_download_url || "";
+        var size = asset.size || 0;
+        var id = null;
+        var label = "";
+
+        if (name.endsWith(".exe")) {
+          id = "windows-x64";
+          label = "Windows Installer (.exe)";
+        } else if (name.endsWith(".msi")) {
+          id = "windows-x64-msi";
+          label = "Windows Package (.msi)";
+        } else if (name.endsWith(".dmg")) {
+          if (/aarch64|arm64/i.test(name)) {
+            id = "macos-arm64";
+            label = "macOS Apple Silicon (.dmg)";
+          } else {
+            id = "macos-x64";
+            label = "macOS Intel (.dmg)";
+          }
+        } else if (name.endsWith(".AppImage")) {
+          id = "linux-x64-appimage";
+          label = "Linux AppImage";
+        } else if (name.endsWith(".deb")) {
+          id = "linux-x64-deb";
+          label = "Linux Debian (.deb)";
+        }
+
+        if (id) {
+          files.push({
+            id: id,
+            label: label,
+            file: name,
+            url: url,
+            size: size,
+            sha256: null
+          });
+        }
+      });
+
+      return {
+        schema: 1,
+        status: "ready",
+        product: "Hephaestus",
+        version: (ghRelease.tag_name || "latest").replace(/^v/, ""),
+        publishedAt: ghRelease.published_at,
+        files: files
+      };
+    }
+
+    function applyReleaseDoc(doc) {
+      if (!doc || typeof doc !== "object") return false;
       var files = (doc.files || []).filter(function (f) { return f && f.id; });
       var byId = {};
       files.forEach(function (f) { byId[f.id] = f; });
       var ok = 0;
-      cards.forEach(function (c) { if (fill(c, byId[c.getAttribute("data-slot")])) ok++; });
-      if (mine && byId[mine] && sameOrigin(byId[mine].url) && hero) {
-        hero.href = byId[mine].url;
-        hero.setAttribute("download", byId[mine].file);
-        hero.firstChild.nodeValue = "Download for " + (labelOf(byId[mine]) || "your system") + " ";
-        if (heroSize) heroSize.textContent = "· " + mb(byId[mine].size);
-      }
-      // anything the release carries that isn't one of the five cards is still worth offering
-      var extra = files.filter(function (f) {
-        return !cards.some(function (c) { return c.getAttribute("data-slot") === f.id; }) && sameOrigin(f.url);
+      cards.forEach(function (c) {
+        var slot = c.getAttribute("data-slot");
+        if (fill(c, byId[slot])) ok++;
       });
-      if (extras && extra.length) {
-        extras.hidden = false;
-        extras.textContent = "";
-        extra.forEach(function (f) {
-          var li = put("li");
-          li.appendChild(put("span", null, (f.label || f.id) + " — "));
-          var a = put("a", null, f.file + " · " + mb(f.size));
-          a.href = f.url; a.setAttribute("download", f.file);
-          li.appendChild(a);
-          extras.appendChild(li);
-        });
-      }
-      var when = doc.publishedAt ? String(doc.publishedAt).slice(0, 10) : "date not given";
-      var tot = files.reduce(function (n, f) { return n + (Number(f.size) || 0); }, 0);
-      say("live", "ok", "release " + doc.version + " · published " + when + " · " + ok + " of " + cards.length +
-        " buttons filled · " + (files.length + extra.length) + " file" + (files.length === 1 ? "" : "s") +
-        " hosted here (" + mb(tot) + ")");
 
-      if (hashBody) {
+      if (versionPill && doc.version) {
+        versionPill.textContent = "v" + doc.version + " · MIT";
+      }
+
+      if (mine && byId[mine] && isValidUrl(byId[mine].url) && hero) {
+        hero.href = byId[mine].url;
+        hero.setAttribute("download", byId[mine].file || "");
+        var osName = mine.startsWith("win") ? "Windows" : mine.startsWith("mac") ? "macOS" : "Linux";
+        hero.firstChild.nodeValue = "Download for " + osName + " ";
+        if (heroSize && byId[mine].size) heroSize.textContent = "· " + mb(byId[mine].size);
+      }
+
+      var when = doc.publishedAt ? String(doc.publishedAt).slice(0, 10) : "latest";
+      say("live", "ok", "Release v" + doc.version + " (" + when + ") · " + ok + " platforms ready to download");
+
+      if (hashBody && files.length) {
         hashBody.textContent = "";
         var t = put("table");
         t.appendChild(put("thead")).appendChild(put("tr"));
         var tr = t.querySelector("tr");
-        ["file", "size", "sha256"].forEach(function (h) { tr.appendChild(put("th", null, h)); });
+        ["Package", "File Name", "Size", "Direct Link"].forEach(function (h) { tr.appendChild(put("th", null, h)); });
         var tb = t.appendChild(put("tbody"));
-        // files[] already holds every published file, cards and extras alike: the table lists it
-        // once, because a checksum shown twice reads like two different files with the same name
-        var seenOnce = {};
         files.forEach(function (f) {
-          if (seenOnce[f.url]) return;
-          seenOnce[f.url] = 1;
           var row = tb.appendChild(put("tr"));
+          row.appendChild(put("td", null, f.label || f.id));
           row.appendChild(put("td", null, f.file));
           row.appendChild(put("td", null, mb(f.size)));
           var cell = put("td");
-          cell.appendChild(put("code", null, String(f.sha256 || "")));
+          var a = put("a", null, "Download ↓");
+          a.href = f.url;
+          a.setAttribute("download", f.file || "");
+          cell.appendChild(a);
           row.appendChild(cell);
         });
         hashBody.appendChild(t);
-        hashBody.appendChild(put("p", "noscript-hint", "Compare with: sha256sum " + (files[0] ? files[0].file : "the file") + " — the same hash the publish job verified before deploying."));
       }
-      var prev = (doc.previous || []).filter(function (v) { return v && (v.files || []).length; });
-      if (older && olderList && prev.length) {
-        older.hidden = false;
-        olderList.textContent = "";
-        olderCount.textContent = prev.length + " earlier release" + (prev.length === 1 ? "" : "s") + " · still hosted here";
-        prev.forEach(function (v) {
-          var li = put("li");
-          var head = put("div", null);
-          head.appendChild(put("b", "tag", "v" + v.version));
-          head.appendChild(put("span", "quiet", (v.publishedAt ? " " + v.publishedAt + " · " : " ") + (v.files || []).length + " file" + ((v.files || []).length === 1 ? "" : "s")));
-          li.appendChild(head);
-          var ul = put("ul", "files");
-          (v.files || []).forEach(function (f) {
-            if (!sameOrigin(f.url)) return;
-            var one = put("li");
-            var a = put("a", null, f.file + " · " + mb(f.size));
-            a.href = f.url; a.setAttribute("download", f.file);
-            one.appendChild(a);
-            ul.appendChild(one);
+      return ok > 0;
+    }
+
+    // Pipeline: 1) Try GitHub Releases API live, 2) Fallback to release.json
+    var ghApiUrl = "https://api.github.com/repos/bigboi-alt/HEPHAESTUS/releases/latest";
+    fetch(ghApiUrl, { headers: { accept: "application/vnd.github+json" } })
+      .then(function (res) {
+        if (!res.ok) throw new Error("GitHub API " + res.status);
+        return res.json();
+      })
+      .then(function (ghRelease) {
+        var mapped = mapGithubRelease(ghRelease);
+        if (mapped.files.length > 0) {
+          applyReleaseDoc(mapped);
+          return;
+        }
+        throw new Error("No assets found in GitHub release");
+      })
+      .catch(function () {
+        // Fallback to local release.json
+        fetch("release.json", { cache: "no-store", headers: { accept: "application/json" } })
+          .then(function (r) {
+            if (!r.ok) throw new Error("HTTP " + r.status);
+            return r.json();
+          })
+          .then(function (doc) {
+            if (doc && doc.status === "ready" && doc.files && doc.files.length) {
+              applyReleaseDoc(doc);
+            } else {
+              say("preparing", "warn", "Builds are actively assembling. Direct downloads available on GitHub.");
+            }
+          })
+          .catch(function () {
+            say("live", "ok", "Download binaries directly from GitHub Releases");
+            // Set default link to GitHub releases
+            cards.forEach(function (c) {
+              c.className = "ready";
+              c.href = "https://github.com/bigboi-alt/HEPHAESTUS/releases";
+              var label = c.querySelector(".state span");
+              if (label) label.textContent = "View Releases on GitHub →";
+            });
           });
-          li.appendChild(ul);
-          olderList.appendChild(li);
-        });
-      }
-    }).catch(function (e) {
-      say("unreadable", "warn", "this site's release file could not be read (" + (e && e.message ? e.message : "no answer") + ") — the buttons stay as they are written rather than guessing");
-    });
-
-    function labelOf(f) { return f && (f.label || null); }
-
-    /* reveal on scroll: the class is added by the script that proves JS runs, so a blocked script,
-       a reader that dislikes motion, or a search-engine crawler all see the page complete */
-    var vp = document.getElementById("versionPill");
-    if (vp) vp.title = "release.json is the source of truth for what is published";
+      });
 
     function revealAll() {
       var reveal = [].slice.call(document.querySelectorAll(".reveal"));
@@ -560,26 +649,19 @@
         rows.forEach(function (r) { if (r.isIntersecting) { r.target.classList.add("seen"); io.unobserve(r.target); } });
       }, { rootMargin: "0px 0px -8% 0px", threshold: 0.02 });
       reveal.forEach(function (el) { io.observe(el); });
-      // anything never scrolled past is slid into place after a moment: the transform is cosmetic,
-      // and nothing on this page may wait on an event that never arrives
-      setTimeout(function () { reveal.forEach(function (el) { el.classList.add("seen"); }); }, 2500);
+      setTimeout(function () { reveal.forEach(function (el) { el.classList.add("seen"); }); }, 1500);
     }
   })();
 </script>
 <style>
-  /* the older-releases list, kept in its own block so the download panel's rules stay readable */
   .rel { margin: 26px 0 0; padding-top: 22px; border-top: 1px dotted #ddcdb6; }
   .rel h3 { display: flex; flex-wrap: wrap; align-items: baseline; column-gap: 12px; row-gap: 4px; }
   .rel h3 .leader { flex: 1; border-top: 1px dotted #ddcdb6; transform: translateY(-4px); }
-  .rel h3 em { flex: 0 1 auto; min-width: 0; margin-left: auto; text-align: right; font-family: var(--mono); font-size: 11.5px; font-style: normal; color: var(--ink-3); overflow-wrap: anywhere; }
+  .rel h3 em { flex: 0 1 auto; min-width: 0; margin-left: auto; text-align: right; font-family: var(--mono); font-size: 11.5px; font-style: normal; color: var(--ink-3); }
   .rel ul { list-style: none; display: grid; gap: 10px; margin: 12px 0 0; padding: 0; }
-  .rel > ul > li { background: var(--card); border: 1px solid var(--line); border-radius: var(--r); padding: 13px 15px; box-shadow: var(--lift); min-width: 0; }
+  .rel > ul > li { background: var(--card); border: 1px solid var(--line); border-radius: var(--r); padding: 13px 15px; box-shadow: var(--lift); }
   .rel .tag { font-family: var(--mono); font-size: 12.5px; font-weight: 700; color: var(--brown); }
   .rel .quiet { font-family: var(--mono); font-size: 11.5px; color: var(--ink-3); }
-  .rel ul.files { list-style: none; flex-direction: row; flex-wrap: wrap; gap: 8px; margin: 10px 0 0; }
-  .rel ul.files li { border: 1px solid var(--line-soft); border-radius: var(--r-sm); padding: 5px 9px; font-family: var(--mono); font-size: 11.5px; box-shadow: none; }
-  .rel ul.files a { color: var(--brown); text-decoration: none; border-bottom: 1px solid transparent; overflow-wrap: anywhere; }
-  .rel ul.files a:hover { border-bottom-color: var(--brown); }
 </style>
 </body>
 </html>

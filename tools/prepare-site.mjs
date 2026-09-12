@@ -90,6 +90,8 @@ const liveSize = (name) => {
 if (live && live.status === "ready") {
   const files = (live.files || []).concat((live.previous || []).flatMap((v) => v.files || []));
   for (const f of files) {
+    const isExt = /^https?:\/\//i.test(String(f.url || ""));
+    if (isExt) continue;
     const name = basename(String(f.url || f.file || ""));
     if (!name || existsSync(join(downloads, name))) continue;
     // Checked before fetching: a bundle containing a >25 MiB file is refused by Pages outright, so

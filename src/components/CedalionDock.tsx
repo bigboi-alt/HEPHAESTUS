@@ -6,10 +6,14 @@
  */
 import { useEffect, useRef, useState } from "react";
 import { useApp } from "../store";
-import { ask, auditPalette, cedalionStarters } from "../engine/cedalion";
+import { askCedalion, auditPalette, cedalionStarters, type CedalionAction } from "../engine/cedalion";
 
 export function CedalionChat({ compact = false }: { compact?: boolean }) {
-  const { chat, pushChat, clearChat, current, purposeId, screen, buildMeta, canvasCtx, cedalionSeed, clearCedalionSeed } = useApp();
+  const {
+    chat, pushChat, clearChat, current, purposeId, screen,
+    buildMeta, canvasCtx, cedalionSeed, clearCedalionSeed,
+    setSwatch, generate, go, say,
+  } = useApp();
   const starters = cedalionStarters(screen);
   const [draft, setDraft] = useState("");
   const endRef = useRef<HTMLDivElement>(null);
@@ -32,28 +36,75 @@ export function CedalionChat({ compact = false }: { compact?: boolean }) {
     const q = text.trim();
     if (!q) return;
     pushChat({ role: "you", text: q });
-    const a = ask(q, {
-      palette: current ?? undefined,
-      purposeId: purposeId ?? undefined,
-      screen,
-      canvas: screen === "build" ? canvasCtx ?? undefined : undefined,
-      buildSite: buildMeta
-        ? {
-            purposeLabel: buildMeta.purposeLabel,
-            sectionsOn: buildMeta.sectionsOn,
-            sectionNames: buildMeta.sectionNames,
-            score: current ? auditPalette(current, purposeId ?? undefined).score : undefined,
-          }
-        : undefined,
-    });
-    pushChat({
-      role: "cedalion",
-      text: a.text,
-      bullets: a.bullets,
-      refs: a.refs,
-      suggestions: a.suggestions,
-    });
     setDraft("");
+    try {
+      const a = askCedalion(
+        q,
+        {
+          palette: current ?? undefined,
+          purposeId: purposeId ?? undefined,
+          screen,
+          canvas: screen === "build" ? canvasCtx ?? undefined : undefined,
+          buildSite: buildMeta
+            ? {
+                purposeLabel: buildMeta.purposeLabel,
+                sectionsOn: buildMeta.sectionsOn,
+                sectionNames: buildMeta.sectionNames,
+                score: current ? auditPalette(current, purposeId ?? undefined).score : undefined,
+              }
+            : undefined,
+        }
+      );
+      pushChat({
+        role: "cedalion",
+        text: a.text,
+        bullets: a.bullets,
+        refs: a.refs,
+        suggestions: a.suggestions,
+        actions: a.actions,
+      });
+    } catch (e: any) {
+      pushChat({
+        role: "cedalion",
+        text: "I encountered an error evaluating that question.",
+        refs: [e?.message || "internal error"],
+      });
+    }
+  }
+
+  function handleAction(act: CedalionAction) {
+    if (act.kind === "fix-contrast") {
+      setSwatch(act.payload.role, act.payload.hex);
+      say(`Fixed ${act.payload.role} contrast to ${act.payload.hex}`);
+    } else if (act.kind === "harmonize-neutrals") {
+      if (act.payload.background) setSwatch("background", act.payload.background);
+      if (act.payload.surface) setSwatch("surface", act.payload.surface);
+      if (act.payload.border) setSwatch("border", act.payload.border);
+      say("Harmonized background, surface, and border with primary brand hue");
+    } else if (act.kind === "switch-theme") {
+      generate({ mode: act.payload.mode });
+      say(`Switched palette to ${act.payload.mode} mode`);
+    } else if (act.kind === "make-pop") {
+      if (act.payload.role && act.payload.hex) {
+        setSwatch(act.payload.role, act.payload.hex);
+        say(`Boosted ${act.payload.role} pop to ${act.payload.hex}`);
+      }
+    } else if (act.kind === "insert-section") {
+      if (screen !== "build") {
+        go("build");
+        say(`Navigated to Studio to insert ${act.payload.presetId}`);
+      }
+      window.dispatchEvent(
+        new CustomEvent("hephaestus-insert-preset", { detail: { presetId: act.payload.presetId } })
+      );
+    } else if (act.kind === "copy-tokens") {
+      if (!current) return;
+      const css = `:root {\n` + current.swatches.map((s) => `  --color-${s.role}: ${s.hex};`).join("\n") + `\n}`;
+      navigator.clipboard.writeText(css);
+      say("Copied palette CSS variables to clipboard");
+    } else if (act.kind === "open-screen") {
+      go(act.payload.screen);
+    }
   }
 
   return (
@@ -75,7 +126,7 @@ export function CedalionChat({ compact = false }: { compact?: boolean }) {
               I read what's on screen and tell you what's measurably wrong with it.
             </div>
             <div className="faint mono-sm" style={{ marginBottom: 14 }}>
-              no model, no api key, no network — colour maths and a rule base. ask me anything.
+              built-in critic engine · OKLCH colour science &amp; 45+ design rules · 100% local
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
               {starters.slice(0, compact ? 4 : 6).map((s) => (
@@ -114,6 +165,30 @@ export function CedalionChat({ compact = false }: { compact?: boolean }) {
                 ))}
               </div>
             )}
+            {t.actions && t.actions.length > 0 && (
+              <div className="row gap-1" style={{ marginTop: 10, flexWrap: "wrap" }}>
+                {t.actions.map((act) => (
+                  <button
+                    key={act.id}
+                    className="btn"
+                    style={{
+                      fontSize: 10.5,
+                      padding: "5px 10px",
+                      border: "1px solid var(--accent)",
+                      background: "color-mix(in srgb, var(--accent) 12%, var(--surface))",
+                      color: "var(--fg)",
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: 5,
+                    }}
+                    onClick={() => handleAction(act)}
+                  >
+                    <span style={{ color: "var(--accent)" }}>⚡</span>
+                    <span>{act.label}</span>
+                  </button>
+                ))}
+              </div>
+            )}
             {t.suggestions && (
               <div className="row gap-1" style={{ marginTop: 8, flexWrap: "wrap" }}>
                 {t.suggestions.map((s) => (
@@ -137,7 +212,9 @@ export function CedalionChat({ compact = false }: { compact?: boolean }) {
             onChange={(e) => setDraft(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && send(draft)}
           />
-          <button className="btn" onClick={() => send(draft)} disabled={!draft.trim()}>send</button>
+          <button className="btn" onClick={() => send(draft)} disabled={!draft.trim()}>
+            send
+          </button>
         </div>
         {chat.length > 0 && (
           <button className="faint mono-sm" style={{ marginTop: 8 }} onClick={clearChat}>
