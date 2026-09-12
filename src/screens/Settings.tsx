@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useApp } from "../store";
 import { DEFAULT_SETTINGS, download, type ClaudeStyle, type ThemeId } from "../lib/storage";
 import { TRENDS_UPDATED, TRENDS_VERSION } from "../data/trends";
@@ -8,6 +8,7 @@ import { SPACE_SIZE } from "../engine/akmon";
 import Emblem from "../components/Emblem";
 import ForgeMark from "../components/ForgeMark";
 import { APP_VERSION } from "../store";
+import sigUrl from "../assets/signature.png";
 
 type Section = "general" | "profile" | "appearance" | "data" | "about";
 
@@ -38,6 +39,26 @@ const ACCENTS = ["#F5F5F5", "#FF7043", "#7FB2FF", "#4ADE80", "#FBBF24", "#C084FC
 export default function Settings() {
   const { settings, setSettings, go, palettes, say, update, checkNow } = useApp();
   const [section, setSection] = useState<Section>("general");
+  const [showSuitsCard, setShowSuitsCard] = useState(false);
+
+  useEffect(() => {
+    if (section !== "about") return;
+    let buf = "";
+    const onKey = (e: KeyboardEvent) => {
+      const tag = (e.target as HTMLElement | null)?.tagName?.toLowerCase();
+      if (tag === "input" || tag === "textarea") return;
+      if (e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        buf = (buf + e.key.toLowerCase()).slice(-10);
+        if (buf.endsWith("suits")) {
+          setShowSuitsCard(true);
+          say("suits unlocked · craftsman mark revealed");
+        }
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [section, say]);
+
   /* Claude has two skins, so its tile opens a second row of choices instead of
      just selecting the theme. */
   const [claudeChoices, setClaudeChoices] = useState(false);
@@ -280,6 +301,7 @@ export default function Settings() {
                 <div className="faint mono-sm" style={{ fontSize: 9, marginTop: 3 }}>design forge · the bust, on transparency</div>
               </div>
             </div>
+            {showSuitsCard && <SuitsCard say={say} onClose={() => setShowSuitsCard(false)} />}
             <Meta k="version" v={`${APP_VERSION} — the forge rework · built ${__BUILD_DATE__}`} />
             <Meta k="current release" v="palette engine · trend library · direction engine · Cedalion" />
             <Meta k="next" v="Akmon canvas · live composition scoring" />
@@ -385,3 +407,105 @@ function Meta({ k, v }: { k: string; v: string }) {
     </>
   );
 }
+
+function SuitsCard({ say, onClose }: { say: (msg: string) => void; onClose: () => void }) {
+  return (
+    <div
+      className="suits-card-anim"
+      style={{
+        border: "1px solid var(--accent, #FF7043)",
+        borderRadius: 12,
+        padding: "16px 18px",
+        background: "var(--surface)",
+        margin: "12px 0 16px",
+        position: "relative",
+      }}
+    >
+      <button
+        className="btn faint"
+        style={{
+          position: "absolute",
+          top: 12,
+          right: 12,
+          fontSize: 10,
+          padding: "2px 7px",
+          lineHeight: 1,
+          border: "none",
+          background: "transparent",
+          cursor: "pointer",
+        }}
+        onClick={onClose}
+        title="dismiss"
+      >
+        ✕
+      </button>
+      <div className="row" style={{ justifyContent: "space-between", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
+        <div>
+          <div className="row gap-1" style={{ alignItems: "center", marginBottom: 6 }}>
+            <span className="label" style={{ letterSpacing: ".15em", color: "var(--accent, #FF7043)", fontWeight: 600 }}>FOUNDER · ARYA</span>
+            <span className="faint mono-sm" style={{ fontSize: 8.5 }}>suits unlocked</span>
+          </div>
+          <div
+            role="img"
+            aria-label="Arya's signature"
+            style={{
+              height: 52,
+              width: 220,
+              background: "currentColor",
+              WebkitMaskImage: `url(${sigUrl})`,
+              maskImage: `url(${sigUrl})`,
+              WebkitMaskRepeat: "no-repeat",
+              maskRepeat: "no-repeat",
+              WebkitMaskSize: "contain",
+              maskSize: "contain",
+              WebkitMaskPosition: "left center",
+              maskPosition: "left center",
+              margin: "6px 0",
+            }}
+          />
+          <div className="faint mono-sm" style={{ fontSize: 9 }}>
+            the craftsman behind the forge
+          </div>
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 8, alignItems: "flex-end" }}>
+          <a
+            href="https://github.com/bigboi-alt"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="btn btn-primary"
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 7,
+              fontSize: 11,
+              padding: "7px 13px",
+              textDecoration: "none",
+            }}
+            onClick={(e) => {
+              if (!window.open("https://github.com/bigboi-alt", "_blank", "noopener,noreferrer")) {
+                e.preventDefault();
+              }
+              say("opening github.com/bigboi-alt");
+            }}
+          >
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22" />
+            </svg>
+            <span>github.com/bigboi-alt</span>
+          </a>
+          <button
+            className="btn faint"
+            style={{ fontSize: 9, padding: "3px 8px" }}
+            onClick={() => {
+              navigator.clipboard.writeText("https://github.com/bigboi-alt");
+              say("copied https://github.com/bigboi-alt");
+            }}
+          >
+            copy link
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+

@@ -111,7 +111,7 @@ function Ink({ size = 1 }: { size?: number }) {
       role="img"
       aria-label="the founder's signature"
       style={{
-        height: 40 * size, color: "currentColor",
+        height: 40 * size, color: "currentColor", background: "currentColor",
         WebkitMaskImage: `url(${sigUrl})`, maskImage: `url(${sigUrl})`,
         WebkitMaskRepeat: "no-repeat", maskRepeat: "no-repeat",
         WebkitMaskSize: "contain", maskSize: "contain",

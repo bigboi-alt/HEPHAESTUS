@@ -242,3 +242,23 @@ input[type="range"]:focus-visible { outline: 2px solid var(--accent); outline-of
 [data-theme="claude"]:not([data-claude-style="nyx"]) .emblem .emblem-marble { display: none; }
 [data-theme="paper"] .emblem .emblem-ink,
 [data-theme="claude"]:not([data-claude-style="nyx"]) .emblem .emblem-ink { display: block; }
+
+/* ---------- suits signature reveal animation ---------- */
+.suits-card-anim {
+  animation: suitsReveal 0.65s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+@keyframes suitsReveal {
+  0% {
+    opacity: 0;
+    transform: translateY(18px) scale(0.96);
+    box-shadow: 0 0 0 0 rgba(229, 106, 45, 0);
+  }
+  50% {
+    box-shadow: 0 0 28px 4px rgba(229, 106, 45, 0.35);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    box-shadow: 0 6px 24px rgba(0, 0, 0, 0.22);
+  }
+}
