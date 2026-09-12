@@ -21,14 +21,37 @@ const FETCH_TIMEOUT_MS = 8000;
 
 export type UpdateStatus = "idle" | "checking" | "available" | "current" | "unreachable";
 
+export type ReleaseFile = {
+  id: string;
+  os: string;
+  arch?: string;
+  label?: string;
+  hint?: string;
+  file: string;
+  url: string;
+  size?: number;
+  kind?: string;
+  sha256?: string;
+};
+
 export type UpdateCheck = {
   status: UpdateStatus;
   /** the version the feed advertises, when there was one to read */
   latest: string | null;
   /** what we are running */
   current: string;
-  /** where to go for it — a page on the same host as the feed, never a redirect through a third party */
+  /** where to go for it — direct download URL for the installer or web link */
   href: string | null;
+  /** direct installer download URL for user's platform */
+  downloadUrl: string | null;
+  /** name of the installer file (e.g. Hephaestus_0.4.0_x64-setup.exe) */
+  fileName: string | null;
+  /** size in bytes of the installer file */
+  fileSize: number | null;
+  /** detected platform (windows | macos | linux | unknown) */
+  platform: string | null;
+  /** all files in the release */
+  files: ReleaseFile[];
   /** epoch ms of the last attempt, successful or not */
   at: number;
   /** one honest line, only when status is "unreachable" */
@@ -36,8 +59,102 @@ export type UpdateCheck = {
 };
 
 export const IDLE_CHECK: UpdateCheck = {
-  status: "idle", latest: null, current: "", href: null, at: 0, reason: null,
+  status: "idle",
+  latest: null,
+  current: "",
+  href: null,
+  downloadUrl: null,
+  fileName: null,
+  fileSize: null,
+  platform: null,
+  files: [],
+  at: 0,
+  reason: null,
 };
+
+export type PlatformOS = "windows" | "macos" | "linux" | "unknown";
+
+export function detectPlatform(): { os: PlatformOS; arch?: "arm64" | "x64" } {
+  if (typeof navigator === "undefined") return { os: "unknown" };
+  const ua = (navigator.userAgent || "").toLowerCase();
+  const nav = navigator as unknown as { userAgentData?: { platform?: string; architecture?: string } };
+  const plat = (nav.userAgentData?.platform || navigator.platform || "").toLowerCase();
+
+  if (plat.includes("win") || ua.includes("windows")) {
+    return { os: "windows", arch: "x64" };
+  }
+  if (plat.includes("mac") || ua.includes("macintosh") || ua.includes("mac os")) {
+    const isArm = ua.includes("arm") || ua.includes("apple silicon") || nav.userAgentData?.architecture === "arm";
+    return { os: "macos", arch: isArm ? "arm64" : "x64" };
+  }
+  if (plat.includes("linux") || ua.includes("linux") || ua.includes("x11")) {
+    return { os: "linux", arch: "x64" };
+  }
+  return { os: "unknown" };
+}
+
+export function pickInstallerFile(files: ReleaseFile[]): ReleaseFile | null {
+  if (!Array.isArray(files) || files.length === 0) return null;
+  const { os, arch } = detectPlatform();
+
+  if (os === "windows") {
+    return (
+      files.find((f) => f.os === "windows" && (f.kind === "installer" || f.id === "windows-x64")) ||
+      files.find((f) => f.os === "windows" && f.file?.endsWith(".exe")) ||
+      files.find((f) => f.os === "windows") ||
+      null
+    );
+  }
+
+  if (os === "macos") {
+    if (arch === "arm64") {
+      const arm = files.find((f) => f.os === "macos" && (f.arch === "arm64" || f.id === "macos-arm64"));
+      if (arm) return arm;
+    } else if (arch === "x64") {
+      const x64 = files.find((f) => f.os === "macos" && (f.arch === "x64" || f.id === "macos-x64"));
+      if (x64) return x64;
+    }
+    return files.find((f) => f.os === "macos") || null;
+  }
+
+  if (os === "linux") {
+    return (
+      files.find((f) => f.os === "linux" && (f.kind === "self-contained" || f.file?.endsWith(".AppImage"))) ||
+      files.find((f) => f.os === "linux" && (f.kind === "package" || f.file?.endsWith(".deb"))) ||
+      files.find((f) => f.os === "linux") ||
+      null
+    );
+  }
+
+  return files.find((f) => f.kind === "installer") || files[0] || null;
+}
+
+/**
+ * Triggers a direct installer download right in the app.
+ */
+export function startUpdateDownload(url: string, filename?: string) {
+  if (!url) return;
+  try {
+    const a = document.createElement("a");
+    a.href = url;
+    if (filename) a.download = filename;
+    a.target = "_blank";
+    a.rel = "noopener noreferrer";
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(() => {
+      if (document.body.contains(a)) document.body.removeChild(a);
+    }, 1000);
+  } catch {
+    // ignore
+  }
+
+  try {
+    window.open(url, "_blank", "noopener,noreferrer");
+  } catch {
+    // ignore
+  }
+}
 
 const NUMERIC = /^\d+(\.\d+)*([-+].*)?$/;
 
@@ -90,7 +207,18 @@ export async function checkForUpdate(opts: {
   const feed = (opts.feed || DEFAULT_FEED).trim();
   const now = opts.now ?? Date.now();
   const doFetch = opts.fetchImpl ?? (typeof fetch === "function" ? fetch : null);
-  const base = { status: "unreachable" as UpdateStatus, latest: null, current: opts.current, href: null, at: now };
+  const base = {
+    status: "unreachable" as UpdateStatus,
+    latest: null,
+    current: opts.current,
+    href: null,
+    downloadUrl: null,
+    fileName: null,
+    fileSize: null,
+    platform: null,
+    files: [] as ReleaseFile[],
+    at: now,
+  };
 
   if (!doFetch) return { ...base, reason: "this build has no fetch() to ask with" };
 
@@ -119,11 +247,23 @@ export async function checkForUpdate(opts: {
   const latest = doc.version;
   const preparing = doc.status === "preparing";
   const newer = compareVersions(latest, opts.current) > 0;
+  const rawFiles = Array.isArray(doc.files) ? (doc.files as ReleaseFile[]) : [];
+  const installer = pickInstallerFile(rawFiles);
+  const plat = detectPlatform();
+  const directUrl = installer?.url || null;
+  const webHref = `${baseOf(feed)}#get`;
+  const href = directUrl || (newer ? webHref : null);
+
   return {
     status: newer && !preparing ? "available" : "current",
     latest,
     current: opts.current,
-    href: newer ? `${baseOf(feed)}#get` : null,
+    href,
+    downloadUrl: directUrl,
+    fileName: installer?.file || null,
+    fileSize: typeof installer?.size === "number" ? installer.size : null,
+    platform: plat.os !== "unknown" ? plat.os : null,
+    files: rawFiles,
     at: now,
     reason: null,
   };

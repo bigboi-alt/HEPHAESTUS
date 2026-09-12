@@ -37,7 +37,7 @@ const CLAUDE_STYLES: { id: ClaudeStyle; label: string; note: string; swatch: str
 const ACCENTS = ["#F5F5F5", "#FF7043", "#7FB2FF", "#4ADE80", "#FBBF24", "#C084FC", "#F472B6"];
 
 export default function Settings() {
-  const { settings, setSettings, go, palettes, say, update, checkNow } = useApp();
+  const { settings, setSettings, go, palettes, say, update, checkNow, downloadUpdate } = useApp();
   const [section, setSection] = useState<Section>("general");
   const [showSuitsCard, setShowSuitsCard] = useState(false);
 
@@ -327,6 +327,34 @@ export default function Settings() {
                 )}
               </span>
             </Row>
+            {update.status === "available" && (
+              <Row
+                label={`Get update v${update.latest}`}
+                note={`New version available (you are running v${update.current}). ${update.fileName ? `Downloads ${update.fileName}${update.fileSize ? ` (${(update.fileSize / 1024 / 1024).toFixed(1)} MB)` : ""} directly.` : "Starts the new version download directly."}`}
+              >
+                <button
+                  className="btn btn-primary"
+                  style={{ fontSize: 10.5, padding: "6px 14px" }}
+                  onClick={() => downloadUpdate()}
+                >
+                  get update
+                </button>
+              </Row>
+            )}
+            {update.downloadUrl && update.status === "current" && (
+              <Row
+                label={`Download installer v${update.latest || APP_VERSION}`}
+                note={`Get the current release installer (${update.fileName ?? "installer"}) directly.`}
+              >
+                <button
+                  className="btn"
+                  style={{ fontSize: 10, padding: "5px 12px" }}
+                  onClick={() => downloadUpdate()}
+                >
+                  download installer
+                </button>
+              </Row>
+            )}
             {update.status === "unreachable" && (
               <div className="faint mono-sm" style={{ fontSize: 9, lineHeight: 1.6, padding: "2px 0 10px" }}>
                 {update.reason}

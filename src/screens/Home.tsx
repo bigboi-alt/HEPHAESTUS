@@ -11,7 +11,7 @@ import Emblem from "../components/Emblem";
 import { forgeNote, forgeVoice } from "../lib/voice";
 
 export default function Home() {
-  const { palettes, current, setCurrent, go, deletePalette, toggleFavorite, purposeId, sites, deleteSite, setResumeId, settings, update, unlockFounder } = useApp();
+  const { palettes, current, setCurrent, go, deletePalette, toggleFavorite, purposeId, sites, deleteSite, setResumeId, settings, update, unlockFounder, downloadUpdate } = useApp();
   const [prompt, setPrompt] = useState("");
 
   const audit = useMemo(
@@ -183,18 +183,17 @@ export default function Home() {
                   <b>v{update.latest}</b> is out — you are on {update.current}
                 </span>
                 <span className="row gap-1">
-                  <a
-                    className="btn"
-                    style={{ fontSize: 10, padding: "5px 10px" }}
-                    href={update.href ?? "#get"}
-                    onClick={(e) => { if (!window.open(update.href ?? "", "_blank", "noopener,noreferrer")) e.preventDefault(); }}
+                  <button
+                    className="btn btn-primary"
+                    style={{ fontSize: 10, padding: "5px 12px" }}
+                    onClick={() => downloadUpdate()}
                   >
-                    get it
-                  </a>
+                    get update
+                  </button>
                 </span>
               </div>
               <div className="faint mono-sm" style={{ fontSize: 8.5, marginTop: 6 }}>
-                the installers come from the same place the site links; nothing downloads itself
+                {update.fileName ? `${update.fileName}${update.fileSize ? ` · ${(update.fileSize / 1024 / 1024).toFixed(1)} MB` : ""} · downloads directly` : "starts the new version download directly"}
               </div>
             </div>
           )}

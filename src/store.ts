@@ -14,7 +14,7 @@ import {
 } from "./lib/storage";
 import { founderMark, forgeMark, type Mark } from "./engine/identity";
 import { readSky } from "./lib/sky";
-import { checkForUpdate, DEFAULT_FEED, dueForCheck, IDLE_CHECK, type UpdateCheck } from "./lib/updates";
+import { checkForUpdate, DEFAULT_FEED, dueForCheck, IDLE_CHECK, startUpdateDownload, type UpdateCheck } from "./lib/updates";
 
 /** the running version, baked at build time; a literal fallback keeps plain `node` imports honest */
 export const APP_VERSION = typeof __APP_VERSION__ === "string" ? __APP_VERSION__ : "0.0.0-dev";
@@ -127,6 +127,8 @@ type State = {
   unlockFounder: () => void;
   /** ask the download feed what the latest version is */
   checkNow: () => Promise<void>;
+  /** download the latest installer directly in the app */
+  downloadUpdate: () => void;
 };
 
 /** the in-flight update check, so a double mount or two screens asking share one request */
@@ -242,12 +244,30 @@ export const useApp = create<State>((set, get) => ({
       const next = await checkForUpdate({ current: APP_VERSION, feed });
       set({ update: next });
       persist(get);
+      if (next.status === "available") {
+        get().say(`v${next.latest} is available · ready to download`);
+      } else if (next.status === "current") {
+        get().say(`up to date · v${APP_VERSION} is the newest`);
+      } else if (next.status === "unreachable") {
+        get().say(next.reason || "couldn’t check for updates");
+      }
     })();
     try {
       await checking;
     } finally {
       checking = null;
     }
+  },
+
+  downloadUpdate() {
+    const update = get().update;
+    const url = update.downloadUrl || update.href;
+    if (!url) {
+      get().say("no installer available to download");
+      return;
+    }
+    startUpdateDownload(url, update.fileName ?? undefined);
+    get().say(`downloading ${update.fileName || `Hephaestus v${update.latest || APP_VERSION}`}…`);
   },
 
   go: (screen) => set({ screen }),
