@@ -319,16 +319,24 @@ jobs:
         if: needs.gate.outputs.publish == 'true'
         run: |
           set -euo pipefail
-          for i in 1 2 3 4 5; do
-            if node tools/verify-release.mjs --base "$LIVE_URL"; then exit 0; fi
-            echo "attempt $i failed; retrying in 8s"; sleep 8
-          done
-          echo "::error::production is serving a bundle that does not pass verification."
-          echo "  Cloudflare keeps every deployment: Pages → $PAGES_PROJECT → view deployments, and"
-          echo "  'npx wrangler pages deployment list --project-name $PAGES_PROJECT' prints the ids."
-          echo "  Roll back to the previous deployment in the dashboard; the live site still serves the"
-          echo "  old release until you do, because nothing here deletes files."
-          exit 1
+          # --expect-version is the point of this step. The production alias can keep serving the
+          # PREVIOUS release for a few seconds after a successful deploy, and that older bundle passes
+          # every structural check on its own: it has a manifest, its own files, and a correct page.
+          # Only the version number tells "production is verified" apart from "production is lagging" -
+          # and lagging is worth waiting on (--retry-for, cache-busted on every attempt), while a real
+          # defect looks the same at second 1 and second 180, and then the run fails for it.
+          node tools/verify-release.mjs --base "$LIVE_URL" \
+            --expect-version "${{ needs.gate.outputs.version }}" --retry-for 180 \
+            || {
+              echo "::error::production is not serving the release that was just verified on the preview."
+              echo "  Cloudflare keeps every deployment: Pages → $PAGES_PROJECT → view deployments, and"
+              echo "  'npx wrangler pages deployment list --project-name $PAGES_PROJECT' prints the ids."
+              echo "  The installers are already sitting in the new bundle, so if this is only the alias"
+              echo "  lagging, re-running this step in a minute goes green without touching anything."
+              echo "  Roll back to the previous deployment in the dashboard if it is not: the live site keeps"
+              echo "  serving the old release either way, because nothing here deletes files."
+              exit 1
+            }
 
       - name: summary
         if: needs.gate.outputs.publish == 'true'

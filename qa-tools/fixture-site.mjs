@@ -136,8 +136,9 @@ export async function startSite(fixture = "ready", { port = 0 } = {}) {
   const reqs = [];
   const TYPES = { ".html": "text/html; charset=utf-8", ".json": "application/json; charset=utf-8", ".png": "image/png", ".svg": "image/svg+xml", ".txt": "text/plain; charset=utf-8" };
   const server = http.createServer((req, res) => {
-    const p = decodeURIComponent((req.url || "/").split("?")[0]);
-    reqs.push({ method: req.method, path: p });
+    const raw = req.url || "/";
+    const p = decodeURIComponent(raw.split("?")[0]);
+    reqs.push({ method: req.method, path: p, query: raw.includes("?") ? raw.split("?")[1] : "" });
     const rel = p === "/" ? "/index.html" : p;
     const fileOnDisk = path.join(tmp, path.normalize(rel).replace(/^(\.\.[/\\])+/, ""));
     if (!fileOnDisk.startsWith(tmp) || !fs.existsSync(fileOnDisk) || !fs.statSync(fileOnDisk).isFile()) {

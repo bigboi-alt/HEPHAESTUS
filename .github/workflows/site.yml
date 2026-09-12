@@ -115,35 +115,75 @@ jobs:
           esac
 
           # ── assemble the bundle: the repo's site, plus whatever release is live ─────────────
+          # One read-only look at how this project decides what is "production", because the answer
+          # is the difference between a deploy going live and a deploy quietly going nowhere. Warn
+          # rather than fail: a deploy to a project whose production branch is set some other way may
+          # still be correct, and the verification below is what actually decides.
+          branch=$(curl -s -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+            "$API/accounts/$CLOUDFLARE_ACCOUNT_ID/pages/projects/$PROJECT" \
+            | jq -r '.result.production_branch // "unknown"')
+          echo "project '$PROJECT' treats '$branch' as its production branch"
+          if [ "$branch" != "main" ]; then
+            echo "::warning::this deploys with --branch main, which only updates https://$PROJECT.pages.dev if the project's production branch IS main (Pages > $PROJECT > Settings)"
+          fi
+
           node tools/prepare-site.mjs --into site-built --carry-from "https://$PROJECT.pages.dev"
 
+          # ── deploy ────────────────────────────────────────────────────────────────────────
+          LIVE="https://$PROJECT.pages.dev"
+          DEPLOY_LOG=/tmp/wrangler-site.log
           npx --yes wrangler@latest pages deploy site-built \
-            --project-name "$PROJECT" \
-            --branch main
+            --project-name "$PROJECT" --branch main > "$DEPLOY_LOG" 2>&1 || {
+              cat "$DEPLOY_LOG"
+              echo "::error::the deploy failed. Whatever was live before is still live - a failed deploy never removes a bundle."
+              exit 1
+            }
+          cat "$DEPLOY_LOG"
 
-          # A green deploy step is not proof the site is reachable, and reachability of the page is
-          # not proof the downloads resolve. Both are checked: this is the step that would have
-          # caught the hephaestus-b4x mix-up on the first run instead of printing a false "live at".
-          # A docs-only deploy is allowed to find "preparing" metadata (no release published yet),
-          # which is why --allow-preparing is on here and off in release.yml.
-          for _ in 1 2 3 4 5; do
-            rm -f /tmp/live.html
-            # `|| true`, not `|| echo 000`: curl already reports 000 for a failed connection, and
-            # appending another zero-string made the check below read 000000.
-            code=$(curl -s -o /tmp/live.html -w "%{http_code}" -L --max-time 20 \
-              "https://$PROJECT.pages.dev" || true)
-            code=${code:-000}
-            if grep -qi "Hephaestus" /tmp/live.html 2>/dev/null; then
-              echo "verified: https://$PROJECT.pages.dev is serving the site"
-              node tools/verify-release.mjs --base "https://$PROJECT.pages.dev" --allow-preparing \
-                || { echo "::error::the page deployed, but its release metadata or downloads do not check out"; exit 1; }
-              exit 0
+          # wrangler prints the URL of the bundle it just stored. That URL is immutable and belongs to
+          # nobody but this run, so verifying it answers the only question worth asking first: is the
+          # thing we uploaded correct? (The alias, by contrast, can still be pointing at the previous
+          # deployment for a few seconds after "Deployment complete" - which is exactly how a correct
+          # site once failed this step by reading the old page and its missing release.json.)
+          DEPLOY_URL=$(grep -Eo 'https://[a-z0-9]+\.[a-z0-9-]+\.pages\.dev' "$DEPLOY_LOG" | head -1)
+
+          if [ -n "$DEPLOY_URL" ]; then
+            echo "checking the bundle itself at $DEPLOY_URL"
+            # --allow-preparing because a docs deploy legitimately ships a site with no release yet.
+            # No --retry-for: this URL is already final, so a problem here is a bug, not a delay.
+            node tools/verify-release.mjs --base "$DEPLOY_URL" --allow-preparing || {
+              echo "::error::the bundle this run uploaded does not check out - fix site/ or tools/prepare-site.mjs, not Cloudflare"
+              exit 1
+            }
+            echo "  ok: the deployed bundle serves its manifest and every file it lists"
+
+            # Only now wait on the alias, and wait on evidence: production has to serve the same bytes
+            # as the bundle above. Grepping for a word would pass on the previous deployment too.
+            curl -s --max-time 20 -o /tmp/deployed.html "$DEPLOY_URL/" || true
+            if [ -s /tmp/deployed.html ]; then
+              for i in 1 2 3 4 5 6 7 8; do
+                # the cache-buster defeats this site's own max-age=600 on /, which would otherwise
+                # hand back the previous deployment's page for ten minutes after a successful deploy
+                curl -s --max-time 20 -o /tmp/live.html "$LIVE/?run=$GITHUB_RUN_ID-$i" || true
+                if cmp -s /tmp/deployed.html /tmp/live.html; then
+                  echo "  ok: $LIVE is serving this deployment"
+                  break
+                fi
+                echo "production has not swapped over yet; retrying in 5s"
+                sleep 5
+              done
             fi
-            echo "not up yet (HTTP $code); retrying in 6s"
-            sleep 6
-          done
+          fi
 
-          echo "::error::deployed, but https://$PROJECT.pages.dev is not serving the site (last check: HTTP $code)."
-          echo "  If the deploy went to a different project name, that name is what is live - check Cloudflare > Workers & Pages."
-          echo "  Otherwise set the production branch: Pages > $PROJECT > Settings > Production branch = main, then re-run."
-          exit 1
+          # Final word, from production, with a small retry budget for the swap. A green deploy step is
+          # not proof the site is reachable, and reachability is not proof the downloads resolve.
+          node tools/verify-release.mjs --base "$LIVE" --allow-preparing --retry-for 60 || {
+            echo "::error::the page deployed, but its release metadata or downloads do not check out at $LIVE"
+            echo "  If the message above says the page has no #get section, production is still serving an"
+            echo "  older bundle: check that the deploy went to the project you expect (Cloudflare >"
+            echo "  Workers & Pages > $PROJECT > Settings > Production branch = main)."
+            echo "  If the deploy went to a suffixed name (a taken project name clones silently), $PROJECT"
+            echo "  is not the project to deploy to - set the repo variable PAGES_PROJECT to the right one."
+            echo "  Nothing in the live site was deleted by this run either way."
+            exit 1
+          }

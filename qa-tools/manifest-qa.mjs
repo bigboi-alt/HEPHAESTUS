@@ -251,6 +251,77 @@ console.log("\nmanifest-qa · what the pipeline insists on, checked without a cl
   await site.close();
 }
 
+// ── 5b. the race that a real deploy hit: the alias lags, the bundle is fine ─────────────────────
+/*
+   A published site once failed its own CI like this:
+
+       FAIL  /release.json is not JSON: Unexpected token '<', "<!doctype "... is not valid JSON
+       FAIL  the deployed page never mentions release.json
+       FAIL  the deployed page still talks to GitHub directly
+
+   Nothing was wrong with the site. `wrangler pages deploy` returns as soon as the bundle is stored,
+   and <project>.pages.dev keeps serving the PREVIOUS deployment for a few more seconds — which is
+   precisely an old page, and no release.json at all. Three assertions follow from that, and they are
+   what a verifier has to be able to tell apart: a bundle that is wrong (fail now), a host that has
+   not caught up (wait), and a host that is still serving an older release that happens to be valid
+   (the version is the only thing that sees it).
+*/
+{
+  const site = await startSite("ready");
+  const file = path.join(site.tmp, "release.json");
+  const page = path.join(site.tmp, "index.html");
+  const goodPage = fs.readFileSync(page, "utf8");
+  const doc0 = JSON.parse(fs.readFileSync(file, "utf8"));
+  const OLD_PAGE = '<!doctype html><title>Hephaestus</title><div id="get"></div>'
+    + '<script>fetch("https://api.github.com/repos/bigboi-alt/HEPHAESTUS/releases/latest")</script>';
+  const timed = async (extra) => {
+    const t = Date.now();
+    const r = await runAsync("verify-release.mjs", ["--base", site.origin, ...extra]);
+    return { ...r, ms: Date.now() - t };
+  };
+
+  // a stale host, with no waiting asked for: fail, and fail now
+  fs.writeFileSync(page, OLD_PAGE);
+  const once = await timed([]);
+  ok(once.code === 1 && /still talks to GitHub directly/.test(once.out), "an old page still fails, so the check itself was not weakened");
+  ok(once.ms < 5000, `and with no --retry-for it fails in one pass rather than stalling (${once.ms}ms)`);
+  ok(/not serving this bundle yet/.test(once.out), "and it says the host is not serving this bundle yet, which is the thing the operator needs to know");
+
+  // same host, same symptoms, but now allowed to wait: it is our own bundle, it will arrive
+  setTimeout(() => fs.writeFileSync(page, goodPage), 9000);   // the swap lands between attempt 2 and 3
+  const waited = await timed(["--retry-for", "45"]);
+  ok(waited.code === 0 && /verified/.test(waited.out),
+    `a host that catches up mid-run goes green instead of red: ${(waited.out.match(/[^\n]*verified[^\n]*/) || ["(none)"])[0]}`);
+  ok(/wait  /.test(waited.out) && waited.ms > 8000, `and it waited for the swap instead of declaring the deploy broken (${Math.round(waited.ms / 1000)}s of waiting)`);
+  ok(/attempts over/.test(waited.out) === false, "a run that ends green does not report a problem count");
+
+  // the cache-buster is only on the two things that can be stale
+  const probes = site.reqs.filter((q) => q.path === "/release.json" || q.path === "/");
+  const dl = site.reqs.filter((q) => q.path.startsWith("/downloads/"));
+  ok(probes.length > 0 && probes.every((q) => /_heph_check=/.test(q.query)), `${probes.length} staleable probes, all cache-busted (Cloudflare caches / for 600s and /release.json for 60s)`);
+  ok(dl.length > 0 && dl.every((q) => q.query === ""), `${dl.length} installer requests carry no query: a visitor's URL and the manifest's must match byte for byte`);
+
+  // a stale-but-complete previous release: every structural check passes, so only the version sees it
+  fs.writeFileSync(file, JSON.stringify({ ...doc0, version: "0.3.9" }, null, 2) + "\n");
+  const ver = await timed(["--expect-version", doc0.version, "--retry-for", "20"]);
+  ok(ver.code === 1 && /has not landed here yet/.test(ver.out), "and an older but perfectly valid release is refused by --expect-version, which structure alone cannot catch");
+  ok(ver.ms > 8000, `a version mismatch counts as lag, so it waited first (${Math.round(ver.ms / 1000)}s) and then still failed`);
+  const verFast = await timed(["--expect-version", doc0.version, "--retry-for", "0"]);
+  ok(verFast.code === 1 && verFast.ms < 5000, "and --retry-for 0 makes that same check a single pass, for a preview URL that cannot lag");
+  fs.writeFileSync(file, JSON.stringify(doc0, null, 2) + "\n");
+
+  // a genuine defect must not be waited on: page is ours, manifest lies
+  const broken = structuredClone(doc0);
+  broken.files[0].size = 12345;
+  fs.writeFileSync(file, JSON.stringify(broken, null, 2) + "\n");
+  const defect = await timed(["--retry-for", "30"]);
+  ok(defect.code === 1 && /bytes but the manifest says 12345/.test(defect.out), "a real defect is still reported as a real defect");
+  ok(defect.ms < 6000, `and is not retried while the host 'catches up' (${defect.ms}ms of the 30s budget spent)`);
+  fs.writeFileSync(file, JSON.stringify(doc0, null, 2) + "\n");
+
+  await site.close();
+}
+
 // ── 6. the workflow files ───────────────────────────────────────────────────────────────────────
 {
   const rel = fs.readFileSync(path.join(REPO, ".github/workflows/release.yml"), "utf8");
@@ -283,6 +354,21 @@ console.log("\nmanifest-qa · what the pipeline insists on, checked without a cl
   ok(!/api\.github\.com|__hephRepo|HEPH_REPO/.test(site), "site.yml no longer bakes a repo name or reads the GitHub API");
   ok(/prepare-site\.mjs --into site-built --carry-from/.test(site), "a docs deploy carries the live release in front of it");
   ok(/--allow-preparing/.test(site), "and is allowed to deploy a site with no release yet");
+  ok(/verify-release\.mjs --base "\$DEPLOY_URL" --allow-preparing/.test(site),
+    "site.yml verifies the exact bundle it uploaded, not only the alias that points at it");
+  ok(/cmp -s \/tmp\/deployed\.html \/tmp\/live\.html/.test(site),
+    "and proves production took it by comparing bytes — grepping for a word passes on the previous deployment too");
+  ok(!/grep -qi "Hephaestus"/.test(site), "the reachability grep that gated the old verify is gone");
+  ok(/production_branch/.test(site) && /::warning::/.test(site),
+    "site.yml reports which branch the project calls production, and warns rather than silently deploying into nowhere");
+  for (const [f, name] of [[site, "site.yml"], [rel, "release.yml"]]) {
+    const calls = f.split("\n").filter((l) => /verify-release\.mjs --base /.test(l));
+    const alias = calls.filter((l) => /\$LIVE/.test(l) || /pages\.dev"/.test(l));
+    ok(alias.every((l) => /--retry-for/.test(l) || /retry-for/.test(f.slice(f.indexOf(l), f.indexOf(l) + 260))),
+      `${name}: every verify aimed at the project alias has a retry budget (${alias.length} of ${calls.length} calls)`);
+  }
+  ok(/--expect-version/.test(rel), "release.yml pins the version it published when it checks production");
+  ok(!/for i in 1 2 3 4 5; do\n\s+if node tools\/verify/.test(rel), "and the hand-rolled retry loop is the verifier's job now, not the shell's");
   ok(/CLOUDFLARE_API_TOKEN|CLOUDFLARE_ACCOUNT_ID/.test(site) && !/secrets\.(?!CLOUDFLARE_API_TOKEN|CLOUDFLARE_ACCOUNT_ID)[A-Z_]+/.test(site),
     "site.yml uses the same two secrets and no others");
   ok(/node-version: 22/.test(site) && /node-version: 22/.test(rel), "both pin Node 22, which wrangler needs");

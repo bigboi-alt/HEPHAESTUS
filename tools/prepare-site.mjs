@@ -60,10 +60,21 @@ const list = async () => {
   if (doc) return doc;
   if (!base) return null;
   try {
-    const r = await fetch(`${base}/release.json`, { signal: AbortSignal.timeout(20000) });
+    // The query string is load-bearing, not noise: /release.json is served with max-age=60, so a
+    // deploy that runs seconds after a release publish could otherwise read the PREVIOUS manifest out
+    // of the cache and upload a bundle without the new release's files in it.
+    const r = await fetch(`${base}/release.json?_=${Date.now()}`, { signal: AbortSignal.timeout(20000) });
     if (!r.ok) { console.log(`  note  the live site answered ${r.status} for /release.json — nothing to carry`); return null; }
-    return await r.json();
-  } catch (e) { console.log(`  note  could not read the live release file (${e.message}) — nothing to carry`); return null; }
+    const body = await r.text();
+    try { return JSON.parse(body); }
+    catch (e) {
+      const kind = /html/i.test(r.headers.get("content-type") || "") || /^\s*<(!doctype|html)/i.test(body)
+        ? "an HTML page, not JSON — that host is serving an older build of the site, one that predates release.json"
+        : `a body that is not JSON (${e.message})`;
+      console.log(`  note  the live site answered with ${kind} — nothing to carry, and nothing deleted either`);
+      return null;
+    }
+  } catch (e) { console.log(`  note  could not reach the live release file (${e.message}) — nothing to carry`); return null; }
 };
 const live = await list();
 const downloads = join(into, "downloads");

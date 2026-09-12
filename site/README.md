@@ -60,8 +60,12 @@ Four rules hold that shape in place, each one checked in `qa-tools/`:
   `connect-src` anything beyond `'self'`.
 - **the browser can't be the only check.** Two failure modes are invisible to the page — a file the
   manifest lists but the bundle lost, and a manifest whose size is wrong. `tools/verify-release.mjs`
-  fetches every listed url and compares the byte length, and CI runs it against a preview deployment
-  before production and again after. That is also why a release is *deployed*, not merely *announced*.
+  fetches every listed url and compares the byte length, and CI runs it twice on a release: against
+  the throwaway preview deployment, then against production. A docs deploy runs it against the
+  immutable URL wrangler printed and then against the alias, waiting for the alias to be serving those
+  same bytes — a deploy is stored before it is pointed at, and reading the alias in between reports the
+  *previous* site as broken. Same symptoms either way, which is why the order matters. That is also why
+  a release is *deployed*, not merely *announced*.
 - **history is carried, not deleted.** The publish job copies the live `downloads/` and
   `release.json` into the new bundle first, so the previous five versions keep resolving. An old blog
   link to `v0.3.0` still works after three more releases.
@@ -109,6 +113,13 @@ certificate exists in this project). Regenerate the whole file by hand with
 | `/downloads/*`, `/release.json` | `X-Robots-Tag: noindex` | a raw file should be reached from the page that explains it |
 | `/release.json` | `max-age=60, must-revalidate` | the one file that must go stale fast: it is how a release appears, and how a bad one can be fixed within the hour |
 | `/*` | `Content-Security-Policy: … connect-src 'self'` | the page has exactly one thing to fetch and cannot be given more by accident |
+
+Those two cache windows are real, and they are read as well as written: every CI probe of `/` and
+`/release.json` carries a throwaway query string (`?_heph_check=…`) so that a retry actually re-reads
+the origin instead of asking Cloudflare for the same cached object a second time, and so a docs deploy
+seconds after a release publish carries the release that is live rather than the one before it.
+`/downloads/*` is deliberately *not* busted — the url in `release.json` has to be the url a visitor
+gets, byte for byte. `manifest-qa` asserts both halves of that split against a real server.
 
 `_headers` carries no comments and no `_headers`-style conditionals: Cloudflare's parser isn't
 documented to accept `#` there, and a silently-ignored file would drop the CSP. This folder's notes

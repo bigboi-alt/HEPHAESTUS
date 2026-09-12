@@ -206,10 +206,19 @@ export async function readCarry(from) {
   if (/^https?:\/\//.test(from)) {
     const base = from.replace(/\/$/, "");
     try {
-      const r = await fetch(`${base}/release.json`, { headers: { accept: "application/json" }, signal: AbortSignal.timeout(20000) });
-      if (r.ok) doc = await r.json();
-      else return { ok: false, why: `the live site answered ${r.status} for /release.json` };
-    } catch (e) { return { ok: false, why: `could not read the live release file (${e.message})` }; }
+      // ?_ defeats this host's own 60-second cache on /release.json: reading a cached manifest here
+      // would carry the previous release's file list instead of the one published seconds ago.
+      const r = await fetch(`${base}/release.json?_=${Date.now()}`, { headers: { accept: "application/json" }, signal: AbortSignal.timeout(20000) });
+      if (!r.ok) return { ok: false, why: `the live site answered ${r.status} for /release.json` };
+      const body = await r.text();
+      try { doc = JSON.parse(body); }
+      catch (e) {
+        const kind = /html/i.test(r.headers.get("content-type") || "") || /^\s*<(!doctype|html)/i.test(body)
+          ? "an HTML page, not JSON — the live host is running an older build with no release.json of its own"
+          : `a body that is not JSON (${e.message})`;
+        return { ok: false, why: `the live site answered with ${kind}` };
+      }
+    } catch (e) { return { ok: false, why: `could not reach the live release file (${e.message})` }; }
     dir = null;   // files are pulled by fetchLiveFile below
   } else {
     dir = resolve(from);

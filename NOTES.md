@@ -424,3 +424,61 @@ the restored `Akmon.tsx` brings back), `vite build` clean, `tools/ascii-art.py -
 Not testable here, and not claimed: a real `tauri build` on the four runners, wrangler's deploy, the
 preview→production promotion, and Actions minute limits — the first preflight run is what exercises
 those, and it deploys nothing.
+
+## 2026-09-12 — the first real deploy, and the check that misread it
+
+The `site` workflow ran in Actions and went red on its last step while the deploy itself succeeded:
+the log has `Deployment complete` at a real bundle URL, then three FAILs saying `/release.json` is not
+JSON, that the page never mentions `release.json`, and that the page still talks to GitHub. Reading
+`https://hephaestus-app.pages.dev` afterwards says otherwise — 44,123 bytes of the new page, ten
+mentions of `release.json`, zero of GitHub, and a 726-byte `application/json` manifest, all of it
+byte-identical to the deployment's own URL. `node tools/verify-release.mjs --base
+https://hephaestus-app.pages.dev --allow-preparing` exits 0 now.
+
+The cause was timing, and my check was built as if timing did not exist. `wrangler pages deploy`
+returns when the bundle is stored; the project alias keeps serving the previous deployment for a few
+seconds, and the previous deployment here was the old GitHub-API site — a page with no
+`release.json`, which is exactly what those three messages describe. Worse, the retry loop around it
+was decorative: it retried a `grep -qi Hephaestus` on the fetched page, the *old* page matches that
+grep, and the strict verifier then ran once inside the first iteration and exited the step. Five
+attempts, zero of them ever spent on the thing that needed waiting for.
+
+What changed:
+
+- **`site.yml`** now captures the deployment URL wrangler prints and verifies *that* first — immutable,
+  this run's bytes only, no alias involved, so a failure there means the bundle is wrong and it fails
+  without stalling. It then waits for production to serve the **same bytes** (`cmp` against the
+  deployment's own `/`, cache-busted) and only then runs the strict verify with `--retry-for 60`. The
+  word-grep is gone, and the step also prints which branch the Pages project calls production, because
+  that is the other way a deploy can go live in a place nobody visits.
+- **`tools/verify-release.mjs`** gained `--retry-for <seconds>` and `--expect-version <v>`, and it
+  distinguishes the two kinds of failure by itself: a host that is *not serving our bundle yet* is
+  worth waiting on, a bundle that lies about its bytes is not. Every attempt fetches `/` and
+  `/release.json` with a fresh cache-buster (the site caches them for 600 s and 60 s, so a retry
+  without one re-reads the same cached answer), while `/downloads/*` requests stay exactly as the
+  manifest names them. A failure that looks like lag says so and points at the deployment URL.
+- **`release.yml`**'s production step replaces its hand-rolled `for i in 1 2 3 4 5` loop with
+  `--expect-version <the version we published> --retry-for 180`. That loop had a hole rather than a
+  race: the previous release is a valid bundle — right shape, real files, correct page — so five
+  structural checks against a lagging alias could all pass while production served last week's release,
+  green. The version is the only thing that sees it, and `--retry-for` then separates "lagging" from
+  "wrong" instead of pretending they are the same.
+- **the carry read is cache-busted too** (`prepare-site.mjs`, `release-manifest.mjs`), and when the live
+  host answers with an HTML page the note now says so instead of quoting a JSON parse error at you:
+  "an older build of the site, one that predates `release.json`" — which is what that first run's
+  `could not read the live release file (Unexpected token '<'…)` line actually meant, and it was
+  harmless: nothing to carry, nothing deleted.
+- **`manifest-qa` grew the race as a test** (103 → 124 assertions): it serves a real bundle from a real
+  server, overwrites the page with an old one mid-run and restores it after nine seconds, and requires
+  the verifier to wait and pass; it requires a defect in our own bundle to fail inside one pass with
+  the 30 s budget unspent; it requires a stale-but-valid previous release to be refused *only* by the
+  version check; and it reads the server's request log to prove the staleable probes are busted and the
+  installer urls are not.
+
+Checked: gate **12/12, 453 assertions plus nine viewports clean** (`manifest-qa` 124, `dl-qa` 87,
+`ascii-qa` 79, `akmon-qa` 44, voice 27, imgsel 27, studio 21, trends 17, merkhet 13, imgcovered 10,
+sitebtn 4), `npm run typecheck` clean, `oxlint` 0 errors / 25 warnings, `vite build` clean,
+`tools/ascii-art.py --write` a no-op, both workflow YAMLs parse and every `run:` block passes
+`bash -n`, and the verifier was run against the live project and its own deployment URL: both exit 0.
+Still not testable in this sandbox, and not claimed: `tauri build` on the four runners, wrangler's
+deploy path, and the promotion of a *release* (this run deployed only the page).

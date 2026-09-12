@@ -136,3 +136,21 @@ against the restored screen.
 Windows/macOS/Linux runners, wrangler deploying, Cloudflare preview→production promotion, and
 Actions minute limits. Those are exercised by the workflow itself on the first real run, and the
 preflight mode exists precisely so the first one costs nothing but build minutes.
+
+
+---
+
+## Addendum, after the first real run
+
+The plan held; one line of it was wrong in a way only a live deploy could show. "deploy → verify"
+assumed a deployment is reachable the instant `wrangler` returns. It is stored first and pointed at a
+few seconds later, so the first real `site` run verified the alias while the alias still served the
+previous deployment, and reported a correct site as broken (three FAILs, all of them describing the
+*old* page). The site was fine and is still fine; the check was reading the wrong URL at the wrong
+moment, and its retry loop tested for the wrong thing.
+
+So "verify" in this plan now means: the deployment's own immutable URL first, then the alias with a
+budget and a byte comparison, with `--expect-version` on a release publish so a lagging alias cannot
+pass as a verified one. Everything else above — the build factory, the static `release.json`, the
+same two secrets, nothing published without validation — is unchanged by it, and no production state
+was altered to find this out. `NOTES.md` (2026-09-12) has the fix and the tests that pin it.

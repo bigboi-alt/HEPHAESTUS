@@ -176,7 +176,7 @@ python3 -m http.server 8099 --directory site      # the site
 cd qa-tools && npm i && npx playwright install chromium && node run-all.mjs
 ```
 
-That's the release gate: 12/12, 432 assertions plus nine viewports of the live page, and
+That's the release gate: 12/12, 453 assertions plus nine viewports of the live page, and
 `run-all.mjs` exits non-zero if any of them complains. `npm run typecheck` (`tsc -b`, not `tsc --noEmit` — the root config is a
 solution file and the latter silently does nothing) and `npm run lint` (oxlint, which also
 covers `tools/` and `qa-tools/`) are expected to come back clean.
@@ -210,7 +210,7 @@ tag v0.4.0  →  4 native runners build installers  →  temporary artifacts
 | Workflow | When | What it does |
 |---|---|---|
 | `release.yml` | **a `v*` tag**, or a manual run | builds the four native targets, then a single `publish` job validates the batch (`tools/release-manifest.mjs`), assembles the deployable site with the installers inside it, deploys to a throwaway preview branch, fetches every listed file back to prove it landed at the right size, and only then promotes to production. A manual run **defaults to build-and-validate only**; publishing needs the `publish` box ticked, or a tag. Runs queue on one shared lock instead of racing |
-| `site.yml` | push touching `site/`, or manual | deploys the page to Cloudflare Pages. It first carries the *live* `release.json` and `downloads/` into the new bundle, so a docs push can never demote a published release. Verifies the URL it just deployed, and that the release file it now serves still reads |
+| `site.yml` | push touching `site/`, or manual | deploys the page to Cloudflare Pages. It first carries the *live* `release.json` and `downloads/` into the new bundle, so a docs push can never demote a published release. Verifies the immutable URL it just deployed, then waits for the production alias to be serving those same bytes and verifies it too |
 
 **There is no GitHub Release, deliberately.** Not because releases are bad but because they put a
 stranger's download behind someone else's web server: installers would live on `github.com`, the
@@ -335,6 +335,41 @@ untouched), or production verification fails (run red, and the log prints the pr
 id via `wrangler pages deployment list`, because Cloudflare keeps every deployment and
 Pages → *your project* → *Rollback* restores one). There is no state in which the live site
 advertises a file that is not there — that is what the verification step is for, not a hope.
+
+**A red verify on a deploy that worked, which is the one to recognise.** `wrangler pages deploy`
+returns as soon as the bundle is *stored*; `https://<project>.pages.dev` goes on serving the
+**previous** deployment for a few more seconds. Checked in that window, the new site looks destroyed:
+
+```
+FAIL  /release.json is not JSON: Unexpected token '<', "<!doctype "... is not valid JSON
+FAIL  the deployed page never mentions release.json — it would not read the manifest we just shipped
+FAIL  the deployed page still talks to GitHub directly; the download path must be this host only
+```
+
+All three are the old page and its missing `release.json`, seen through the alias — not the bundle
+that went up. The first real run failed exactly this way, so the checks are ordered against it:
+
+1. **verify the deployment's own `https://<hash>.<project>.pages.dev` URL first.** It is immutable,
+   belongs to nobody but that run, and answers with the bytes just uploaded. A failure there *is* a
+   defect in `site/` or in `tools/prepare-site.mjs`, and it fails at once: nothing worth waiting for.
+2. **then wait on the alias with evidence, not with a grep.** Production has to serve the *same bytes*
+   as the deployment URL. Grepping the page for the word "Hephaestus" passes on the previous
+   deployment too, which is what the retry loop used to do — five attempts, and it took the first
+   branch and died inside them.
+3. **every probe of `/` and `/release.json` carries a cache-buster**, because this site caches them for
+   600 s and 60 s on purpose: without it, a retry re-reads the same cached answer and calls it a
+   second opinion. The `/downloads/*` urls are *not* busted — a visitor must get exactly the url the
+   manifest names.
+4. **a release publish also pins the version it expects** (`--expect-version`), because a stale
+   production alias still serving the previous release is *valid* in every other respect: right shape,
+   real files, correct page. Only the number distinguishes "production verified" from "production
+   lagging", and the run must not go green on the second one.
+
+So `verify-release.mjs --base <url> [--expect-version 0.4.0] [--retry-for 180]` waits while and only
+while the host is not serving our bundle, and `manifest-qa` reproduces the whole race against a real
+server that flips mid-run. If a run still goes red with a site that is demonstrably fine, **Re-run
+jobs** in Actions is enough — the deploy is not undone by a failed check, and nothing here deletes a
+published file.
 
 ### macOS signing (later)
 
