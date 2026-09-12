@@ -130,8 +130,9 @@ no server, no build.
   exporter — checked, not asserted
 - Merkhet measures, repairs, then measures again: it reports how many problems it fixed, what is still
   open, and what it tried and put back because the page read worse. No tick for a fix it hasn't verified
-- Akmon shows surfaces as a stack of planes with the perceptual distance between them, and voice as
-  editable cards, plus a page fragment painted twice to make the difference between the two unmistakable
+- Akmon is two labelled swatch grids — *surfaces* (background, surface, border, text, muted, each with a
+  whisper of the brand hue) and *voice* (primary, secondary, accent) — every swatch editable in place,
+  click-to-copy, locked or unlocked, with a contrast grade per pair and Cedalion's read across the top
 - Six shell themes (Obsidian, Graphite, Paper, Claude, Blueprint, Ember), accent colour, density, motion
   toggle — and Claude comes in two skins, Ambrosia (cream) and Nyx (dusted black with orange coals)
 - Everything persists locally. No account, no telemetry, no network.
@@ -175,7 +176,7 @@ python3 -m http.server 8099 --directory site      # the site
 cd qa-tools && npm i && npx playwright install chromium && node run-all.mjs
 ```
 
-That's the release gate: 12/12, 302 assertions plus seven viewports of the live page, and
+That's the release gate: 12/12, 432 assertions plus nine viewports of the live page, and
 `run-all.mjs` exits non-zero if any of them complains. `npm run typecheck` (`tsc -b`, not `tsc --noEmit` — the root config is a
 solution file and the latter silently does nothing) and `npm run lint` (oxlint, which also
 covers `tools/` and `qa-tools/`) are expected to come back clean.
@@ -193,77 +194,111 @@ the app was already offline-first and dependency-light, so this is a wrapper, no
 The icon in `src-tauri/icons/` is generated from `tools/icon.cjs` (`node tools/icon.cjs`,
 then `npx tauri icon src-tauri/icons/app-icon.png`).
 
-**The release pipeline lives in `.github/workflows/`:**
+**The release pipeline lives in `.github/workflows/`, and it has one rule: GitHub builds,
+Cloudflare delivers.**
+
+```
+tag v0.4.0  →  4 native runners build installers  →  temporary artifacts
+                                                            ↓
+                     one publish job: validate → place in /downloads/ → write release.json
+                                                            ↓
+                             preview deploy → verify every file → promote → verify again
+                                                            ↓
+                                   visitors download from your own hostname
+```
 
 | Workflow | When | What it does |
 |---|---|---|
-| `release.yml` | **a `v*` tag, or a manual run** — deliberately not every push | builds Windows (x64), macOS (aarch64 + x86_64), Linux (deb + AppImage) and puts them on a release tagged `v<version>`: a tag push **publishes** it, a manual run leaves a **draft**. Runs queue per tag rather than racing over one draft |
-| `site.yml` | push touching `site/`, or manual | writes this repo's name into the built page (the one thing the cards and the release list need), deploys it to Cloudflare Pages, prints what GitHub will answer a visitor, and verifies the live URL carries the write. Only runs once the `CLOUDFLARE_API_TOKEN` / `CLOUDFLARE_ACCOUNT_ID` secrets exist |
+| `release.yml` | **a `v*` tag**, or a manual run | builds the four native targets, then a single `publish` job validates the batch (`tools/release-manifest.mjs`), assembles the deployable site with the installers inside it, deploys to a throwaway preview branch, fetches every listed file back to prove it landed at the right size, and only then promotes to production. A manual run **defaults to build-and-validate only**; publishing needs the `publish` box ticked, or a tag. Runs queue on one shared lock instead of racing |
+| `site.yml` | push touching `site/`, or manual | deploys the page to Cloudflare Pages. It first carries the *live* `release.json` and `downloads/` into the new bundle, so a docs push can never demote a published release. Verifies the URL it just deployed, and that the release file it now serves still reads |
 
-**The site** lives in `site/` — one static page, no build step, coffee-and-cream, the hero
-portrait set in text characters measured off the mark. Its three download cards and its list of
-**every** release both read `bigboi-alt/HEPHAESTUS` at run time: the newest stable release's file
-for your system on the card, the whole release history underneath, sizes and all. The one line that
-names the repo is a working default, and `site.yml` overwrites it with whatever repo the deploy ran
-from — which is why there is no `config.js`, no connect step, and nothing to edit after publishing.
-When there is nothing to confirm, the card stays the anchor it already was and says so;
-`qa-tools/dl-qa.mjs` drives twelve of those states against a stand-in GitHub, including a release
-whose name is really HTML and an asset whose URL is really `javascript:`. `site/_headers` narrows
-`connect-src` to `'self' https://api.github.com`, so that reader is the only way this page can
-reach outside itself. One honest ceiling: **GitHub will not hand release files to anonymous
-visitors on a private repo**, so while the repo is private the cards stay inert and labelled —
-they light up by themselves the day it goes public. `node tools/site-preview.mjs` builds the
-single-file offline copy. Full notes, including the two ways to wire up Cloudflare Pages:
+**There is no GitHub Release, deliberately.** Not because releases are bad but because they put a
+stranger's download behind someone else's web server: installers would live on `github.com`, the
+page would have to ask `api.github.com` who the newest one is, and every visitor's browser would
+need that to work. So the files are published as ordinary static files on the site's own host —
+`/downloads/Hephaestus_0.4.0_x64-setup.exe` — with a small generated `release.json` beside them
+listing what exists, its byte size and its sha256. Consequences worth having: the repository can be
+**private** with no effect on downloads, GitHub can be down and the site keeps serving, and no
+visitor leaks anything to a third party. Nothing on `site/` mentions GitHub at all, and
+`qa-tools/ascii-qa.mjs` fails the build if that ever stops being true.
+
+**The site** lives in `site/` — one static page, no build step, coffee-and-cream, the hero portrait
+set in text characters measured off the mark. Five platform cards (Windows, Apple Silicon, Intel,
+AppImage, .deb) read `/release.json` from the same origin, and say one of exactly three things:
+filled with a real file (name, size, short hash), *not in this release*, or *not published yet*. A
+button is never a guess: when the file cannot be confirmed the link stays the in-page anchor it was
+authored as. Older releases are listed from the same file — kept for five versions, because the
+publish job carries the previous bundle forward instead of deleting it (`site/_headers` also serves
+`/downloads/*` as `immutable` + `Content-Disposition: attachment`, and `release.json` with a 60-second
+revalidate so a bad manifest is fixable within the hour). `qa-tools/dl-qa.mjs` drives the page against
+bundles that are complete, partial, empty, malformed, size-lying and off-site-pointing — the last two
+of which a browser cannot detect, and which the pipeline's own `tools/verify-release.mjs` rejects.
+`node tools/site-preview.mjs` builds the single-file offline copy. Full notes:
 [`site/README.md`](site/README.md).
 
-The emblem is transparent-backed in two inks — light marble for dark themes, brown for light
-ones — chosen by CSS from `[data-theme]`, so it never sits on a black plate and never
-disappears on a pale background.
-
-**Version bumps** — the version lives in three places; this keeps them in sync:
+**Version bumps** — the version lives in three places; this keeps them in sync (and the pipeline
+refuses a batch that disagrees):
 
 ```bash
-node tools/bump.mjs 0.2.0
+node tools/bump.mjs 0.4.0        # package.json + Cargo.toml + tauri.conf.json, prints the tag to push
+node tools/release-manifest.mjs --check-config            # the same check CI runs, in two seconds
+node tools/release-manifest.mjs --print-required          # which files a release must contain, read
+                                                          # from tauri.conf's bundle.targets
 ```
 
 ### To ship a release
 
-1. `node tools/bump.mjs 0.2.0`, commit, push, then `git tag v0.2.0 && git push --tags`.
-2. That tag is the whole release: Actions builds all three systems and **publishes** `v0.2.0`.
-   Nothing to click on github.com, and no run needed if you'd rather look first — press
-   **Run workflow** instead and it stops at a draft you can publish by hand.
-3. The download page needs no step at all: its cards and its release list read this repo when a
-   visitor loads the page, so they pick up `v0.2.0` on the next load after the tag — no redeploy,
-   no edit. Running `site.yml` at least once is still worth it, because that overwrites the repo
-   the page asks with the repo the deploy actually ran from.
-   While the repo is private the cards say so instead of linking — that is GitHub enforcing
-   privacy on strangers, not a bug in the page.
+1. `node tools/bump.mjs 0.4.0`, commit, push.
+2. `git tag v0.4.0 && git push --tags` — that is the publish trigger, and the only automatic one.
+3. Watch Actions → `release`. Four builds, then the `publish` job. It prints the batch it accepted,
+   the preview URL it verified, and the production URL it re-verified. `site/index.html` needs no
+   edit and no redeploy: it reads `release.json`, which the job just rewrote.
+4. If any platform is missing, empty, or named for another version, the job fails **before** the
+   deploy step and the live release keeps serving what it served. Nothing is deleted either way,
+   so a failed release never takes the old ones down.
 
-### The release ritual (one version at a time)
-
-A push does NOT always create a new release — it creates **or updates** the draft for the
-version that is currently set. That is deliberate: you keep pushing refinements to the same
-draft until you're happy, then you publish it once. The moment something is **published**,
-the workflow refuses to touch it again and tells you to bump:
+To check a release **without** shipping it — the run to use first, since a private repo pays macOS
+minutes at 10x: Actions → **release** → *Run workflow*, leaving **publish** unticked. It builds all
+four platforms, runs every validation rule, writes nothing, and tells you at the end what a publish
+would have done. Tick `publish` on the same form to do the deploy; tick `republish` only if you are
+deliberately re-shipping a version that is already live (the gate otherwise stops you, because the
+usual answer to "the release is wrong" is a new version number).
 
 | You want to… | Do |
 |---|---|
-| ship a version | `node tools/bump.mjs 0.2.0`, commit, push, `git tag v0.2.0 && git push --tags` — builds and publishes; the site notices by itself |
-| build without shipping | Actions → **Release** → Run workflow — same three OSes into a **draft** you can test, then publish or delete |
-| refresh a draft you already have | run it again for the same tag — `tauri-action` updates that draft instead of minting a second one |
-| push docs, site or workflow changes | nothing to remember: the release workflow has no push trigger, so a normal commit spends zero macOS minutes and `[skip ci]` is not needed |
-
-You can tell which build a draft holds by its run time: a run that finishes in ~4 minutes
-(caches warm) still uploaded fresh installers — always re-download before testing.
+| ship a version | `node tools/bump.mjs 0.4.0`, push, `git tag v0.4.0 && git push --tags` |
+| build everything and change nothing | Actions → release → Run workflow (leave `publish` off) |
+| re-run a deploy that failed on a missing secret | same form, `publish` ticked — the artifacts live 7 days |
+| ship only the page | push under `site/` (or run **site**); the live release rides along untouched |
+| push app/code changes | nothing to remember: no push trigger on `release.yml`, so a normal commit spends zero macOS minutes and `[skip ci]` is not needed |
 
 ### Secrets — what lives where
 
 | Secret | Needed for | Where it lives | In repo files? |
 |---|---|---|---|
-| `GITHUB_TOKEN` | creating releases/uploading installers | automatic — GitHub injects it every run | never |
-| `CLOUDFLARE_API_TOKEN` | deploying the download site | GitHub → repo **Settings → Secrets and variables → Actions** | never |
+| `CLOUDFLARE_API_TOKEN` | the deploy steps in both workflows | GitHub → repo **Settings → Secrets and variables → Actions** | never |
 | `CLOUDFLARE_ACCOUNT_ID` | same (tells wrangler which account) | same place | never |
-| Tauri updater signing key (later) | signing auto-update manifests | same place, when auto-update is wired in | public half only, deliberately |
+| `PAGES_PROJECT` *(a variable, not a secret)* | only if `hephaestus-app` is taken and you want another subdomain | the **Variables** tab of the same page | default is in the workflow |
+
+Nothing else is required, and this repo does not invent what isn't. A preflight run needs **no**
+secrets at all; a publish run stops with a readable error if either Cloudflare secret is missing,
+after the build and before the deploy. The names above are the only credential references in either
+workflow — `qa-tools/manifest-qa.mjs` asserts that, so a future edit cannot quietly start reading
+an undefined secret.
+
+Deliberately **not** configured, because none of it is real yet (each is documented so nobody has to
+guess, and none is faked):
+
+- **Tauri updater signing** (`TAURI_SIGNING_PRIVATE_KEY` + `_PASSWORD`, with the public half in
+  `tauri.conf.json`). `plugins` is `null` in that config: there is no updater, so in-app "check for
+  updates" does not exist and this workflow will not pretend otherwise. Downloading the new file is
+  the update path. Wiring an updater is its own job — it needs a key generated on your machine and
+  kept out of this repository, and its own QA, not a placeholder key.
+- **Apple Developer ID + notarization.** No certificate, no notary credentials, no signing step, and
+  no claim of any of it: the manifest says `"signing": {"macos": "unsigned, not notarised"}` and the
+  page tells visitors to right-click → Open once. If you ever buy the account and sign properly,
+  change that field and the sentence — the site shows what the file says rather than what it hopes.
+- **Windows code signing.** Same story: no certificate, no claim.
 
 **Setup order for Cloudflare (do it when you want the site live — desktop releases need none of this):**
 
@@ -273,15 +308,33 @@ You can tell which build a draft holds by its run time: a run that finishes in ~
    - Account resources: **Include → your account**
    - Create → **copy the token now** (Cloudflare shows it only once)
 2. **Account ID**: dash.cloudflare.com home page → right column → copy the long hex ID.
-3. Nothing to create in Cloudflare. The workflow asks the Pages API whether the project name it wants — `hephaestus-app` — is yours. Free: it creates it with `main` as the production branch. Yours from a previous run: it deploys straight in. **Someone else's: it stops and says so**, because `wrangler pages deploy` would otherwise mint a suffixed clone (`hephaestus-app-x9k`) and cheerfully report success. Want a different subdomain? Add an Actions **variable** named `PAGES_PROJECT` with the name you want — the project name *is* the subdomain, and Cloudflare cannot rename one later. By-eye alternative: Workers & Pages → Create → Pages → Upload assets → project name `hephaestus-app`, then delete that test upload and let the workflow take over.
+3. Nothing to create in Cloudflare. The workflow asks the Pages API whether the project name it wants —
+   `hephaestus-app` — is yours. Free: it creates it with `main` as the production branch. Yours from a
+   previous run: it deploys straight in. **Someone else's: it stops and says so**, because
+   `wrangler pages deploy` would otherwise mint a suffixed clone (`hephaestus-app-x9k`) and cheerfully
+   report success. Want a different subdomain? Add an Actions **variable** named `PAGES_PROJECT` — the
+   project name *is* the subdomain, and Cloudflare cannot rename one later.
 4. github.com repo → **Settings → Secrets and variables → Actions → New repository secret**, twice:
-   - name `CLOUDFLARE_API_TOKEN`, value = token from step 1
-   - name `CLOUDFLARE_ACCOUNT_ID`, value = ID from step 2
-   Names must match **exactly** — a typo is a silent skip, not an error.
-5. Run the **site** workflow manually once (repo → Actions → site → Run workflow). The last step of that job loads the URL it just deployed to and checks the page's `<title>` before it claims anything, so the run summary tells you the truth: **https://hephaestus-app.pages.dev**.
-6. Nothing else to wire up. The page doesn't read GitHub, so a private repo changes nothing about it — no connect step, no placeholder owner, no button that could land on a 404.
+   `CLOUDFLARE_API_TOKEN` (step 1) and `CLOUDFLARE_ACCOUNT_ID` (step 2). Names must match **exactly** —
+   a typo is a silent skip on a docs deploy, and an explicit failure on a release.
+5. Run the **site** workflow once (repo → Actions → site → Run workflow). Its last step loads the URL it
+   just deployed, checks it is this page, and reads `/release.json` back — so the run summary is either
+   "verified" or an error, never an assumption.
+6. Then a release: preflight first, tag when it is green. Nothing else is wired up by hand.
 
-Actions billing note: builds on **public** repos are unlimited/free; on **private** repos they burn the 2,000 free minutes/month. Since a public download site is the endgame anyway, flip the repo public when you start iterating releases.
+**Minutes and limits, honestly.** Public repos get unlimited Actions minutes; a private repo on the
+Free plan gets 2,000/month with macOS counted 10x and Windows 2x, and the default spend limit of $0
+makes running out a hard stop rather than a bill. That is why `release.yml` has no push trigger and
+why manual runs are preflight by default. And it is why the split matters: **Cloudflare Pages serves
+the site and its downloads from its own storage**, so a month with no buildable minutes can stop a
+new release and cannot break the page, the buttons, or a single existing download.
+
+**If a deploy goes wrong.** The publish job verifies the preview before promoting and production
+after, so the failure modes are: preview verification fails (nothing promoted, run red, live site
+untouched), or production verification fails (run red, and the log prints the previous deployment's
+id via `wrangler pages deployment list`, because Cloudflare keeps every deployment and
+Pages → *your project* → *Rollback* restores one). There is no state in which the live site
+advertises a file that is not there — that is what the verification step is for, not a hope.
 
 ### macOS signing (later)
 

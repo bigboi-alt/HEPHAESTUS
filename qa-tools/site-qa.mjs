@@ -1,6 +1,6 @@
 import { SHOTS, FILE_URL } from "./paths.mjs";
 import { chromium } from "playwright";
-import { stubGithub } from "./gh-stub.mjs";
+import { startSite } from "./fixture-site.mjs";
 
 const AUDIT = () => {
   const srgb = (c) => { c /= 255; return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4); };
@@ -54,7 +54,12 @@ const AUDIT = () => {
 };
 
 const b = await chromium.launch();
-const serve = process.env.SERVE || "http://127.0.0.1:8099/index.html";
+// Measured against a bundle that has a release in it — the lesson the last overflow bug taught: a
+// gate that only ever sees the empty state certifies the page nobody visits. The fixture writes a
+// real release.json plus real files, exactly as the publish job does.
+const live = await startSite("ready");
+const empty = await startSite("preparing");
+const serve = process.env.SERVE || `${live.origin}/index.html`;
 const fileUrl = FILE_URL;
 
 for (const [label, url, w, h, dsf] of [
@@ -64,11 +69,12 @@ for (const [label, url, w, h, dsf] of [
   ["phone 390", serve, 390, 844, 3],
   ["phone 360", serve, 360, 780, 2],
   ["wide 1920", serve, 1920, 1000, 1],
+  ["preparing 1440", `${empty.origin}/index.html`, 1440, 950, 1],
+  ["preparing 360", `${empty.origin}/index.html`, 360, 780, 2],
   ["FILE preview", fileUrl, 1400, 900, 1],
 ]) {
   const ctx = await b.newContext({ viewport: { width: w, height: h }, deviceScaleFactor: dsf });
   const page = await ctx.newPage();
-  await stubGithub(page, "full");   // measured with releases on it, not just the empty state
   const errs = [];
   page.on("pageerror", e => errs.push(String(e).slice(0, 160)));
   page.on("console", m => { if (m.type() === "error") errs.push("console: " + m.text().slice(0, 120)); });
@@ -95,4 +101,6 @@ for (const [label, url, w, h, dsf] of [
   if (label.startsWith("phone")) await page.screenshot({ path: `${SHOTS}/2-new-mobile.png`, fullPage: false });
   await ctx.close();
 }
+await live.close();
+await empty.close();
 await b.close();

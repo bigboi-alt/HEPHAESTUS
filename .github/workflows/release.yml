@@ -1,131 +1,341 @@
-# Releases Hephaestus desktop builds for Windows, macOS (Intel + Apple
-# Silicon) and Linux. Runs on a version tag, or when you press the button.
+# Hephaestus desktop release — GitHub Actions builds, Cloudflare Pages delivers.
 #
-# How it works
-#   1. Each runner builds the frontend + the Tauri binary for its OS.
-#   2. tauri-action finds (or creates) a DRAFT GitHub release tagged
-#      v<VERSION> and uploads every installer to it as an asset.
-#      Drafts keep being updated on later pushes, so just keep pushing.
-#   3. When you are happy: open the repo on github.com -> Releases ->
-#      edit the draft -> "Publish release". Publishing one updates the release page
-#      on GitHub and nothing on the landing site: site/ carries no download links and
-#      reads no API while the repo is private. If a card should ever link a build, the
-#      edit is documented in site/README.md - three divs in #get, and the gate re-run.
+# There is no GitHub Release in this pipeline, on purpose. GitHub is a private build factory: four
+# native runners produce installers, hand them to temporary workflow artifacts, and a single final
+# job validates them, places them into the deployable site as /downloads/*, writes release.json,
+# and only then touches Cloudflare. A visitor downloads from your own hostname and never learns or
+# cares that GitHub exists — which is also why this works identically whether the repository is
+# public or private.
 #
-# Before a new release, bump the version everywhere:
-#     node tools/bump.mjs 0.2.0
+#   git tag v0.4.0 && git push --tags        → build, validate, deploy. The only automatic publisher.
+#   Actions → Release → Run workflow         → build + validate ONLY. Nothing is deployed.
+#   Actions → Release → Run, tick "publish" → the full deploy, same checks as a tag.
+#
+# Every rule that protects the live site:
+#   · publish needs all four platform jobs to have succeeded — a cancelled or failed build deploys
+#     nothing, so the last verified release stays exactly as it was
+#   · the assembled bundle is deployed to a throwaway preview branch and verified (every file
+#     fetched, byte length compared) BEFORE the same bundle is promoted to production
+#   · nothing is ever deleted: whatever the live site already serves under /downloads/ is carried
+#     into the new bundle first, so old links keep resolving
+#   · missing Cloudflare secrets stop the deploy after the build, with an explanatory error, and a
+#     preflight run needs no secrets at all
+#
+# Secrets required (repository → Settings → Secrets and variables → Actions):
+#   CLOUDFLARE_API_TOKEN   Cloudflare Pages: Edit            — only for the deploy steps
+#   CLOUDFLARE_ACCOUNT_ID  Cloudflare dashboard, right column — only for the deploy steps
+# Optional, not required by anything here:
+#   TAURI_SIGNING_PRIVATE_KEY / _PASSWORD   in-app updater only; no updater is configured, and this
+#                                           workflow will not invent keys. Apple Developer ID +
+#                                           notarization credentials only if you ever sign macOS
+#                                           builds; until then the site says "unsigned" truthfully.
+# Nothing in this file needs GITHUB_TOKEN: no release object is created, so no write permission.
+#
+# Runner minutes: a public repo has unlimited Actions minutes; a private one on the Free plan has
+# 2,000/month with macOS counted 10x and Windows 2x. Running out delays or blocks *new builds* — it
+# cannot break a live site, because the site and its downloads no longer depend on GitHub.
 
 name: release
 
-# Two ways to build installers, and nothing else triggers this — a private repo is metered
-# on Actions minutes, and macOS runners count 10x, so building three OSes on every push
-# would eat a free plan's month in about ten commits to buy files nobody can download.
-#
-#   git tag v0.3.1 && git push --tags      -> builds, and PUBLISHES release v0.3.1.
-#                                           The landing page notices by itself: its cards
-#                                           read the newest published release.
-#   Actions -> Release -> Run workflow     -> builds into a DRAFT you can look at first.
 on:
   push:
     tags: ['v*']
   workflow_dispatch:
+    inputs:
+      publish:
+        type: boolean
+        default: false
+        description: "Deploy to Cloudflare Pages if every check passes (leave off for a build-only preflight)"
+      republish:
+        type: boolean
+        default: false
+        description: "Allow re-deploying a version that is already live (bumping is normally the better answer)"
 
 permissions:
-  contents: write
+  contents: read
 
-# two tags in quick succession used to race over one draft release; this makes them queue
+# the same lock site.yml takes, so a docs deploy and a release deploy can never interleave
 concurrency:
-  group: release-${{ github.ref }}
+  group: hephaestus-release
   cancel-in-progress: false
 
-jobs:
-  build-tauri:
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - platform: macos-latest # Apple Silicon
-            args: --target aarch64-apple-darwin
-          - platform: macos-latest # Intel
-            args: --target x86_64-apple-darwin
-          - platform: ubuntu-22.04
-            args: ''
-          - platform: windows-latest
-            args: ''
+env:
+  PAGES_PROJECT: ${{ vars.PAGES_PROJECT || 'hephaestus-app' }}
+  LIVE_URL: https://${{ vars.PAGES_PROJECT || 'hephaestus-app' }}.pages.dev
+  # installers are build output, not a deliverable to keep in GitHub for a month
+  RETENTION_DAYS: '7'
 
-    runs-on: ${{ matrix.platform }}
+jobs:
+  # ── the cheap gate first: five minutes of macOS is expensive, a mislabelled version is worse ──
+  gate:
+    name: agree on a version
+    runs-on: ubuntu-latest
+    outputs:
+      publish: ${{ steps.decide.outputs.publish }}
+      version: ${{ steps.decide.outputs.version }}
     steps:
       - uses: actions/checkout@v4
 
-      - name: setup node
-        uses: actions/setup-node@v4
+      - uses: actions/setup-node@v4
         with:
-          node-version: 20
-          cache: npm
+          node-version: 22
 
-      - name: install Rust stable
-        uses: dtolnay/rust-toolchain@stable
+      - name: package.json, Cargo.toml and tauri.conf.json must agree
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "push" ]; then
+            node tools/release-manifest.mjs --check-config --expect-tag "${GITHUB_REF_NAME}"
+          else
+            node tools/release-manifest.mjs --check-config
+          fi
+
+      - name: decide whether this run may deploy
+        id: decide
+        env:
+          EVENT: ${{ github.event_name }}
+          WANT_PUBLISH: ${{ inputs.publish }}
+          REPUBLISH: ${{ inputs.republish }}
+        run: |
+          set -euo pipefail
+          VER=$(node -p "require('./package.json').version")
+          echo "version=$VER" >> "$GITHUB_OUTPUT"
+          PUBLISH=false
+          [ "$EVENT" = "push" ] && PUBLISH=true
+          [ "$WANT_PUBLISH" = "true" ] && PUBLISH=true
+          echo "publish=$PUBLISH" >> "$GITHUB_OUTPUT"
+          {
+            echo "### This run"
+            echo "- version \`v$VER\`"
+            echo "- mode **$([ "$PUBLISH" = true ] && echo 'publish (will deploy after every check)' || echo 'preflight (build + validate, no deploy)')**"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: is this version already published?
+        env:
+          REPUBLISH: ${{ inputs.republish }}
+        run: |
+          set -euo pipefail
+          VER=$(node -p "require('./package.json').version")
+          live=$(curl -s --max-time 20 -o /tmp/live.json -w '%{http_code}' "$LIVE_URL/release.json" || echo 000)
+          if [ "$live" != "200" ]; then echo "nothing readable at $LIVE_URL/release.json (HTTP $live) — first deploy, or the site is served from another project"; exit 0; fi
+          NOW=$(node -p "try{JSON.parse(require('fs').readFileSync('/tmp/live.json','utf8')).version}catch(e){null}" || echo null)
+          echo "live release.json: version $NOW, this run is v$VER"
+          if [ "$NOW" = "$VER" ]; then
+            if [ "${{ github.event_name }}" = "push" ] || [ "$REPUBLISH" != "true" ]; then
+              echo "::error::v$VER is already the live release. Bump the version (node tools/bump.mjs <next>), or re-run this workflow with 'republish' ticked if you only need to rebuild the same files."
+              exit 1
+            fi
+            echo "::warning::re-publishing v$VER over the live one, because 'republish' was ticked"
+          fi
+
+  # ── four native builds. Each one is allowed to fail the release, not just warn about it. ────────
+  build-windows:
+    name: windows x64
+    needs: gate
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: swatinem/rust-cache@v2
+        with: { workspaces: './src-tauri -> target' }
+      - run: npm ci
+      # no --bundles here on purpose: tauri.conf.json names the targets, and the release gate reads
+      # the same list, so a target can't be built by one and expected by the other
+      - name: build the installers
+        run: npm run tauri build
+      - name: upload the packages (temporary, not a deliverable)
+        uses: actions/upload-artifact@v4
         with:
-          # only used on macOS runners
-          targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
+          name: pkg-windows
+          path: |
+            src-tauri/target/release/bundle/nsis/*.exe
+            src-tauri/target/release/bundle/msi/*.msi
+          if-no-files-found: error
+          retention-days: ${{ env.RETENTION_DAYS }}
 
-      - name: cache cargo
-        uses: swatinem/rust-cache@v2
-        with:
-          workspaces: './src-tauri -> target'
-
-      - name: install Linux system dependencies
-        if: matrix.platform == 'ubuntu-22.04'
+  build-linux:
+    name: linux x64
+    needs: gate
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: swatinem/rust-cache@v2
+        with: { workspaces: './src-tauri -> target' }
+      - name: webkit + bundler dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf xdg-utils
+      - run: npm ci
+      - name: build the packages
+        run: npm run tauri build
+      - name: upload the packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: pkg-linux
+          path: |
+            src-tauri/target/release/bundle/deb/*.deb
+            src-tauri/target/release/bundle/appimage/*.AppImage
+          if-no-files-found: error
+          retention-days: ${{ env.RETENTION_DAYS }}
 
-      - name: install frontend dependencies
-        run: npm ci
+  build-macos-arm:
+    name: macos apple silicon
+    needs: gate
+    runs-on: macos-latest          # ARM runner; 10x minute cost on a private repo, so this whole
+    steps:                         # workflow deliberately never runs on a plain push
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - uses: dtolnay/rust-toolchain@stable
+        with: { targets: aarch64-apple-darwin }
+      - uses: swatinem/rust-cache@v2
+        with: { workspaces: './src-tauri -> target' }
+      - run: npm ci
+      - name: build the disk image
+        run: npm run tauri build -- --target aarch64-apple-darwin
+      - name: upload the package
+        uses: actions/upload-artifact@v4
+        with:
+          name: pkg-macos-arm
+          path: src-tauri/target/aarch64-apple-darwin/release/bundle/dmg/*.dmg
+          if-no-files-found: error
+          retention-days: ${{ env.RETENTION_DAYS }}
 
-      # Guard: a push must NEVER silently overwrite a PUBLISHED release.
-      # Same version as a published release = you forgot to bump -> fail
-      # loudly with the fix. Updating a still-open DRAFT is fine (that's
-      # the iterate flow: keep pushing to vX.Y.Z until you publish it).
-      - name: refuse to overwrite a published release
-        shell: bash
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  build-macos-intel:
+    name: macos intel
+    needs: gate
+    runs-on: macos-latest-large    # the x86_64 runner; "-large" is Intel, plain "-latest" is ARM
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - uses: dtolnay/rust-toolchain@stable
+        with: { targets: x86_64-apple-darwin }
+      - uses: swatinem/rust-cache@v2
+        with: { workspaces: './src-tauri -> target' }
+      - run: npm ci
+      - name: build the disk image
+        run: npm run tauri build -- --target x86_64-apple-darwin
+      - name: upload the package
+        uses: actions/upload-artifact@v4
+        with:
+          name: pkg-macos-intel
+          path: src-tauri/target/x86_64-apple-darwin/release/bundle/dmg/*.dmg
+          if-no-files-found: error
+          retention-days: ${{ env.RETENTION_DAYS }}
+
+  # ── one final job does the publishing, and only after every build above succeeded ──────────────
+  publish:
+    name: validate, place, deploy
+    needs: [gate, build-windows, build-linux, build-macos-arm, build-macos-intel]
+    runs-on: ubuntu-latest
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: collect the packages from the four runners
+        uses: actions/download-artifact@v4
+        with:
+          pattern: pkg-*
+          path: artifacts
+          merge-multiple: true
+
+      - name: what arrived
         run: |
-          VER=$(node -p "require('./src-tauri/tauri.conf.json').version")
-          echo "release version: v$VER"
-          CODE=$(curl -s -o /tmp/rel.json -w "%{http_code}" \
-            -H "Authorization: Bearer $GITHUB_TOKEN" \
-            -H "Accept: application/vnd.github+json" \
-            "https://api.github.com/repos/${{ github.repository }}/releases/tags/v$VER")
-          if [ "$CODE" = "200" ]; then
-            DRAFT=$(node -p "JSON.parse(require('fs').readFileSync('/tmp/rel.json','utf8')).draft")
-            echo "release v$VER exists (draft=$DRAFT)"
-            if [ "$DRAFT" = "false" ]; then
-              echo "::error::v$VER is already published. Bump the version first: node tools/bump.mjs <next-version> — then commit and push."
-              exit 1
-            fi
-            echo "draft v$VER exists — its assets will be refreshed in place. Publish it when you're happy with this build."
-          else
-            echo "no release v$VER yet — tauri-action will create a new draft."
+          find artifacts -type f -printf '%10s  %P\n' | sort -k2 || true
+          echo "files: $(find artifacts -type f | wc -l)"
+
+      - name: assemble the deployable site (live files first, so nothing is deleted)
+        run: |
+          set -euo pipefail
+          node tools/prepare-site.mjs --into site-built --files-only --carry-from "$LIVE_URL"
+          node tools/release-manifest.mjs --scan artifacts \
+            --version "${{ needs.gate.outputs.version }}" \
+            --out site-built/release.json \
+            --downloads site-built/downloads \
+            --carry-from "$LIVE_URL"
+          echo "- \`site-built/release.json\`: $(node -p "const r=require('./site-built/release.json'); r.status+' '+r.version+' · '+r.files.length+' files · '+(r.previous||[]).length+' previous')" 2>/dev/null || echo '(unreadable)')" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: preflight ends here
+        if: needs.gate.outputs.publish != 'true'
+        run: |
+          echo "PREFLIGHT: the batch validated and nothing was deployed."
+          echo "Release notes for the operator:"
+          echo "  · to publish, push a tag:  git tag v$(node -p "require('./package.json').version") && git push --tags"
+          echo "  · or re-run this workflow with 'publish' ticked"
+          echo "  · this job's site-built/ is discarded with the run; it is never uploaded anywhere"
+          exit 0
+
+      # Everything below runs only on a publish. Secrets are checked here rather than at the start
+      # so a preflight build needs none of them, and so a missing secret can never be the reason a
+      # live deployment half-updates: the deploy step is simply never reached.
+      - name: cloudflare credentials present?
+        if: needs.gate.outputs.publish == 'true'
+        run: |
+          set -euo pipefail
+          if [ -z "${CLOUDFLARE_API_TOKEN:-}" ] || [ -z "${CLOUDFLARE_ACCOUNT_ID:-}" ]; then
+            echo "::error::the installers are built and valid, but CLOUDFLARE_API_TOKEN / CLOUDFLARE_ACCOUNT_ID are missing, so nothing was deployed. The live site still serves the previous release. Add the secrets under Settings → Secrets and variables → Actions, then re-run this workflow with 'publish' ticked — the artifacts stay available for ${{ env.RETENTION_DAYS }} days."
+            exit 1
           fi
 
-      - name: build + upload to draft release
-        uses: tauri-apps/tauri-action@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          tagName: v__VERSION__
-          releaseName: 'Hephaestus v__VERSION__'
-          releaseBody: |
-            Desktop build of Hephaestus v__VERSION__.
+      - name: deploy to a preview branch and verify there before production
+        if: needs.gate.outputs.publish == 'true'
+        id: preview
+        run: |
+          set -euo pipefail
+          npx --yes wrangler@latest pages deploy site-built \
+            --project-name "$PAGES_PROJECT" --branch "verify-${GITHUB_RUN_ID}" > /tmp/wrangler-preview.log 2>&1 \
+            || { cat /tmp/wrangler-preview.log; echo "::error::the preview deploy failed; production untouched"; exit 1; }
+          cat /tmp/wrangler-preview.log
+          URL=$(grep -Eo 'https://[a-z0-9]+\.[a-z0-9-]+\.pages\.dev' /tmp/wrangler-preview.log | head -1)
+          if [ -z "$URL" ]; then echo "::error::could not read the preview URL out of wrangler's output"; exit 1; fi
+          echo "url=$URL" >> "$GITHUB_OUTPUT"
+          echo "preview: $URL"
 
-            **Installers**
-            - Windows — `*_x64-setup.exe` (recommended) or `*.msi`
-            - macOS — `*_aarch64.dmg` (Apple Silicon) or `*_x64.dmg` (Intel). Unsigned for now: right-click the app -> Open the first time.
-            - Linux — `*.deb` (Debian/Ubuntu) or `*.AppImage` (any distro: chmod +x and run)
+      - name: every file in release.json must actually download, on the preview
+        if: needs.gate.outputs.publish == 'true'
+        run: node tools/verify-release.mjs --base "${{ steps.preview.outputs.url }}"
 
-            Runs 100% local. No account, no telemetry, no AI.
-          releaseDraft: ${{ github.event_name != 'push' }}   # a tag publishes; a manual run leaves a draft
-          prerelease: false
-          args: ${{ matrix.args }}
+      - name: promote the verified bundle to production
+        if: needs.gate.outputs.publish == 'true'
+        run: |
+          set -euo pipefail
+          npx --yes wrangler@latest pages deploy site-built \
+            --project-name "$PAGES_PROJECT" --branch main > /tmp/wrangler-prod.log 2>&1 \
+            || { cat /tmp/wrangler-prod.log; echo "::error::production deploy failed. The previous deployment is still live — nothing was half-published."; exit 1; }
+          tail -3 /tmp/wrangler-prod.log
+
+      - name: and again against production
+        if: needs.gate.outputs.publish == 'true'
+        run: |
+          set -euo pipefail
+          for i in 1 2 3 4 5; do
+            if node tools/verify-release.mjs --base "$LIVE_URL"; then exit 0; fi
+            echo "attempt $i failed; retrying in 8s"; sleep 8
+          done
+          echo "::error::production is serving a bundle that does not pass verification."
+          echo "  Cloudflare keeps every deployment: Pages → $PAGES_PROJECT → view deployments, and"
+          echo "  'npx wrangler pages deployment list --project-name $PAGES_PROJECT' prints the ids."
+          echo "  Roll back to the previous deployment in the dashboard; the live site still serves the"
+          echo "  old release until you do, because nothing here deletes files."
+          exit 1
+
+      - name: summary
+        if: needs.gate.outputs.publish == 'true'
+        run: |
+          {
+            echo "### Released"
+            echo "- version **${{ needs.gate.outputs.version }}**"
+            echo "- downloads: $(node -p "JSON.parse(require('fs').readFileSync('site-built/release.json','utf8')).files.map(f=>'\`'+f.url+'\`').join(' ')" 2>/dev/null || echo '?')"
+            echo "- live: $LIVE_URL"
+          } >> "$GITHUB_STEP_SUMMARY"

@@ -25,10 +25,16 @@
   },
   "bundle": {
     "active": true,
-    "targets": "all",
+    "targets": [
+      "nsis",
+      "msi",
+      "dmg",
+      "deb",
+      "appimage"
+    ],
     "category": "GraphicsAndDesign",
-    "shortDescription": "Design intelligence — palettes, trends, rules.",
-    "longDescription": "Hephaestus is a design intelligence workspace: forge colour palettes from plain language, browse recombination-engine design directions, and get rule-based critiques from Cedalion. No AI — every answer comes from its own algorithms.",
+    "shortDescription": "Design intelligence \u2014 palettes, trends, rules.",
+    "longDescription": "Hephaestus is a design intelligence workspace: forge colour palettes from plain language, browse recombination-engine design directions, and get rule-based critiques from Cedalion. No AI \u2014 every answer comes from its own algorithms.",
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",

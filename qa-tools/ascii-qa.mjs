@@ -1,20 +1,22 @@
 /*
   The page must stay what it is: text, on paper, with no way out and no way in.
 
-  Three groups of assertions:
-   1. the ASCII portrait — the block on the page has to equal what tools/ascii-art.py
-      prints, cell for cell, and the copy that quotes its size has to match too
-   2. nothing external — no images, no canvas, no scripts loaded from anywhere, no link
-      that leaves the page, no request to another origin, no GitHub at all (private repo)
+  Groups of assertions:
+   1. the ASCII portrait — the block on the page has to equal what tools/ascii-art.py prints, cell
+      for cell, and the copy that quotes its size has to match too
+   2. nothing external — no images, no canvas, no scripts loaded from anywhere, no link that leaves
+      the page, and no request to another origin. Not "GitHub is allowed": nothing is
    3. nothing hidden — with JS off, and with reduced motion on, every word is still shown
+   4. nothing invented — every number printed on the page is recomputed from this repository
+   5. the release file — what the buttons read is valid, same-origin, and says "preparing" in git
 
-    node ascii-qa.mjs          (needs the site served on :8099 — see README)
+    node ascii-qa.mjs          (drives its own fixture server; needs no :8099)
 */
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync, statSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { chromium } from "playwright";
-import { stubGithub } from "./gh-stub.mjs";
-import { ROOT, SITE, FILE_URL, SHOTS } from "./paths.mjs";
+import { startSite } from "./fixture-site.mjs";
+import { ROOT, FILE_URL, SHOTS } from "./paths.mjs";
 
 let pass = 0, fail = 0;
 const ok = (c, m) => { if (c) { pass++; console.log("  ✓ " + m); } else { fail++; console.log("  ✗ " + m); } };
@@ -39,17 +41,14 @@ const inked = lines.filter((l) => l.trim().length).length;
 ok(inked / rows > 0.9, `${inked}/${rows} rows carry a mark — the picture is present, not a smudge at the top`);
 const density = body.replace(/ /g, "").length / (cols * rows);
 ok(density > 0.25 && density < 0.85, `the grid is ${(density * 100).toFixed(0)}% inked — shading, not a solid block`);
-
-const hero = (html.match(/<figure class="art">[\s\S]*?<\/figure>/) || [""])[0];
-ok(!/id="artDims"/.test(html) && !/<figcaption>/.test(hero),
-  "the portrait ships with no caption: no size read-out, no explaining text under the art");
+ok(!/<figure/.test(html) && !/<figcaption>/.test(html), "the art is a block of text, not a figure with a caption hanging off it");
+ok(!/id="artDims"/.test(html), "and there is no size read-out next to it, on purpose");
 ok(/<pre class="bust"[^>]*aria-label="[^"]{60,}"/.test(html),
-  "and it still carries an aria-label, so removing the words doesn't remove the picture");
+  "while it still carries an aria-label, so removing the words doesn't remove the picture");
 
 let gen = null;
 try {
   execFileSync("python3", ["-c", "import PIL"], { stdio: "ignore" });
-  // stdout is the block, then a blank line and a /* size */ note — the note isn't art
   gen = execFileSync("python3", ["tools/ascii-art.py"], { cwd: ROOT, encoding: "utf8" })
     .split("\n\n/*")[0].replace(/\n+$/, "");
 } catch (e) {
@@ -62,51 +61,70 @@ if (gen) {
 
 /* ── 2 · nothing out, nothing in ─────────────────────────────────────────── */
 
-for (const tag of ["img", "picture", "source", "canvas", "iframe", "video", "svg"]) {
+for (const tag of ["img", "picture", "source", "canvas", "iframe", "video", "svg", "audio"]) {
   ok(!new RegExp(`<${tag}[\\s>/]`).test(html), `no <${tag}> anywhere on the page`);
 }
-ok(!/href="https?:\/\/github\.com/.test(html) && !/content="https?:/.test(html),
-  "no link in the shipped markup points at github.com — the only owner the page knows is the one the deploy writes in");
-ok(!/your-github-username|connect\.mjs|site\/config\.js/.test(html),
-  "no placeholder owner, no connect step, no config file to keep in sync — the deploy bakes or nothing does");
-ok(/var HEPH_REPO = window\.__hephRepo \|\| "bigboi-alt\/HEPHAESTUS";/.test(html),
-  "the page names exactly one repo, as a plain owner/repo — and a deploy may overwrite the line");
-ok(!/["'`][\w.-]+\/["'`]?\s*\.git|api\.github\.com\/repos\/[\w.-]+/i.test(html),
-  "and it names no other repo, so there is no second owner anywhere for the list to read by mistake");
-ok(!/<script[^>]+\ssrc=/.test(html), "every script is inline — nothing to fetch, nothing to block");
-ok(!/(src|href|content)="https?:/.test(html.replace(/<meta name="description"[\s\S]*?\/>/, "")),
-  "no absolute URL in any src, href or content attribute");
+ok(!/github/i.test(html), "the word github appears nowhere in the file: no release page, no API host, no badge");
+ok(!/api\.github\.com|releases\/download|releases\/latest|__hephRepo|HEPH_REPO/.test(html),
+  "and neither do any of the shapes a GitHub-backed download page would need");
+ok(!/your-github-username|connect\.mjs|site\/config\.js|window\.__/.test(html),
+  "no placeholder owner, no connect step, no config file for a human to keep in sync");
+ok(!/<script[^>]+\ssrc=/.test(html), "every script is inline — nothing to fetch, nothing that can be blocked");
+ok(!/(src|href)="https?:/.test(html), "no absolute URL in any src or href attribute");
+ok(!/rel="stylesheet"|@import|fonts\.googleapis|\.woff/.test(html), "no webfont anywhere: the page draws with system faces");
 const hrefs = [...html.matchAll(/<a [^>]*href="([^"]*)"/g)].map((m) => m[1]);
 const local = hrefs.filter((h) => h.startsWith("#"));
-ok(hrefs.length > 0 && local.length === hrefs.length, `all ${hrefs.length} links stay inside the page`);
+ok(hrefs.length > 0 && local.length === hrefs.length, `all ${hrefs.length} links in the shipped markup stay inside the page`);
 const ids = new Set([...html.matchAll(/id="([^"]+)"/g)].map((m) => m[1]));
 const dead = local.filter((h) => h !== "#" && !ids.has(h.slice(1)));
 ok(dead.length === 0, `every anchor has a target (${dead.join(", ") || "none dead"})`);
-ok(/connect-src 'self' https:\/\/api\.github\.com/.test(headers) && !/connect-src 'self'[^']*http/.test(headers.replace("https://api.github.com", "")),
-  "the CSP allows exactly one outside call — the releases API — and nothing else");
+ok(/connect-src 'self';/.test(headers) && !/connect-src 'self' [^;]*http/.test(headers),
+  "the CSP lets the page talk to its own origin and to nothing else");
+ok(/default-src 'self'/.test(headers) && /frame-ancestors 'none'/.test(headers), "and the rest of the CSP is as closed as it was");
+ok(/font-src 'self'/.test(headers) && /style-src 'self' 'unsafe-inline'/.test(headers),
+  "no third party is granted anything, so none can be added by oversight");
+const redirects = readFileSync(`${ROOT}/site/_redirects`, "utf8");
+ok(/\/dl\s+\/#get\s+301/.test(redirects), "the old /dl path still forwards to the download section");
+ok(!/github/.test(redirects), "and no redirect leaves for another host");
+for (const f of ["favicon.svg", "favicon.png", "og.png", "logo-touch.png", "logo-ink-512.png"]) {
+  ok(existsSync(`${ROOT}/site/assets/${f}`) && statSync(`${ROOT}/site/assets/${f}`).size > 200, `site/assets/${f} is really there`);
+}
 
-/* ── 3 · in a browser ────────────────────────────────────────────────────── */
+/* ── 3 · the release file the buttons read ───────────────────────────────── */
 
+const rel = JSON.parse(readFileSync(`${ROOT}/site/release.json`, "utf8"));
+ok(rel.schema === 1, "site/release.json is a schema-1 document");
+ok(rel.status === "preparing" && rel.version === null && rel.files.length === 0,
+  "in git it says preparing with no files — the honest pre-release state, not a fabricated one");
+ok(/signing/.test(JSON.stringify(rel)) && /unsigned/.test(JSON.stringify(rel.signing.windows)),
+  "and it states the signing truth before any release exists to misstate it");
+ok(/"previous":\s*\[\]/.test(readFileSync(`${ROOT}/site/release.json`, "utf8")), "with an empty history, not an omitted field");
+ok(/fetch\("release\.json"/.test(html), "the page reads it by relative path, so it works on any host and any port");
+ok(!/fetch\(["'`]?\//.test(html), "and never with a root-absolute path a subfolder deploy would miss");
+
+/* ── 4 · in a browser, with a release actually published ────────────────── */
+
+const site = await startSite("ready");
 const b = await chromium.launch();
 const seen = [];
 const ctx = await b.newContext({ viewport: { width: 1440, height: 900 }, javaScriptEnabled: true });
 const page = await ctx.newPage();
-await stubGithub(page);   // the page is measured here, not the download logic — dl-qa owns that
 const errs = [];
 page.on("pageerror", (e) => errs.push(String(e)));
 page.on("console", (m) => { if (m.type() === "error") errs.push("console: " + m.text()); });
 page.on("request", (r) => { if (!r.url().startsWith("data:")) seen.push(r.url()); });
-await page.goto(SITE, { waitUntil: "networkidle" });
+await page.goto(site.url, { waitUntil: "networkidle" });
 await page.waitForTimeout(700);
-const origin = new URL(SITE).origin;
+const origin = new URL(site.url).origin;
 const offsite = seen.filter((u) => !u.startsWith(origin));
-ok(offsite.every((u) => u.startsWith("https://api.github.com/repos/bigboi-alt/HEPHAESTUS")),
-  `${seen.length} request${seen.length === 1 ? "" : "s"} to load the page: ${offsite.length} of them offsite, and every offsite one is the same repo's release list — no fonts, no images, no analytics`);
+ok(offsite.length === 0,
+  `${seen.length} request${seen.length === 1 ? "" : "s"} to load a page that has releases: ${offsite.length} offsite (fonts, images and analytics would show up here)`);
+ok(seen.filter((u) => /release\.json/.test(u)).length === 1, "release.json is read once, not on a timer");
 ok(errs.length === 0, `no page errors ${JSON.stringify(errs.slice(0, 2))}`);
 
 const box = await page.evaluate(() => {
   const pre = document.querySelector("pre.bust");
-  const holder = pre.closest(".art-box").getBoundingClientRect();
+  const holder = pre.parentElement.getBoundingClientRect();
   const r = pre.getBoundingClientRect();
   const cs = getComputedStyle(pre);
   const cols = +pre.dataset.cols, rows = +pre.dataset.rows;
@@ -124,46 +142,79 @@ const want = (box.rows * box.lh) / (box.cols * 0.6 * box.fs);   // the grid's ow
 ok(Math.abs(box.h / box.w - want) / want < 0.03,
   `the block is ${box.w}×${box.h} against a wanted ${want.toFixed(3)} — the mark's proportions, not stretched by the column`);
 
-const cards = await page.evaluate(() => [...document.querySelectorAll(".os > [data-kind]")].map((el) => {
-  const a = el.querySelector("a.state");
-  return { tag: el.tagName, raw: a?.getAttribute("href") || null, abs: a?.href || null,
-           live: !!(a && a.classList.contains("live")), text: (a?.innerText || "").trim() };
-}));
-ok(cards.length === 3, `three systems listed (${cards.length})`);
-// the cards ARE anchors now — that is what makes "click and the download starts" possible. On a
-// repo with nothing published, the only two honest outcomes are this section's own anchor and the
-// releases page GitHub confirmed exists; a file link at that moment would be a lie
-ok(cards.every((c) => (c.raw === "#get" || c.raw === "https://github.com/bigboi-alt/HEPHAESTUS/releases") && !c.live),
-  `no card claims a file it didn't see: ${[...new Set(cards.map((c) => c.raw))].join(" | ")}`);
-ok(!cards.some((c) => /\/releases\/latest|\/download\//.test(c.raw || "")),
-  "and none of them links /releases/latest or a raw asset path — only URLs that exist for sure");
-ok(cards.every((c) => /not posted yet|all releases/.test(c.text)), "and each says which of the two it is", cards.map((c) => c.text).join(" / "));
+const cards = await page.evaluate(() => [...document.querySelectorAll(".dl [data-slot]")].map((a) => ({
+  slot: a.getAttribute("data-slot"), raw: a.getAttribute("href"), live: a.classList.contains("ready"),
+  target: a.getAttribute("target"), rel: a.getAttribute("rel"), text: a.innerText.replace(/\s+/g, " ").trim(),
+})));
+ok(cards.length === 5, `five platform cards: ${cards.map((c) => c.slot).join(", ")}`);
+ok(cards.every((c) => c.raw === "#get" || /^\/downloads\//.test(c.raw)), "each one is either this section or a file on this host");
+ok(cards.every((c) => !c.target && !c.rel), "nothing opens in a new tab or sheds its referrer on the way out");
+ok(cards.every((c) => !/github/i.test(c.text)), "and none of the labels mentions another service while handing over a file");
+ok(cards.filter((c) => c.live).length === 5, "with a release published, all five filled themselves");
+const nums = await page.evaluate(() => {
+    const o = {};
+    for (const el of document.querySelectorAll("[data-check]")) o[el.getAttribute("data-check")] = ((o[el.getAttribute("data-check")] || "") + " " + el.textContent.trim()).trim();
+    return o;
+  });
+  ok(Object.keys(nums).length >= 8, `the page prints ${Object.keys(nums).length} checkable figures: ${Object.keys(nums).join(", ")}`);
+
+const inert = await page.evaluate(() => [...document.querySelectorAll('a[href^="#"], a[href^="/downloads/"]')].filter((a) => !a.textContent.trim() && !a.getAttribute("aria-label")).length);
+ok(inert === 0, `every link on the page has a name a screen reader can read (${inert} without)`);
 ok(!(await page.evaluate(() => Object.keys(localStorage).length)), "the page writes nothing to localStorage");
 await page.screenshot({ path: `${SHOTS}/ascii-hero.png` });
 await ctx.close();
 
-/* with the script off, and with reduced motion on, every word must still be there */
+/* ── 5 · with the script off, and with reduced motion on ─────────────────── */
+
 for (const [label, opts] of [["JS off", { javaScriptEnabled: false }], ["reduced motion", { reducedMotion: "reduce" }]]) {
   const c2 = await b.newContext({ viewport: { width: 1100, height: 900 }, ...opts });
   const p2 = await c2.newPage();
-  await stubGithub(p2);
-  await p2.goto(SITE, { waitUntil: "load" });
+  await p2.goto(site.url, { waitUntil: "load" });
   const r = await p2.evaluate(() => {
     const els = [...document.querySelectorAll(".reveal")];
-    const hidden = els.filter((e) => +getComputedStyle(e).opacity < 0.99).length;
+    // nothing on this page may be held invisible: the reveal is a slide, and opacity is checked
+    // anyway, because "decoration must never gate content" is the rule the slide has to obey
+    const hidden = els.filter((e) => +getComputedStyle(e).opacity < 0.99 || getComputedStyle(e).display === "none").length;
     const art = document.querySelector("pre.bust").getBoundingClientRect();
-    return { total: els.length, hidden, artW: Math.round(art.width), words: document.body.innerText.trim().split(/\s+/).length };
+    const dl = [...document.querySelectorAll(".dl [data-slot]")].map((a) => a.getAttribute("href"));
+    return { total: els.length, hidden, artW: Math.round(art.width), dl,
+             words: document.body.innerText.trim().split(/\s+/).length,
+             status: document.getElementById("statusText").textContent.trim() };
   });
-  ok(r.hidden === 0, `${label}: all ${r.total} animated blocks are shown anyway (${r.hidden} stuck invisible)`);
+  ok(r.hidden === 0, `${label}: all ${r.total} reveal blocks are legible without a script or a scroll (${r.hidden} stuck invisible)`);
   ok(r.artW > 200, `${label}: the portrait is text, so it's still there (${r.artW}px wide)`);
-  ok(r.words > 700, `${label}: the page still reads as ${r.words} words, not a stub`);
+  ok(r.words > 1200, `${label}: the page still reads as ${r.words} words, not a stub`);
+  if (label === "JS off") ok(r.dl.every((h) => h === "#get"), `${label}: a reader with no script is offered no download it can't confirm`);
+  else ok(r.dl.every((h) => h === "#get" || /^\/downloads\//.test(h)), `${label}: with motion off the links still resolve locally only`);
+  ok(!/reading|loading|\.\.\.$/.test(r.status), `${label}: and the status line is a sentence, not a spinner ("${r.status.slice(0, 54)}…")`);
   await c2.close();
 }
 
-/* the single-file preview has to carry the same art, or the shipped copy lies */
+/* ── 6 · the numbers printed on the page ────────────────────────────────── */
+{
+    const n = (k) => (nums[k] || "").trim().split(" ")[0].replace(/,/g, "");
+  const num = (v) => String(v).replace(/,/g, "");        // 4,923 on the page, 4923 from wc -l
+  const engine = execFileSync("bash", ["-c", "ls src/engine/*.ts | wc -l && cat src/engine/*.ts | wc -l && find src -name '*.ts' -o -name '*.tsx' | xargs cat | wc -l && wc -l < src-tauri/src/main.rs && grep -c 'id:' src/engine/grids.ts"], { cwd: ROOT, encoding: "utf8" }).trim().split("\n").map(Number);
+  ok(n("engineFiles") === num(engine[0]), `the page's engine file count (${nums.engineFiles}) is the repo's (${engine[0]})`);
+  ok(n("engineLines") === num(engine[1]), `and its engine line count (${nums.engineLines}) matches the counted ${engine[1]}`);
+  ok(n("srcLines") === num(engine[2]), `the whole-app figure (${nums.srcLines}) matches ${engine[2]}`);
+  ok(n("rustLines") === num(engine[3]), `the "8 lines of Rust" claim is checked, not asserted (${nums.rustLines} vs ${engine[3]})`);
+  ok(n("grids") === num(engine[4]), `the grid library is ${nums.grids} presets, as the repo counts them`);
+  const readme = readFileSync(`${ROOT}/README.md`, "utf8");
+  const cat = (readme.match(/library of \*\*([\d,]+)/) || [])[1];
+  const refused = (readme.match(/([\d,]+) combinations are refused/) || [])[1];
+  ok(num(cat) === n("catalog"), `the catalogue count on the page (${nums.catalog}) is the count README makes (${cat})`);
+  ok(num(refused) === n("refused"), `and so is the refused-combinations figure (${nums.refused} vs README's ${refused})`);
+  const pkg = JSON.parse(readFileSync(`${ROOT}/package.json`, "utf8"));
+  ok(num(n("version")) === num(pkg.version), `the version printed in the header (${n("version")}) is package.json's (${pkg.version})`);
+  const conf = JSON.parse(readFileSync(`${ROOT}/src-tauri/tauri.conf.json`, "utf8"));
+  ok(conf.version === pkg.version, "which is the version the desktop bundle will carry");
+}
+
+/* ── 7 · the offline single-file copy ───────────────────────────────────── */
+
 const pv = await b.newContext({ viewport: { width: 1280, height: 900 } });
 const pp = await pv.newPage();
-await stubGithub(pp);
 const pvErrs = [];
 pp.on("pageerror", (e) => pvErrs.push(String(e)));
 await pp.goto(FILE_URL, { waitUntil: "load" });
@@ -176,6 +227,7 @@ ok(pblock === body.replace(/^\n|\n$/g, ""), "site-preview.html carries the ident
 ok(pvErrs.length === 0, `the offline copy runs clean ${JSON.stringify(pvErrs.slice(0, 2))}`);
 await pv.close();
 
+await site.close();
 await b.close();
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

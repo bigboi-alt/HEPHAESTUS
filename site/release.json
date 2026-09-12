@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "status": "preparing",
+  "product": "Hephaestus",
+  "version": null,
+  "publishedAt": null,
+  "channel": "stable",
+  "signing": {
+    "windows": "unsigned",
+    "macos": "unsigned, not notarised",
+    "linux": "unsigned"
+  },
+  "files": [],
+  "previous": [],
+  "note": "This is the file the download buttons read. It is committed as a placeholder on purpose: installers live in Cloudflare's copy of the deployed site, not in git, so the publish job in .github/workflows/release.yml overwrites this document with one that lists real files, real byte counts and real sha256 sums. Until that happens the page says 'no release is published on this site yet' \u2014 the truth, rather than a button that 404s."
+}

@@ -340,3 +340,87 @@ typecheck` clean, `npm run lint` 0 errors / 24 warnings on 50 files, `npm run bu
 repo and shows "Nothing published yet", which is today's truth: `git tag -l` on the remote is empty,
 0 releases, so the cards correctly resolve to `<repo>/releases` and will fill themselves the moment a
 `v*` tag is pushed). `site/index.html` is 51,403 B with zero `href="https://…` in the markup.
+
+## 2026-09-11 — the shop window owns its own stock (and Akmon went back to cards)
+
+Two asks, one change of architecture and one reversal.
+
+**Akmon reverted.** `96f5404` replaced the two labelled swatch grids with a "surfaces are planes,
+voice is cards" panel (`src/components/ForgeSplit.tsx`, 382 lines, plus a rewritten
+`src/screens/Akmon.tsx`), and `815d374` later added `qa-tools/planes-qa.mjs` to police it. All three
+are undone: `Akmon.tsx` restored from `96f5404^`, `ForgeSplit.tsx` deleted, `planes-qa.mjs` deleted.
+`akmon-qa.mjs` was written for the rejected design, so it was rewritten rather than deleted: 44
+assertions over two forges, checking the eight cards (roles in order, lockable, copyable, picker
+editable, `L·C` per card, contrast + WCAG grade on the seven that can be graded), that a lock
+survives a `shake`, that deuteranopia repaints the painted squares and hands them back exactly, and —
+because a revert that nothing enforces is a revert that gets "improved" again — that no trace of the
+planes panel is reachable. No orphan CSS was left behind: the experiment styled itself inline.
+
+**The release pipeline stopped being a GitHub feature.** The previous design had `tauri-action`
+putting installers on a GitHub Release and the website asking `api.github.com` what to offer. That
+made the delivery path depend on the repository's visibility, on GitHub's API, and on a third-party
+host holding the bytes. Now: `release.yml` builds the four native targets onto
+`bundle.targets = ["nsis","msi","dmg","deb","appimage"]` — that list is now explicit in
+`src-tauri/tauri.conf.json` instead of `"all"`, because "all" quietly promises an `.rpm` nobody can
+build without `rpmbuild`, and a gate that demands a file the bundler skips is a gate that will be
+turned off. Four jobs upload 7-day artifacts; **no** release object is created, `permissions` is
+`contents: read` and the token is never used for publishing.
+
+Three new pieces of tooling, all runnable locally with no credentials and no network:
+
+- `tools/release-manifest.mjs` — classifies a folder of installers, requires every *primary* slot
+  (`.exe`, both `.dmg`s, AppImage, `.deb`; `.msi`/`.rpm` publish as extras when built), refuses empty
+  or absurdly large files, refuses a batch whose file names carry a different version than
+  package.json/Cargo.toml/tauri.conf.json, skips `.sig` and `.app` with a reason, carries the live
+  release forward into `previous[]` (five versions, so no old link dies), and writes
+  `site-built/release.json` + `site-built/downloads/`. `--check-only` is the preflight mode and
+  provably writes nothing; `--print-required` and `--check-config` print what the gate will demand.
+- `tools/prepare-site.mjs` — assembles the deployable folder for *both* workflows, carrying the live
+  `release.json` + files first (a docs push can no longer demote a release; `--files-only` keeps the
+  placeholder metadata for the manifest to replace), and drops the folder's own README.
+- `tools/verify-release.mjs` — fetches `/release.json` from a deployed URL and every file it lists,
+  comparing status and byte length, refusing any url that is not a same-origin `/downloads/` path,
+  refusing a `ready` manifest with no files, and refusing a page that still mentions
+  `api.github.com`. Older-release 404s are a note, never a blocked deploy.
+
+`.github/workflows/release.yml`: `workflow_dispatch` (default: build + validate, **no deploy**;
+`publish` and `republish` checkboxes) or a `v*` tag; a cheap `gate` job first (config agreement,
+tag-vs-config agreement, and refusing to silently re-publish the version already live) so a mislabel
+costs nothing; then four builds; then one `publish` job needing all four, which assembles the bundle,
+deploys it to a `verify-<run>` **preview** branch, verifies, promotes to `main`, verifies again, and
+prints the rollback route if that last check fails. Missing Cloudflare secrets fail *after* the build
+and *before* the deploy. `site.yml` keeps the Pages-ownership guard (the `hephaestus-b4x` lesson) and
+both workflows share `concurrency: hephaestus-release` with `cancel-in-progress: false`.
+
+**The site was rebuilt around that.** `site/index.html` no longer knows a repository exists: the word
+"github" appears zero times in the file (`ascii-qa` enforces it, plus `connect-src 'self'` and zero
+off-site requests in a browser). Product-first instead of index-first — hero with one honest button
+that becomes "Download for <your platform> · 14.9 MB"; five platform cards reading `release.json`;
+extras row; checksum table; carried history; a "how it thinks" section saying plainly that the
+determinism costs you variety on purpose; "the catch" listing no-AI/no-account/0.x/unsigned-macOS/
+manual-updates; and a details block whose figures (`9` engine files, `4,923` lines, `10,688` app
+lines, `8` lines of Rust, `17` grids, `1,750`/`1,390` catalogue counts, the version) are recomputed
+from the repo by the gate, so the page cannot drift into inventing a statistic. `site/release.json`
+ships as a `preparing` document, which is what makes the fail-safe state the *normal* state rather
+than an error. Padding lesson applied twice over: `.wrap` now declares only left/right, sections only
+top/bottom, and `.sechead` can wrap — a `flex: none` label is what put a long "§ 03 — arithmetic, on
+purpose" 4 px past a 360 px screen during this very rewrite.
+
+Two follow-ups in the same round, both forced by looking at a full-page render rather than by an
+assertion passing:
+
+- the reveal effect started at `opacity: 0`, so anything that expands the page instead of scrolling
+  it — a print, a screenshot tool, a crawler that never scrolls — showed "How it thinks" and "The
+  catch" as two headings over blank space. It slides 10px now and never hides a thing: decoration may
+  not gate content, and "invisible until a script and a scroll event agree" was both of those.
+- the header nav was a wrapping flex row of five links, which at 390px left one or two alone on their
+  own line mid-sentence. Two tidy columns instead; and the hero button's "· 3.0 MB" no longer breaks
+  onto a second line inside the button.
+
+Checked: gate **12/12, 432 assertions plus nine viewports clean** (`dl-qa` 87, `manifest-qa` 103,
+`ascii-qa` 79, `akmon-qa` 44, voice 27, imgsel 27, studio 21, trends 17, merkhet 13, imgcovered 10,
+sitebtn 4), `npm run typecheck` clean, `oxlint` 0 errors / 25 warnings (the 24 baseline plus the one
+the restored `Akmon.tsx` brings back), `vite build` clean, `tools/ascii-art.py --write` a no-op.
+Not testable here, and not claimed: a real `tauri build` on the four runners, wrangler's deploy, the
+preview→production promotion, and Actions minute limits — the first preflight run is what exercises
+those, and it deploys nothing.

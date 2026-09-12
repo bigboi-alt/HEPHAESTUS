@@ -1,30 +1,31 @@
 # Deploys the landing page (site/) to Cloudflare Pages.
 #
-# The page ships no download links and makes no requests, so this workflow is the only
-# moving part: push site/** and the URL updates. Two secrets, nothing to keep in sync
-# by hand, and nothing on the page that can point at a repo nobody can read.
+# A docs or design push to site/** is the whole trigger. There is no build step to run and no
+# config file to edit: the folder is the site. What this job adds is one safety rule — a deploy
+# must never delete a published release. site/ in the repo carries a `preparing` release.json and
+# no /downloads/, because installers are not kept in git, so uploading the folder as-is over a live
+# release would break every download link on the site. So the deployable bundle is assembled by
+# tools/prepare-site.mjs, which copies the live release metadata and its files in first.
 #
-# The deploy step skips itself until you add the two secrets, so it never
-# fails a push while unconfigured. To switch it on:
+# Two secrets, and the job skips itself until they exist, so it can't fail an unrelated push:
 #
-#   1. Nothing to pre-create. The job runs `pages project create hephaestus-app
-#      --production-branch main` itself, tolerating "already exists" on every
-#      later run, then deploys. Site lands on https://hephaestus-app.pages.dev.
-#      (Doing it explicitly is required: `pages deploy` would otherwise *prompt*
-#      to create the missing project, and CI has no keyboard — and without the
-#      production branch set you'd get main.hephaestus-app.pages.dev instead.)
+#   1. Nothing to pre-create. The job asks the Pages API whether this account owns the project name
+#      and creates it with `main` as the production branch if it is free. (Doing it explicitly is
+#      required: `pages deploy` would otherwise *prompt* to create the missing project, and CI has
+#      no keyboard — and without the production branch set you'd get main.hephaestus-app.pages.dev.)
 #
 #   2. Repo -> Settings -> Secrets and variables -> Actions -> New secrets:
 #        CLOUDFLARE_API_TOKEN   (token with "Cloudflare Pages: Edit")
 #        CLOUDFLARE_ACCOUNT_ID  (your Cloudflare account id)
 #
-#   3. Re-run this workflow manually ("Run workflow") or push a change
-#      under site/.
+#   3. Re-run this workflow manually, or push a change under site/.
 #
-# NOTE: GitHub refuses `secrets` inside `if:` conditions at BOTH job and
-# step level ("Unrecognized named-value: 'secrets'"). So there is no `if:`
-# here — the secrets are copied into plain env vars (which IS allowed) and
-# a shell check decides whether to deploy or to warn + skip.
+# NOTE: GitHub refuses `secrets` inside `if:` conditions at both job and step level ("Unrecognized
+# named-value: 'secrets'"). So there is no `if:` here — the secrets are copied into plain env vars
+# (which IS allowed) and a shell check decides whether to deploy or to warn and skip.
+#
+# Release deploys go through release.yml, which takes the same concurrency lock: a docs push can
+# never interleave with a release publish.
 
 name: site
 
@@ -34,15 +35,22 @@ on:
     paths: ['site/**']
   workflow_dispatch:
 
+permissions:
+  contents: read
+
+concurrency:
+  group: hephaestus-release      # shared with release.yml: one deploy at a time, queue instead of race
+  cancel-in-progress: false
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
-      # Do not remove: current wrangler hard-fails under Node 22 ("Wrangler requires
-      # at least Node.js v22.0.0"), and ubuntu-latest's built-in Node is 20.x. Without
-      # this pin the deploy step dies before it ever reaches Cloudflare.
+      # Do not remove: current wrangler hard-fails under Node 22 ("Wrangler requires at least
+      # Node.js v22.0.0"), and ubuntu-latest's built-in Node is 20.x. Without this pin the deploy
+      # step dies before it ever reaches Cloudflare.
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -51,26 +59,28 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          PAGES_PROJECT: ${{ vars.PAGES_PROJECT || 'hephaestus-app' }}
         run: |
           set -euo pipefail
-          # The :- defaults are load-bearing: this step runs under `set -u`, so a
-          # variable that is merely absent (a human running it by hand, or a secret
-          # renamed) must skip cleanly instead of aborting the shell before the check.
+          # The :- defaults are load-bearing: this step runs under `set -u`, so a variable that is
+          # merely absent (a human running it by hand, or a renamed secret) must skip cleanly
+          # instead of aborting the shell before the check.
           if [ -z "${CLOUDFLARE_API_TOKEN:-}" ] || [ -z "${CLOUDFLARE_ACCOUNT_ID:-}" ]; then
             echo "::warning::site deploy skipped - add CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID under repo Settings > Secrets and variables > Actions, then re-run this workflow"
+            echo "The live site, if any, is untouched by this run."
             exit 0
           fi
 
-          # The Pages project name IS the subdomain, and it cannot be renamed later -
-          # Cloudflare only lets you delete the project and make a new one. Override
-          # without editing this file by setting a repo variable PAGES_PROJECT.
+          # The Pages project name IS the subdomain, and it cannot be renamed later — Cloudflare
+          # only lets you delete the project and make a new one. Override without editing this file
+          # by setting a repo variable PAGES_PROJECT.
           PROJECT="${PAGES_PROJECT:-hephaestus-app}"
           API="${CF_PAGES_API:-https://api.cloudflare.com/client/v4}"
 
-          # Ask the API whether THIS ACCOUNT owns the name. `pages deploy` cannot be
-          # trusted here: when the name belongs to somebody else it silently creates a
-          # suffixed clone (hephaestus -> hephaestus-b4x), reports "Deployment complete",
-          # and the URL you wanted 404s. Pages names are unique across all accounts.
+          # Ask the API whether THIS ACCOUNT owns the name. `pages deploy` cannot be trusted here:
+          # when the name belongs to somebody else it silently creates a suffixed clone
+          # (hephaestus -> hephaestus-b4x), reports "Deployment complete", and the URL you wanted
+          # 404s. Pages names are unique across all accounts.
           status=$(curl -s -o /dev/null -w "%{http_code}" \
             -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
             "$API/accounts/$CLOUDFLARE_ACCOUNT_ID/pages/projects/$PROJECT")
@@ -104,64 +114,32 @@ jobs:
               ;;
           esac
 
-          # ── write this repo's name into the page, then deploy that copy ───────────
-          # site/index.html already names the repo its releases live in, so a copy of the
-          # folder onto any host works on its own. This step overwrites that with
-          # github.repository — the repo the workflow actually ran from — which is what makes
-          # the page survive a rename, a move, or a fork. There is nothing for a human to edit
-          # either way, and the placeholder it looks for is the only contract.
-          REPO="${{ github.repository }}"
-          rm -rf site-built && cp -a site site-built
-          # the folder's own notes are for the repo, not for the people visiting the site
-          rm -f site-built/README.md
-          if ! grep -q 'window.__hephRepo' site-built/index.html; then
-            echo "::error::site/index.html lost the HEPH_REPO placeholder the deploy writes into"
-            exit 1
-          fi
-          sed -i "s#var HEPH_REPO = window.__hephRepo .*#var HEPH_REPO = \"$REPO\";#" site-built/index.html
-          grep -q "var HEPH_REPO = \"$REPO\";" site-built/index.html || {
-            echo "::error::the bake did not take - refusing to deploy an unbaked page"; exit 1; }
-          echo "baked: download cards will read https://github.com/$REPO"
-
-          # What an anonymous visitor can actually reach, printed so the run log answers
-          # "why are the cards grey" without anyone opening a browser:
-          # `|| true`, not `|| echo 000`: -w already prints 000 for a failed connection, and
-          # appending a second zero-string is what made the check below the loop read 000000.
-          repo_code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 15 "https://api.github.com/repos/$REPO" || true)
-          repo_code=${repo_code:-000}
-          rel_code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 15 "https://api.github.com/repos/$REPO/releases/latest" || true)
-          rel_code=${rel_code:-000}
-          echo "anonymous GitHub answers: repo $repo_code, latest release $rel_code"
-          case "$repo_code/$rel_code" in
-            200/200) echo "  -> cards fill from the newest release's assets, and the list below them shows every one" ;;
-            200/404) echo "  -> repo is public, no PUBLISHED release yet: cards point at $REPO/releases and the list says so. Push a v* tag and release.yml will change that line by itself." ;;
-            404/*|401/*|403/*) echo "  -> repo is not readable anonymously (private): cards stay inert. That is correct, and it is also why a download link from here cannot work: GitHub will not serve release files to strangers on a private repo. Make the repo public, or publish the files somewhere public (R2), and the same deploy lights the cards up." ;;
-            *) echo "  -> GitHub did not answer; cards stay as written" ;;
-          esac
+          # ── assemble the bundle: the repo's site, plus whatever release is live ─────────────
+          node tools/prepare-site.mjs --into site-built --carry-from "https://$PROJECT.pages.dev"
 
           npx --yes wrangler@latest pages deploy site-built \
             --project-name "$PROJECT" \
             --branch main
 
-          # A green deploy step is not proof the site is reachable. Poll the real URL
-          # and check it is OUR page; this is the step that would have caught the
-          # hephaestus-b4x mix-up on the first run instead of printing a false "live at".
+          # A green deploy step is not proof the site is reachable, and reachability of the page is
+          # not proof the downloads resolve. Both are checked: this is the step that would have
+          # caught the hephaestus-b4x mix-up on the first run instead of printing a false "live at".
+          # A docs-only deploy is allowed to find "preparing" metadata (no release published yet),
+          # which is why --allow-preparing is on here and off in release.yml.
           for _ in 1 2 3 4 5; do
             rm -f /tmp/live.html
-            # `|| true`, not `|| echo 000`: curl already reports 000 for a failed
-            # connection, and appending another zero-string made the error read 000000.
+            # `|| true`, not `|| echo 000`: curl already reports 000 for a failed connection, and
+            # appending another zero-string made the check below read 000000.
             code=$(curl -s -o /tmp/live.html -w "%{http_code}" -L --max-time 20 \
               "https://$PROJECT.pages.dev" || true)
             code=${code:-000}
             if grep -qi "Hephaestus" /tmp/live.html 2>/dev/null; then
               echo "verified: https://$PROJECT.pages.dev is serving the site"
-              if grep -q "var HEPH_REPO = \"$REPO\";" /tmp/live.html; then
-                echo "verified: the live page carries the baked repo ($REPO), so the cards are wired"
-              else
-                echo "::warning::the live page does NOT carry the baked repo - it is serving an unbaked copy (a stale build, or a second deploy path)"
-              fi
+              node tools/verify-release.mjs --base "https://$PROJECT.pages.dev" --allow-preparing \
+                || { echo "::error::the page deployed, but its release metadata or downloads do not check out"; exit 1; }
               exit 0
             fi
+            echo "not up yet (HTTP $code); retrying in 6s"
             sleep 6
           done
 
@@ -169,4 +147,3 @@ jobs:
           echo "  If the deploy went to a different project name, that name is what is live - check Cloudflare > Workers & Pages."
           echo "  Otherwise set the production branch: Pages > $PROJECT > Settings > Production branch = main, then re-run."
           exit 1
-

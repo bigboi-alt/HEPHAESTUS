@@ -2,7 +2,7 @@
 //   node tools/bump.mjs 0.2.0
 // Keeps package.json + package-lock.json in sync (npm pkg set), then
 // patches Cargo.toml and src-tauri/tauri.conf.json. Commit everything
-// and push — the release workflow drafts v0.2.0 automatically.
+// and push — a v* tag is what builds and publishes the release.
 "use strict";
 import { execFileSync } from "node:child_process";
 import { readFileSync, writeFileSync } from "node:fs";

@@ -1,383 +1,216 @@
 <!doctype html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Hephaestus — design help that shows its work</title>
-    <meta name="description" content="A free desktop app that picks your colours, lays out your pages and reviews your designs. No AI, no subscription, nothing sent anywhere." />
-    <meta name="theme-color" content="#f5efe7" />
-    <meta property="og:title" content="Hephaestus" />
-    <meta property="og:description" content="Free desktop design tool. Picks colours, builds layouts, reviews your work — with rules you can read. No AI." />
-    <meta property="og:type" content="website" />
-    <meta property="og:image" content="./assets/og.png" />
-    <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:image" content="./assets/og.png" />
-    <link rel="icon" type="image/svg+xml" href="./assets/favicon.svg" />
-    <link rel="alternate icon" type="image/png" href="./assets/favicon.png" />
-    <link rel="apple-touch-icon" href="./assets/logo-touch.png" />
-    <script>
-      /* the page is complete without JS; this class only ever ADDS a soft entrance */
-      (function () {
-        var r = document.documentElement;
-        r.className = "js";
-        if (matchMedia("(prefers-reduced-motion: reduce)").matches) r.className += " nomotion";
-      })();
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Hephaestus — a design forge that shows its work</title>
+<meta name="description" content="Hephaestus forges colour palettes from plain language, audits them against measured rules, and keeps a 1,750-entry library of buildable design directions. Free, offline, MIT. Desktop builds download directly — no account, no telemetry, no AI.">
+<meta name="theme-color" content="#f5efe7">
+<meta property="og:title" content="Hephaestus — a design forge that shows its work">
+<meta property="og:description" content="Colour palettes, rule-based critique and a buildable direction library. Free desktop app, direct downloads, no AI, no account.">
+<meta property="og:type" content="website">
+<meta property="og:image" content="./assets/og.png">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" href="./assets/favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="./assets/logo-touch.png">
+<style>
+  :root {
+    --paper: #f5efe7;
+    --paper-2: #efe6d9;
+    --card: #fcf9f4;
+    --line: #e6dccb;
+    --line-soft: #eee4d6;
+    --ink: #2c1e15;
+    --ink-2: #6a5443;
+    --ink-3: #75604f;   /* 5.2:1 on paper, 5.6:1 on a card — quiet, never unreadable */
+    --brown: #6f4429;
+    --brown-2: #8a5a37;
+    --amber: #b78251;
+    --on-brown: #fdf9f4;
+    --ok: #3f6b4a;
+    --warn: #8a5a37;
+    --serif: ui-serif, Georgia, Cambria, "Times New Roman", Times, serif;
+    --sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    --mono: ui-monospace, "SF Mono", Menlo, Consolas, "DejaVu Sans Mono", monospace;
+    --r: 14px;
+    --r-sm: 10px;
+    --lift: 0 1px 1px rgba(44, 30, 21, .035), 0 14px 30px -24px rgba(44, 30, 21, .30);
+    --lift-2: 0 1px 2px rgba(44, 30, 21, .05), 0 22px 44px -28px rgba(44, 30, 21, .34);
+  }
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; scroll-behavior: smooth; }
+  @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+  body {
+    margin: 0; background: var(--paper); color: var(--ink);
+    font-family: var(--sans); font-size: 16px; line-height: 1.62;
+    text-rendering: optimizeLegibility;
+  }
+  /* one axis each: a `.wrap` element that also matches a rule setting `padding: X 0` would lose its
+     side padding to it, and setting the shorthand back here would steal that rule's vertical padding.
+     Sides live here, tops and bottoms live with the section. */
+  .wrap { width: min(1180px, 100%); margin: 0 auto; padding-left: 22px; padding-right: 22px; }
+  a { color: var(--brown); }
+  h1, h2, h3 { font-family: var(--serif); font-weight: 600; letter-spacing: -0.015em; margin: 0; }
+  h1 { font-size: clamp(2.1rem, 1.1rem + 3.6vw, 3.9rem); line-height: 1.04; }
+  h2 { font-size: clamp(1.45rem, 1rem + 1.5vw, 2.1rem); line-height: 1.15; }
+  h3 { font-size: 1.06rem; line-height: 1.3; }
+  p { margin: 0 0 14px; }
+  code, .mono { font-family: var(--mono); }
+  code { font-size: .88em; color: #513c2c; background: var(--paper-2); border: 1px solid var(--line-soft); border-radius: 4px; padding: 0 5px; }
+  .panel code, .note code { background: #f7f0e6; }
+  .skip { position: absolute; left: -9999px; top: 0; background: var(--brown); color: var(--on-brown); padding: 10px 14px; border-radius: 0 0 var(--r-sm) 0; z-index: 5; }
+  .skip:focus { left: 0; }
 
-      /* Which repo the releases live in — the one thing this page needs to know. It names the
-         repo this site is built for, so a plain copy of site/ onto any host already works. The
-         deploy step in .github/workflows/site.yml rewrites the line to whatever repo it actually
-         ran from, which is what keeps it correct if the repo is ever renamed or moved. If the
-         value ends up unreadable, the cards and the release list stay exactly as the markup has
-         them: inert and honest, with nothing to 404 on. */
-      var HEPH_REPO = window.__hephRepo || "bigboi-alt/HEPHAESTUS";   // "owner/repo"
-    </script>
-    <style>
-      :root {
-        --paper: #f5efe7;
-        --paper-2: #efe6d9;
-        --card: #fcf9f4;
-        --line: #e6dccb;
-        --line-soft: #eee4d6;
-        --ink: #2c1e15;
-        --ink-2: #6a5443;
-        --ink-3: #75604f;   /* 5.2:1 on paper, 5.6:1 on a card — quiet, but never unreadable */
-        --brown: #6f4429;
-        --brown-2: #8a5a37;
-        --amber: #b78251;
-        --on-brown: #fdf9f4;
-        --serif: ui-serif, Georgia, Cambria, "Times New Roman", Times, serif;
-        --sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-        --mono: ui-monospace, "SF Mono", Menlo, Consolas, "DejaVu Sans Mono", monospace;
-        --r: 14px;
-        --r-sm: 10px;
-        --lift: 0 1px 1px rgba(44, 30, 21, .035), 0 14px 30px -24px rgba(44, 30, 21, .30);
-        --lift-2: 0 1px 2px rgba(44, 30, 21, .05), 0 22px 44px -28px rgba(44, 30, 21, .34);
-      }
-      * { box-sizing: border-box; }
-      /* no visible scrollbars — the page still scrolls normally */
-      html { scrollbar-width: none; }
-      html::-webkit-scrollbar, body::-webkit-scrollbar, *::-webkit-scrollbar {
-        width: 0; height: 0; background: transparent;
-      }
-      html { scroll-behavior: smooth; -webkit-text-size-adjust: 100%; }
-      body {
-        margin: 0; color: var(--ink); font-family: var(--sans); font-size: 17px; line-height: 1.68;
-        -webkit-font-smoothing: antialiased;
-        /* warm paper, lit from the top left, and nothing else */
-        background:
-          radial-gradient(1100px 700px at 12% -8%, #fbf6ee 0%, rgba(251, 246, 238, 0) 60%),
-          radial-gradient(900px 620px at 96% 4%, #f7ecdd 0%, rgba(247, 236, 221, 0) 55%),
-          var(--paper);
-      }
-      a { color: var(--brown); text-decoration: none; }
-      a:hover { text-decoration: underline; }
-      ::selection { background: #e9d6bd; }
-      .wrap { max-width: 1060px; margin: 0 auto; padding: 0 24px; }
-      .mono { font-family: var(--mono); }
+  /* ── header ────────────────────────────────────────────────────────── */
+  header { border-bottom: 1px solid var(--line); background: var(--paper); position: sticky; top: 0; z-index: 3; }
+  .bar { display: flex; align-items: center; gap: 16px; min-height: 62px; }
+  .mark { display: flex; align-items: baseline; gap: 10px; text-decoration: none; color: var(--ink); }
+  .mark b { font-family: var(--serif); font-size: 1.12rem; font-weight: 600; letter-spacing: .01em; }
+  .pill { font-family: var(--mono); font-size: 11px; letter-spacing: .06em; color: var(--ink-2); border: 1px solid var(--line); border-radius: 999px; padding: 2px 9px; white-space: nowrap; }
+  nav { margin-left: auto; display: flex; gap: 20px; flex-wrap: wrap; }
+  nav a { font-family: var(--mono); font-size: 12.5px; letter-spacing: .02em; color: var(--ink-2); text-decoration: none; border-bottom: 1px solid transparent; padding-bottom: 2px; }
+  nav a:hover { color: var(--brown); border-bottom-color: var(--brown); }
+  nav a.dl { color: var(--brown); }
+  @media (max-width: 720px) {
+    .bar { flex-wrap: wrap; padding-top: 12px; padding-bottom: 12px; }
+    /* a wrapping flex row of links leaves one orphan on its own line at 390px; two tidy columns don't */
+    nav { margin-left: 0; width: 100%; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 14px; }
+    nav a { font-size: 12px; }
+  }
 
-      /* ── header ─────────────────────────────────────────────────────────── */
-      header {
-        position: sticky; top: 0; z-index: 20; background: rgba(245, 239, 231, .86);
-        backdrop-filter: blur(12px) saturate(1.1); border-bottom: 1px solid var(--line-soft);
-      }
-      .bar { display: flex; align-items: center; gap: 12px; min-height: 66px; }
-      .name { font-family: var(--serif); font-size: 19px; letter-spacing: .005em; }
-      .vchip {
-        font-family: var(--mono); font-size: 10.5px; letter-spacing: .06em; color: var(--brown-2);
-        border: 1px solid var(--line); background: var(--card); padding: 3px 7px; border-radius: 99px;
-      }
-      .bar nav {
-        margin-left: auto; display: flex; align-items: center; gap: 4px;
-        font-size: 13px; font-family: var(--mono); letter-spacing: .03em;
-      }
-      .bar nav a { color: var(--ink-2); text-transform: lowercase; padding: 7px 11px; border-radius: 99px; }
-      .bar nav a:hover { color: var(--brown); background: #efe4d4; text-decoration: none; }
-      .bar nav a.pill {
-        border: 1px solid var(--brown); color: var(--on-brown); background: var(--brown);
-        padding: 7px 14px; margin-left: 8px;
-      }
-      .bar nav a.pill:hover { background: #5f3a22; color: var(--on-brown); }
+  /* ── hero ───────────────────────────────────────────────────────────── */
+  section.hero { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, .95fr); gap: 34px; align-items: center; padding-top: 62px; padding-bottom: 54px; }
+  @media (max-width: 900px) { section.hero { grid-template-columns: minmax(0, 1fr); gap: 26px; padding-top: 34px; padding-bottom: 30px; } }
+  .eyebrow { font-family: var(--mono); font-size: 12px; letter-spacing: .13em; text-transform: uppercase; color: var(--ink-3); margin: 0 0 16px; }
+  .lede { font-size: clamp(1rem, .95rem + .35vw, 1.16rem); color: var(--ink-2); max-width: 46ch; }
+  .acts { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin-top: 22px; }
+  .btn { display: inline-flex; align-items: center; gap: 9px; font: inherit; font-weight: 600; text-decoration: none; border-radius: var(--r-sm); padding: 11px 17px; border: 1px solid var(--brown); background: var(--brown); color: var(--on-brown); }
+  .btn:hover { background: #5d3a23; }
+  .btn.ghost { background: transparent; color: var(--brown); border-color: #dccfb9; }
+  .btn.ghost:hover { border-color: var(--brown); background: rgba(111, 68, 41, .05); }
+  .btn small { font-family: var(--mono); font-weight: 400; font-size: 11.5px; opacity: .82; white-space: nowrap; }
+  .here { font-family: var(--mono); font-size: 12px; color: var(--ink-3); margin: 14px 0 0; }
+  /* the portrait: text on the page's own background, no plate, no caption */
+  pre.bust {
+    /* width:max-content keeps the block the size of its own characters: stretched to the column it
+       would claim the portrait's aspect ratio, which the gate measures against the grid */
+    margin: 0 auto; width: max-content; max-width: 100%; font-family: var(--mono);
+    font-size: clamp(6.4px, 1.05vw, 11.2px); line-height: 1.02;
+    color: var(--brown); white-space: pre; text-align: center;
+    letter-spacing: normal; user-select: none;
+  }
+  @media (max-width: 900px) { pre.bust { font-size: clamp(4.6px, 1.85vw, 8.4px); } }
 
-      /* ── hero: words on the left, the portrait on the right, same paper ─── */
-      .band { padding: 0 0 8px; }
-      .hero {
-        display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.02fr);
-        gap: clamp(24px, 4vw, 56px); align-items: center;
-        /* only the vertical padding is set here: the .wrap it shares a box with owns the
-           sides, and a `0` here would overwrite that and let the page touch the screen edge */
-        padding-top: clamp(40px, 6vw, 78px);
-        padding-bottom: clamp(34px, 5vw, 58px);
-      }
-      .kicker {
-        font-family: var(--mono); font-size: 12px; letter-spacing: .1em; text-transform: uppercase;
-        color: var(--ink-3); margin: 0 0 20px;
-      }
-      .kicker b { color: var(--brown); font-weight: 600; }
-      h1 {
-        font-family: var(--serif); font-size: clamp(36px, 5.1vw, 58px); line-height: 1.06;
-        font-weight: 400; letter-spacing: -.02em; margin: 0 0 22px; text-wrap: balance;
-      }
-      h2, h3 { font-family: var(--serif); font-weight: 400; letter-spacing: -.012em; }
-      h2 { text-wrap: balance; }
-      .lead { font-size: 19px; color: var(--ink-2); margin: 0 0 30px; max-width: 40ch; }
-      .cta { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
-      .btn {
-        display: inline-flex; flex-direction: column; gap: 2px; padding: 13px 22px;
-        background: var(--brown); color: var(--on-brown); border: 1px solid var(--brown);
-        border-radius: var(--r-sm); font-size: 15.5px; font-weight: 550; line-height: 1.3;
-        cursor: pointer; box-shadow: var(--lift);
-        transition: transform .16s ease, background .16s ease, box-shadow .16s ease;
-      }
-      .btn:hover { background: #5f3a22; text-decoration: none; transform: translateY(-1px); box-shadow: var(--lift-2); }
-      .btn:active { transform: translateY(1px); box-shadow: none; }
-      .btn small { font-weight: 400; font-size: 11.5px; opacity: .8; font-family: var(--mono); }
-      .btn.ghost { background: transparent; color: var(--ink); border-color: var(--line); box-shadow: none; }
-      .btn.ghost:hover { background: var(--card); border-color: #d9c9b3; color: var(--brown); }
-      .facts {
-        display: flex; flex-wrap: wrap; gap: 6px 0; margin: 28px 0 0; padding: 0; list-style: none;
-        font-size: 13px; color: var(--ink-2); font-family: var(--mono);
-      }
-      .facts li + li::before { content: "·"; margin: 0 10px; color: var(--amber); }
+  /* ── sections ────────────────────────────────────────────────────────── */
+  section { padding-top: 58px; padding-bottom: 8px; }
+  /* The heading row is a flex line with a label that refuses to shrink — the exact shape that put a
+     long "§ 03 — arithmetic, on purpose" 4px past the edge of a 360px screen. It wraps now, and the
+     label may shrink and break anywhere rather than widen the page. */
+  .sechead { display: flex; flex-wrap: wrap; align-items: baseline; column-gap: 14px; row-gap: 4px; margin-bottom: 6px; }
+  .sechead .leader { flex: 1 1 24px; min-width: 24px; border-top: 1px dotted #ddcdb6; transform: translateY(-5px); }
+  .sechead h2 { flex: 0 1 auto; min-width: 0; }
+  .sechead .no { font-family: var(--mono); font-size: 11.5px; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-3); flex: 0 1 auto; min-width: 0; text-align: right; overflow-wrap: anywhere; }
+  .sub { color: var(--ink-2); max-width: 68ch; margin: 8px 0 26px; }
 
-      /* the portrait: text, on the page's own background, nothing behind it */
-      .art { margin: 0; }
-      .art-box { container-type: inline-size; width: 100%; max-width: 660px; margin: 0 auto; }
-      pre.bust {
-        margin: 0; font-family: var(--mono); color: var(--brown); white-space: pre;
-        line-height: 1.02; letter-spacing: 0; word-break: normal;
-        font-size: clamp(5px, 1.12vw, 13.5px);              /* fallback if cqi is unsupported */
-        font-size: min(13.5px, calc(100cqi / 44));            /* exact fit: 72 cells × 0.60em */
-        text-align: center; user-select: none;
-      }
-      html.js pre.bust { text-shadow: 0 1px 0 rgba(255, 255, 255, .5); }
+  /* ── the download panel ─────────────────────────────────────────────── */
+  .status { display: flex; align-items: center; gap: 9px; margin: 0 0 18px; font-family: var(--mono); font-size: 12.5px; color: var(--ink-2); }
+  .status .dot { width: 8px; height: 8px; border-radius: 50%; background: #d9b98f; flex: none; }
+  .status.ok .dot { background: var(--ok); }
+  .status.warn .dot { background: var(--amber); }
+  .dl { display: grid; grid-template-columns: repeat(auto-fit, minmax(214px, 1fr)); gap: 14px; }
+  .dl > a {
+    display: flex; flex-direction: column; gap: 8px; min-width: 0; text-decoration: none; color: inherit;
+    background: var(--card); border: 1px solid var(--line); border-radius: var(--r);
+    padding: 16px 16px 14px; box-shadow: var(--lift); transition: box-shadow .18s ease, transform .18s ease, border-color .18s ease;
+  }
+  @media (prefers-reduced-motion: reduce) { .dl > a { transition: none; } }
+  .dl > a:hover { border-color: #d9c7ad; box-shadow: var(--lift-2); transform: translateY(-2px); }
+  @media (prefers-reduced-motion: reduce) { .dl > a:hover { transform: none; } }
+  .dl .top { display: flex; align-items: center; gap: 8px; font-family: var(--mono); font-size: 12px; color: var(--ink-3); }
+  .dl .top .t { font-family: var(--serif); font-size: 1.02rem; color: var(--ink); letter-spacing: 0; }
+  .dl .you { margin-left: auto; font-family: var(--mono); font-size: 10.5px; letter-spacing: .06em; text-transform: uppercase; background: var(--brown); color: var(--on-brown); border-radius: 999px; padding: 2px 8px; }
+  .dl .d { font-size: 13.5px; color: var(--ink-2); margin: 0; min-width: 0; overflow-wrap: anywhere; }
+  .dl .state { margin-top: auto; padding-top: 11px; border-top: 1px dotted #ddcdb6; display: flex; align-items: center; gap: 8px; font-family: var(--mono); font-size: 12px; color: var(--ink-3); min-width: 0; }
+  .dl .state i { width: 7px; height: 7px; border-radius: 50%; background: #d9b98f; flex: none; }
+  .dl .state span { min-width: 0; overflow-wrap: anywhere; }
+  .dl a.ready .state { color: var(--brown); }
+  .dl a.ready .state i { background: var(--brown); }
+  .dl a.ready .state span { border-bottom: 1px solid transparent; }
+  .dl a.ready:hover .state span { border-bottom-color: var(--brown); }
+  .dl a.none .state i { background: #ddcdb6; }
+  .dl a .sizes { font-family: var(--mono); font-size: 11.5px; color: var(--ink-3); }
+  .extras { display: flex; flex-wrap: wrap; gap: 8px; margin: 16px 0 0; padding: 0; list-style: none; }
+  .extras li { font-family: var(--mono); font-size: 12px; border: 1px solid var(--line-soft); border-radius: var(--r-sm); padding: 6px 10px; background: var(--card); min-width: 0; overflow-wrap: anywhere; }
+  .extras a { color: var(--brown); text-decoration: none; border-bottom: 1px solid transparent; }
+  .extras a:hover { border-bottom-color: var(--brown); }
+  .panel { margin: 22px 0 0; background: var(--card); border: 1px solid var(--line); border-radius: var(--r); padding: 16px 18px; box-shadow: var(--lift); }
+  .panel summary { cursor: pointer; font-family: var(--mono); font-size: 12.5px; color: var(--ink-2); }
+  .panel table { width: 100%; border-collapse: collapse; margin-top: 12px; font-family: var(--mono); font-size: 12px; }
+  .panel th { text-align: left; font-weight: 400; color: var(--ink-3); padding: 0 10px 6px 0; }
+  .panel td { padding: 5px 10px 5px 0; border-top: 1px solid var(--line-soft); color: var(--ink-2); vertical-align: top; overflow-wrap: anywhere; }
+  .note { margin: 20px 0 0; padding: 15px 17px; border-left: 3px solid var(--amber); background: var(--paper-2); border-radius: 0 var(--r-sm) var(--r-sm) 0; font-size: 14.5px; color: var(--ink-2); }
+  .note b { color: var(--ink); }
 
-      /* ── sections ───────────────────────────────────────────────────────── */
-      main { padding-bottom: 20px; }
-      section { padding: clamp(40px, 5.4vw, 74px) 0; border-top: 1px solid var(--line-soft); }
-      .sechead { display: flex; align-items: baseline; gap: 14px; margin-bottom: 14px; }
-      .sechead .leader { flex: 1 1 40px; min-width: 24px; border-bottom: 1px dotted #dccbb4; transform: translateY(-7px); }
-      .sechead h2 { font-size: clamp(27px, 3.2vw, 38px); line-height: 1.15; margin: 0; }
-      .no { font-family: var(--mono); font-size: 11.5px; letter-spacing: .1em; color: var(--ink-3); text-transform: uppercase; white-space: nowrap; }
-      .sechead { margin-bottom: 26px; }
-      .sub { color: var(--ink-2); max-width: 68ch; margin: 0 0 30px; }
-      .sub b, .sub i { color: var(--ink); font-style: normal; }
+  /* ── the rest ────────────────────────────────────────────────────────── */
+  .duo { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 14px; }
+  .feat { background: var(--card); border: 1px solid var(--line); border-radius: var(--r); padding: 17px 18px; box-shadow: var(--lift); }
+  .feat h3 { display: flex; align-items: baseline; gap: 9px; margin-bottom: 7px; }
+  .feat h3 em { font-family: var(--mono); font-size: 10.5px; font-style: normal; letter-spacing: .08em; text-transform: uppercase; color: var(--brown-2); }
+  .feat p { font-size: 14.5px; color: var(--ink-2); margin: 0; }
+  ul.plain { list-style: none; margin: 0; padding: 0; display: grid; gap: 11px; }
+  ul.plain > li { display: grid; grid-template-columns: 200px minmax(0, 1fr); gap: 16px; align-items: start; border-top: 1px solid var(--line-soft); padding-top: 11px; }
+  ul.plain > li b { font-family: var(--serif); font-weight: 600; font-size: 1.01rem; }
+  ul.plain > li span { font-size: 14.5px; color: var(--ink-2); min-width: 0; overflow-wrap: anywhere; }
+  @media (max-width: 680px) { ul.plain > li { grid-template-columns: minmax(0, 1fr); gap: 4px; } }
+  dl.spec { margin: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 0 28px; }
+  dl.spec > div { display: flex; justify-content: space-between; gap: 12px; border-top: 1px dotted #ddcdb6; padding: 9px 0; }
+  dl.spec dt { font-size: 14px; color: var(--ink-2); }
+  dl.spec dd { margin: 0; font-family: var(--mono); font-size: 12.5px; color: var(--ink); text-align: right; min-width: 0; overflow-wrap: anywhere; }
+  footer { border-top: 1px solid var(--line); margin-top: 58px; padding-top: 26px; padding-bottom: 40px; }
+  .fbar { display: flex; flex-wrap: wrap; gap: 12px 22px; align-items: baseline; padding-top: 0; font-family: var(--mono); font-size: 12px; color: var(--ink-3); }
+  .fbar a { color: var(--ink-2); }
 
-      .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
-      .cell {
-        display: grid; grid-template-columns: 46px minmax(0, 1fr); gap: 18px; align-items: start;
-        background: var(--card); border: 1px solid var(--line); border-radius: var(--r);
-        padding: 22px 22px 20px; box-shadow: var(--lift); transition: box-shadow .2s ease, background .2s ease;
-      }
-      .cell:hover { box-shadow: var(--lift-2); background: #fdfbf7; }
-      .glyph {
-        width: 46px; height: 46px; display: grid; place-items: center; border-radius: 50%;
-        background: #f3e8d8; border: 1px solid #e6d5bd; color: var(--brown); font-size: 19px; line-height: 1;
-      }
-      .cell .n { font-family: var(--mono); font-size: 11px; letter-spacing: .12em; color: var(--ink-3); }
-      .cell h3 { font-size: 21px; margin: 5px 0 7px; }
-      .cell p { margin: 0; color: var(--ink-2); font-size: 16px; }
+  /* Revealed on scroll — motion only, never invisibility. A fade that starts at opacity 0 makes
+     content wait for a script and a scroll event: a full-page render, a print, or a screenshot tool
+     that expands the page sees empty sections below the fold (it did, on this very page). Sliding in
+     from 10px down gives the same unhurried feel with nothing held back. */
+  .js .reveal { transform: translateY(10px); }
+  .js .reveal.seen { transform: none; transition: transform .45s ease; }
+  @media (prefers-reduced-motion: reduce) { .js .reveal, .js .reveal.seen { transform: none; transition: none; } }
+  .noscript-hint { font-family: var(--mono); font-size: 12px; color: var(--ink-3); }
+</style>
+<script>document.documentElement.classList.add("js");</script>
+</head>
+<body>
+<a class="skip" href="#get">Skip to the downloads</a>
 
-      /* the screens: an index, not a gallery */
-      .ledger { display: grid; gap: 0; }
-      .row {
-        display: grid; grid-template-columns: 96px minmax(0, 1fr) minmax(0, 1.05fr);
-        gap: 20px; padding: 18px 4px; border-top: 1px solid var(--line-soft); align-items: start;
-      }
-      .row:first-child { border-top: 0; }
-      .row .path { font-family: var(--mono); font-size: 12.5px; color: var(--brown); letter-spacing: .02em; padding-top: 4px; }
-      .row h3 { font-size: 19.5px; margin: 0 0 4px; }
-      .row p { margin: 0; color: var(--ink-2); font-size: 15.5px; }
-      .row .tally {
-        font-family: var(--mono); font-size: 12.5px; color: var(--ink-3); line-height: 1.75;
-        text-align: right; border-left: 1px dotted #e3d5c1; padding-left: 18px;
-      }
-      .row .tally b { color: var(--brown-2); font-weight: 600; }
+<header>
+  <div class="wrap bar">
+    <a class="mark" href="#top"><b>Hephaestus</b><span class="pill" id="versionPill">v0.3.0 · MIT</span></a>
+    <nav aria-label="Sections">
+      <a href="#does">what it does</a>
+      <a href="#thinks">how it thinks</a>
+      <a class="dl" href="#get">get it</a>
+      <a href="#catch">the catch</a>
+      <a href="#details">details</a>
+    </nav>
+  </div>
+</header>
 
-      /* three real forged palettes, straight out of the engine */
-      .forged {
-        margin-top: 34px; background: var(--card); border: 1px solid var(--line);
-        border-radius: var(--r); padding: 24px; box-shadow: var(--lift);
-      }
-      .forged h3 { margin: 0 0 4px; font-size: 20px; }
-      .forged > p { margin: 0 0 20px; color: var(--ink-2); font-size: 15.5px; max-width: 62ch; }
-      .strip { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 14px 18px; align-items: center; padding: 13px 0; border-top: 1px dotted #ddcdb6; }
-      .strip:first-of-type { border-top: 0; padding-top: 0; }
-      .strip .say { font-size: 15.5px; }
-      .strip .say i { color: var(--ink-3); font-family: var(--mono); font-size: 12.5px; font-style: normal; display: block; margin-top: 3px; }
-      .chips { display: flex; gap: 0; border-radius: 8px; overflow: hidden; border: 1px solid var(--line); box-shadow: 0 1px 1px rgba(44,30,21,.05); }
-      .chips span { width: 46px; height: 38px; display: block; }
-      .forged .foot { font-family: var(--mono); font-size: 12px; color: var(--ink-3); margin: 18px 0 0; }
-
-      /* what it isn't */
-      ul.plain { list-style: none; margin: 0; padding: 0; }
-      ul.plain li {
-        display: grid; grid-template-columns: minmax(0, 190px) minmax(0, 1fr); gap: 8px 24px;
-        padding: 17px 4px; border-top: 1px solid var(--line-soft);
-      }
-      ul.plain li:first-child { border-top: 0; }
-      ul.plain b { font-family: var(--serif); font-size: 19px; font-weight: 400; color: var(--ink); }
-      ul.plain span { color: var(--ink-2); font-size: 16px; }
-      ul.plain code {
-        font-family: var(--mono); font-size: .88em; background: #f1e7d9; color: var(--brown);
-        padding: 1px 5px; border-radius: 5px;
-      }
-
-      /* how to get it */
-      .os { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
-      .os > div {
-        background: var(--card); border: 1px solid var(--line); border-radius: var(--r);
-        padding: 22px; box-shadow: var(--lift); display: flex; flex-direction: column; gap: 12px;
-      }
-      .os .top { display: flex; align-items: center; gap: 10px; }
-      .os .idx { font-family: var(--mono); font-size: 11px; letter-spacing: .1em; color: var(--ink-3); }
-      .os .t { font-family: var(--serif); font-size: 22px; }
-      .os .d { margin: 0; color: var(--ink-2); font-size: 15.5px; }
-      .os .tag {
-        font-family: var(--mono); font-size: 11px; letter-spacing: .04em; color: var(--brown-2);
-        background: #f3e8d8; border: 1px solid #e6d5bd; border-radius: 99px; padding: 3px 9px;
-      }
-      .os .you {
-        font-family: var(--mono); font-size: 10.5px; letter-spacing: .08em; text-transform: uppercase;
-        color: var(--on-brown); background: var(--brown); border-radius: 99px; padding: 3px 8px;
-      }
-      .os .state {
-        margin-top: auto; font-family: var(--mono); font-size: 12.5px; color: var(--ink-3);
-        border-top: 1px dotted #ddcdb6; padding-top: 12px; display: flex; align-items: center; gap: 8px;
-      }
-      .os .state i { width: 7px; height: 7px; border-radius: 50%; background: #d9b98f; flex: none; }
-      /* filled in by the release reader: clickable, and it looks like it */
-      .os a.state:hover { text-decoration: none; }
-      .os .state.live { color: var(--brown); }
-      .os .state.live span { border-bottom: 1px solid transparent; }
-      .os .state.live:hover span { border-bottom-color: var(--brown); }
-      .os .state.live i { background: var(--brown); }
-      .os .state.some { color: var(--brown-2); }
-      .os .state.some i { background: var(--amber); }
-      .status {
-        display: flex; align-items: center; gap: 9px; margin: 20px 0 0; padding: 0;
-        font-family: var(--mono); font-size: 12.5px; color: var(--ink-2);
-      }
-      .status .dot { width: 8px; height: 8px; border-radius: 50%; background: #d9b98f; flex: none; }
-      /* every release, listed straight off the repo. Paper cards, dotted rules, no motion. */
-      .rel { margin: 34px 0 0; padding: 26px 0 0; border-top: 1px dotted #ddcdb6; }
-      .rel h3 { display: flex; flex-wrap: wrap; align-items: baseline; column-gap: 12px; row-gap: 4px; margin: 0;
-        font-family: var(--serif); font-size: 19px; font-weight: 600; letter-spacing: -0.01em; }
-      .rel h3 .leader { flex: 1; border-top: 1px dotted #ddcdb6; transform: translateY(-4px); }
-      .rel h3 em { flex: 0 1 auto; min-width: 0; margin-left: auto; text-align: right; overflow-wrap: anywhere;
-        font-family: var(--mono); font-size: 11.5px; font-style: normal; color: var(--ink-3); }
-      .rel ul { list-style: none; display: grid; gap: 10px; margin: 14px 0 0; padding: 0; }
-      .rel li { background: var(--card); border: 1px solid var(--line); border-radius: var(--r);
-        padding: 14px 16px; box-shadow: var(--lift); min-width: 0; }
-      .rel .r1 { display: flex; flex-wrap: wrap; align-items: baseline; gap: 10px;
-        font-family: var(--mono); font-size: 12.5px; color: var(--ink-2); }
-      .rel .tag { font-weight: 700; color: var(--brown); text-decoration: none;
-        border-bottom: 1px solid transparent; }
-      a.tag:hover { border-bottom-color: var(--brown); }
-      .rel .pre { border: 1px solid var(--amber); border-radius: 999px; padding: 1px 7px;
-        font-size: 10.5px; color: var(--brown-2); }
-      .rel .what { font-family: var(--serif); font-size: 15px; color: var(--ink); }
-      .rel .quiet { color: var(--ink-3); font-family: var(--mono); font-size: 11.5px; }
-      .rel .files { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0 0; }
-      .rel .files li, .rel .files a, .rel .r1 { min-width: 0; overflow-wrap: anywhere; }
-      .rel .files li { background: transparent; border: 1px solid var(--line-soft);
-        border-radius: var(--r-sm); box-shadow: none; padding: 6px 10px;
-        font-family: var(--mono); font-size: 12px; }
-      .rel .files a { color: var(--brown); text-decoration: none; border-bottom: 1px solid transparent; }
-      .rel .files a:hover { border-bottom-color: var(--brown); }
-      .rel p.quiet { margin: 10px 0 0; }
-      .rel .none { background: transparent; border: 1px dashed #ddcdb6; box-shadow: none;
-        color: var(--ink-3); font-size: 14px; line-height: 1.55; font-family: var(--sans); }
-      .rel .none a { color: var(--brown); }
-      .status.ok .dot { background: var(--brown); }
-      .status i { font-style: normal; }
-      .status.warn .dot { background: #c98f3e; }
-      .note {
-        margin: 22px 0 0; padding: 16px 18px; background: #f2e9dc; border: 1px solid var(--line);
-        border-left: 3px solid var(--amber); border-radius: var(--r-sm); color: var(--ink-2); font-size: 15.5px;
-      }
-      .note b { color: var(--ink); }
-
-      /* spec sheet */
-      dl.spec { display: grid; grid-template-columns: 1fr 1fr; gap: 0 40px; margin: 0; }
-      dl.spec div { display: flex; justify-content: space-between; gap: 16px; padding: 11px 2px; border-top: 1px solid var(--line-soft); }
-      dl.spec div:nth-child(-n+2) { border-top: 0; }
-      dl.spec dt { font-size: 15px; color: var(--ink-2); }
-      dl.spec dd { margin: 0; font-family: var(--mono); font-size: 13px; color: var(--ink); text-align: right; }
-
-      footer { border-top: 1px solid var(--line); background: var(--paper-2); margin-top: 30px; }
-      .fbar {
-        display: flex; flex-wrap: wrap; gap: 10px 26px; align-items: center;
-        /* vertical only — see .hero: the shared .wrap owns the sides, and 0 here erases it */
-        padding-top: 26px; padding-bottom: 26px;
-        font-family: var(--mono); font-size: 12.5px; color: var(--ink-3);
-      }
-      .fbar .sp { margin-left: auto; }
-      .fbar a { color: var(--ink-2); }
-      .fmark { font-family: var(--serif); font-size: 15px; color: var(--ink); }
-
-      /* the soft entrance: never hides content from a browser that doesn't run the script */
-      html.js .reveal { opacity: 0; transform: translateY(14px); }
-      html.js .reveal.in { opacity: 1; transform: none; transition: opacity .7s ease, transform .7s ease; }
-      html.nomotion .reveal { opacity: 1 !important; transform: none !important; }
-
-      @media (max-width: 1000px) {
-        .hero { grid-template-columns: minmax(0, 1fr); }
-        .art { order: 2; }
-        .art-box { max-width: 540px; }
-        pre.bust { font-size: min(12px, calc(100cqi / 44)); }
-        .row { grid-template-columns: minmax(0, 1fr); gap: 8px; padding: 20px 4px; }
-        .row .tally { text-align: left; border-left: 0; padding-left: 0; }
-        .row .path { padding-top: 0; color: var(--ink-3); }
-        .strip { grid-template-columns: minmax(0, 1fr); }
-      }
-      @media (max-width: 860px) {
-        body { font-size: 16.5px; }
-        .bar nav a:not(.pill) { display: none; }
-        .grid2, .os, dl.spec { grid-template-columns: minmax(0, 1fr); }
-        dl.spec div:nth-child(2) { border-top: 1px solid var(--line-soft); }
-        ul.plain li { grid-template-columns: minmax(0, 1fr); }
-        .hero { padding-top: 28px; }
-      }
-    </style>
-  </head>
-  <body>
-    <header id="top">
-      <div class="wrap bar">
-        <span class="name">Hephaestus</span>
-        <span class="vchip">v0.3.0</span>
-        <nav>
-          <a href="#does">what it does</a>
-          <a href="#screens">screens</a>
-          <a href="#honest">no ai</a>
-          <a href="#get">get it</a>
-          <a href="#details">details</a>
-        </nav>
+<main>
+  <section class="wrap hero" id="top">
+    <div>
+      <p class="eyebrow reveal">Colour · critique · a buildable library</p>
+      <h1 class="reveal">A design forge<br>that shows its work.</h1>
+      <p class="lede reveal">Hephaestus turns a plain-language brief into a working palette, tells you which of its rules the palette breaks and why, and keeps a library of 1,750 design directions you can build from rather than admire. Every answer comes from its own arithmetic — nothing is generated for you by a model, so the same brief gives the same answer tomorrow, and you can look up how it was reached.</p>
+      <div class="acts reveal">
+        <a class="btn" href="#get" id="heroGet">Download for your system <small id="heroSize"></small></a>
+        <a class="btn ghost" href="#does">See what it actually does</a>
       </div>
-    </header>
-
-    <div class="band">
-      <div class="wrap hero">
-        <div>
-          <p class="kicker">Free desktop app · <b>windows · macos · linux</b></p>
-          <h1>Design help that<br />shows its work.</h1>
-          <p class="lead">
-            Hephaestus picks your colours, lays out your pages and tells you what's wrong with
-            the result. Every answer comes from rules written in the app — the kind you can
-            read, argue with, and ignore when you disagree.
-          </p>
-          <div class="cta">
-            <a class="btn" href="#does"><span>See what it does</span><small>four screens, no sign-up</small></a>
-            <a class="btn ghost" href="#honest">And what it isn't</a>
-          </div>
-          <ul class="facts">
-            <li>works offline</li><li>no account</li><li>no AI guessing</li><li>about 6 mb</li>
-          </ul>
-        </div>
-
-        <figure class="art">
-          <div class="art-box">
-            <!-- the characters between these tags are generated: tools/ascii-art.py --write -->
-            <pre class="bust" role="img" aria-label="The Hephaestus mark drawn in text characters: a carved head and shoulders, measured cell by cell, where the darkest cell is an at-sign and the lightest is a space." data-cols="72" data-rows="42">
+      <p class="here" id="here">Desktop · Windows, macOS and Linux · free, forever, no account</p>
+    </div>
+    <div class="reveal">
+      <pre class="bust" role="img" aria-label="The Hephaestus mark drawn in text characters: a carved head and shoulders, measured cell by cell, where the darkest cell is an at-sign and the lightest is a space." data-cols="72" data-rows="42">
                                     -@#%==*%:=,                         
                                ,@@@@@@#+*@#%@@@**,                      
                              @@#%@#@@##%+@#@#%*@@%#                     
@@ -421,365 +254,347 @@
       , . .   , , . . .   . . . . , . . , .   . . . . .   . , .   .     
                .                   .                                    
 </pre>
-          </div>
-        </figure>
-      </div>
+    </div>
+  </section>
+
+  <section class="wrap" id="get">
+    <div class="sechead"><h2>Get Hephaestus</h2><span class="leader"></span><span class="no">§ 01 — downloads</span></div>
+    <p class="sub">Pick the one that matches your machine. Each button is filled in from <code>release.json</code>, a small file that sits next to this page and lists what is actually published on this hostname — so a button only exists when the file behind it does.</p>
+
+    <p class="status" id="status"><span class="dot"></span><i id="statusText">the buttons fill themselves from <code>release.json</code> as soon as a release is published here</i></p>
+
+    <div class="dl">
+      <a href="#get" data-slot="windows-x64" class="none">
+        <span class="top"><span>01</span> <span class="t">Windows</span> <em class="you" hidden>you</em></span>
+        <p class="d">Windows 10 and 11, 64-bit. One installer, nothing else dragged in.</p>
+        <span class="state"><i></i><span>not published yet</span></span>
+      </a>
+      <a href="#get" data-slot="macos-arm64" class="none">
+        <span class="top"><span>02</span> <span class="t">macOS · Apple silicon</span> <em class="you" hidden>you</em></span>
+        <p class="d">M1 through M4. Unsigned, which costs you one right-click — the note below.</p>
+        <span class="state"><i></i><span>not published yet</span></span>
+      </a>
+      <a href="#get" data-slot="macos-x64" class="none">
+        <span class="top"><span>03</span> <span class="t">macOS · Intel</span> <em class="you" hidden>you</em></span>
+        <p class="d">The same build for 2015–2020 Macs, published separately rather than as a fat binary.</p>
+        <span class="state"><i></i><span>not published yet</span></span>
+      </a>
+      <a href="#get" data-slot="linux-x64-appimage" class="none">
+        <span class="top"><span>04</span> <span class="t">Linux · AppImage</span> <em class="you" hidden>you</em></span>
+        <p class="d">Any recent distro. <code>chmod +x</code>, run it, no package manager involved.</p>
+        <span class="state"><i></i><span>not published yet</span></span>
+      </a>
+      <a href="#get" data-slot="linux-x64-deb" class="none">
+        <span class="top"><span>05</span> <span class="t">Linux · .deb</span> <em class="you" hidden>you</em></span>
+        <p class="d">Debian and Ubuntu, installed properly with a menu entry and an icon.</p>
+        <span class="state"><i></i><span>not published yet</span></span>
+      </a>
     </div>
 
-    <main class="wrap">
-      <section id="does">
-        <div class="sechead"><h2>Four things, all of them yours</h2><span class="leader"></span><span class="no">§ 01 — what it does</span></div>
-        <p class="sub">No cloud, no seats, no monthly bill. It's one program on your machine that does the parts of design that are tedious and repeatable, and leaves the rest to you.</p>
-        <div class="grid2">
-          <div class="cell reveal"><span class="glyph">◈</span><div><span class="n">01 · AKMON</span><h3>Colours from a sentence</h3><p>Type what you want — "calm banking app", "loud poster" — and it builds the whole palette: background, text, accents, borders, states. Contrast is checked while it works, not after.</p></div></div>
-          <div class="cell reveal"><span class="glyph">⊞</span><div><span class="n">02 · CANVAS</span><h3>Layouts that stay tidy</h3><p>Drop blocks on a canvas and everything keeps its alignment and spacing. Pages, links between pages, and an HTML export when you're done — viewable full-screen before you use it anywhere.</p></div></div>
-          <div class="cell reveal"><span class="glyph">✦</span><div><span class="n">03 · MERKHET</span><h3>A review you can argue with</h3><p>Point it at a design and it lists what's weak — contrast too low, spacing too tight, too many colours fighting — each with a specific fix it will make, or not, at your word. It never claims a repair it hasn't measured twice.</p></div></div>
-          <div class="cell reveal"><span class="glyph">▤</span><div><span class="n">04 · TRENDS</span><h3>Places to start</h3><p>1,750 directions with colours, type and layout rules already paired, each with a recipe you can pull apart. Browse them, search them, steal one, keep going.</p></div></div>
-        </div>
-      </section>
+    <ul class="extras" id="extras" hidden></ul>
 
-      <section id="screens">
-        <div class="sechead"><h2>The screens, in the order you meet them</h2><span class="leader"></span><span class="no">§ 02 — the app</span></div>
-        <p class="sub">There are six, and that's the whole app. Nothing here is a mockup — every line below is what the screen in front of you does.</p>
-        <div class="ledger">
-          <div class="row reveal"><span class="path">home</span><div><h3>The bench</h3><p>Everything you've saved, the state of the current palette, and a grade that moves as you work. The greeting changes with what you last did and what's still open.</p></div><span class="tally">five stats, live<br /><b>nothing loaded</b></span></div>
-          <div class="row reveal"><span class="path">akmon</span><div><h3>Colour</h3><p>One line of intent in, a whole palette out — painted twice on the same page so you can see what the colour is doing, with every surface measured in steps apart instead of vibes.</p></div><span class="tally">7 roles + states<br />contrast <b>while</b> it works</span></div>
-          <div class="row reveal"><span class="path">canvas</span><div><h3>The page</h3><p>Blocks you can click, drag and resize, on a grid that holds its own alignment. Text, images, stacks. Links between pages. An export you can open in a browser and check before you ship it.</p></div><span class="tally">16-column grid<br />export <b>one click</b></span></div>
-          <div class="row reveal"><span class="path">merkhet</span><div><h3>The reviewer</h3><p>Lists what's weak, with the measurement that says so and the fix it would make. Apply one, apply all, undo any of them — it re-measures after each change and tells you what actually moved.</p></div><span class="tally">measured <b>twice</b><br />every fix revertible</span></div>
-          <div class="row reveal"><span class="path">trends</span><div><h3>The library</h3><p>1,750 directions, each one a real starting point: palette, type, spacing rules, and the reason it hangs together. Search, sort, take one and change half of it.</p></div><span class="tally"><b>1,750</b> entries<br />all on your disk</span></div>
-          <div class="row reveal"><span class="path">ask</span><div><h3>The questions</h3><p>Type a question about your own work — "is this too busy", "why does the footer feel off" — and it answers from what's on the canvas, naming the blocks it looked at.</p></div><span class="tally">rules, not guesses<br />says when it <b>can't tell</b></span></div>
-        </div>
+    <p class="note">
+      <b>The macOS one, honestly.</b> macOS builds here are unsigned and not notarised, because an
+      Apple Developer ID costs money and this project does not have one. So the first launch complains:
+      right-click the app, choose <b>Open</b>, confirm once — after that it opens normally. Windows and
+      Linux builds need no such workaround. If a release ever does get signed, that sentence changes and
+      the <code>signing</code> field in <code>release.json</code> says so.
+    </p>
 
-        <div class="forged reveal">
-          <h3>What the colour engine actually gives back</h3>
-          <p>Three sentences, run through Akmon as it ships — the same call the app makes, with the
-          sentence as the seed and light mode asked for. Nothing below was chosen by hand.</p>
-          <div class="strip"><span class="say">“calm banking app”<i>Calm Banking Slag · analogous · background #EDF8F6</i></span><span class="chips"><span style="background:#E0EDEB"></span><span style="background:#C2D2D0"></span><span style="background:#607371"></span><span style="background:#4A6965"></span><span style="background:#6786A0"></span><span style="background:#749681"></span></span></div>
-          <div class="strip"><span class="say">“loud poster”<i>Loud Poster Hammer · complement · background #FFF8F9</i></span><span class="chips"><span style="background:#F6EAEC"></span><span style="background:#E4D4D7"></span><span style="background:#776569"></span><span style="background:#DA0063"></span><span style="background:#009B95"></span><span style="background:#FF3A7B"></span></span></div>
-          <div class="strip"><span class="say">“a bookshop that sells good coffee”<i>Bookshop That Crucible · neutral with an accent · background #FFFDFB</i></span><span class="chips"><span style="background:#F4EFEC"></span><span style="background:#E4DEDA"></span><span style="background:#59524E"></span><span style="background:#84624B"></span><span style="background:#A8894A"></span><span style="background:#D2721B"></span></span></div>
-          <p class="foot">surface · border · muted · primary · secondary · accent — copied out of the engine, not out of a designer's file.</p>
-        </div>
-      </section>
+    <details class="panel" id="hashes">
+      <summary>Checksums and exact file sizes for this release</summary>
+      <div id="hashBody"><p class="noscript-hint">This table fills itself from <code>release.json</code>. With no release published there is nothing to list, which is also the honest answer.</p></div>
+    </details>
 
-      <section id="honest">
-        <div class="sechead"><h2>What it isn't</h2><span class="leader"></span><span class="no">§ 03 — the catch</span></div>
-        <p class="sub">Worth saying out loud, because most tools avoid it.</p>
-        <ul class="plain">
-          <li class="reveal"><b>No AI</b><span>Nothing generates your work and nothing sends it anywhere to be generated for you. Rules and measurements instead — so the same input gives the same answer every time, and you can look up why.</span></li>
-          <li class="reveal"><b>No account, no telemetry</b><span>The app runs offline and keeps its files on your disk. No fonts, no images, no analytics, nothing that could count you reading it. The only call this page can make is an anonymous read of a public release list, and it makes it twice at most, once: no token, no cookie, nothing beyond the IP any request carries.</span></li>
-          <li class="reveal"><b>No subscription</b><span>It's free, and it isn't free "while it's in beta". There's no key, no seat count, no license screen, nothing that stops working in a year.</span></li>
-          <li class="reveal"><b>Not a Figma replacement</b><span>It won't do multiplayer, prototypes or plugins. It's good at the four things above and quiet about everything else.</span></li>
-          <li class="reveal"><b>Nothing hard-wired</b><span>The markup contains no download URLs at all. The cards read the newest published release when there is one to read, and stay plainly inert when the repo is private, empty, or unreachable — so a stale page can't offer you a file that was never uploaded. <a href="#get">How to get it</a> has the details.</span></li>
-          <li class="reveal"><b>Even the portrait is by rule</b><span>The head above is the app's own mark measured on a 72-cell grid and set in ten characters, darkest to <code>@</code>. The strips in the screens section came out of the same kind of rule. <code>tools/ascii-art.py</code>: arithmetic, a font metric, nothing trained.</span></li>
-        </ul>
-      </section>
+    <div class="rel" id="older" hidden>
+      <h3>Earlier releases<span class="leader"></span><em id="olderCount"></em></h3>
+      <ul id="olderList"></ul>
+    </div>
+  </section>
 
-      <section id="get">
-        <div class="sechead"><h2>How to get it</h2><span class="leader"></span><span class="no">§ 04 — availability</span></div>
-        <p class="sub">Pick your system: each card hands out the matching file from the newest published release, and every release ever published is listed underneath with everything on it. When there is nothing to read, the page says so in words instead of pointing you at something that isn't there.</p>
-        <div class="os">
-          <div class="reveal" data-kind="windows">
-            <span class="top"><span class="idx">01</span> <span class="t">Windows</span> <em class="you" hidden>you</em></span>
-            <p class="d">Windows 10 and 11, 64-bit. An installer, one .exe, nothing else dragged in.</p>
-            <a class="state" href="#get" data-dl="windows"><i></i><span>not posted yet</span></a>
-          </div>
-          <div class="reveal" data-kind="mac">
-            <span class="top"><span class="idx">02</span> <span class="t">macOS</span> <em class="you" hidden>you</em></span>
-            <p class="d">Apple silicon and Intel, one disk image for both. Unusual for a free tool, deliberate.</p>
-            <a class="state" href="#get" data-dl="mac"><i></i><span>not posted yet</span></a>
-          </div>
-          <div class="reveal" data-kind="linux">
-            <span class="top"><span class="idx">03</span> <span class="t">Linux</span> <em class="you" hidden>you</em></span>
-            <p class="d">Any recent distro: an AppImage that runs, and a .deb for the ones that want a package.</p>
-            <a class="state" href="#get" data-dl="linux"><i></i><span>not posted yet</span></a>
-          </div>
-        </div>
-        <p class="status" id="status"><span class="dot"></span><i id="statusText">checking for a published release…</i></p>
-        <p class="note">
-          <b>Nothing here is typed by hand.</b> This file names one repo, the list below and the
-          cards above read whatever that repo has actually published, and a deploy overwrites the
-          name with the repo it ran from — so publishing a release is the whole maintenance
-          routine, and there is no number to remember. A repo that goes private, or a release that
-          was never published, or a network that won't answer all leave the cards as they are: no
-          link invented, no button that goes nowhere. macOS builds aren't signed with a developer certificate, so on
-          the first launch right-click the app and choose <b>Open</b>. Everything else installs normally.
-        </p>
+  <section class="wrap" id="does">
+    <div class="sechead"><h2>What it does</h2><span class="leader"></span><span class="no">§ 02 — the tool, not the idea</span></div>
+    <p class="sub">Six screens, one document model, and an export that produces a real site rather than a picture of one.</p>
+    <div class="duo">
+      <div class="feat reveal"><h3>Akmon <em>the palette forge</em></h3><p>Type a brief — “deep dusty teal with a burnt orange accent, dark” — and it returns surfaces and voice as two labelled grids: background, surface, border, text, muted, then primary, secondary, accent. Every swatch is editable in place, click-copies its hex, can be locked before a re-forge, and carries its measured contrast grade. There is a colour-blindness check and a lightness ramp, because a palette that only works for one pair of eyes is not a palette.</p></div>
+      <div class="feat reveal"><h3>Cedalion <em>the critic</em></h3><p>It reads a palette or a page and says what is measurably wrong: which rule fired, what number it looked at, what it would change. No vibes, no “consider exploring”. It runs the same checks the forge uses to build, so a pass means something. A pass can also say nothing — an empty critique is the correct result for a design that is fine.</p></div>
+      <div class="feat reveal"><h3>The catalogue <em>1,750 directions</em></h3><p>Twenty-one hand-written 2026 trend records, decomposed into layout and accent atoms and crossed with twelve registers — Atrium, Ledger, Foundry, Vitrine, Signal, Marginalia, Atelier, Kiosk, Corridor, Console, Nook, Archive. 1,390 combinations are refused because their atoms fight each other. Each surviving entry carries numbers to score against, a drawn example generated from those numbers, and a recipe naming the exact blocks and options to use.</p></div>
+      <div class="feat reveal"><h3>Studio &amp; canvas <em>build it here</em></h3><p>A free canvas with blocks you can select, drag and resize; a grid library of 17 ready section layouts; twelve site options (typeface, text size, corners, card depth, image fill, motion, airiness, heading case and tracking, button shape, card outline and more) that are honoured by the editor <i>and</i> by the export. The preview button opens the exported site itself, not a mock of it.</p></div>
+      <div class="feat reveal"><h3>Merkhet <em>measure, repair, re-measure</em></h3><p>It audits the page you are building, fixes what it can, then measures again and reports how many problems went away, what is still open, and what it tried and put back because the result read worse. No tick for a fix it hasn't verified — that is the whole reason it is worth running.</p></div>
+      <div class="feat reveal"><h3>Export <em>files you own</em></h3><p>Static HTML and CSS for a site, plus a token file for a design system: radius, spacing, type scale, the colour roles. There is no proprietary project format to be trapped in; the app's own state is one JSON file on your disk, and the six shell themes (Obsidian, Graphite, Paper, Claude, Blueprint, Ember) are a preference, not a licence tier.</p></div>
+    </div>
+  </section>
 
-        <div class="rel" id="releases">
-          <h3>Every release<span class="leader"></span><em id="relCount">reading the repo once, on load…</em></h3>
-          <ul id="relList">
-            <li class="none">This list is read from GitHub when the page loads, so every release you publish appears here with each file on it — nothing to update by hand, and nothing that can go stale.</li>
-          </ul>
-        </div>
-      </section>
+  <section class="wrap" id="thinks">
+    <div class="sechead"><h2>How it thinks</h2><span class="leader"></span><span class="no">§ 03 — arithmetic, on purpose</span></div>
+    <p class="sub">The design tool market has settled on “ask it to make something”. Hephaestus is deliberately the other kind of tool, and the trade-offs are real in both directions.</p>
+    <ul class="plain">
+      <li class="reveal"><b>Colour science, not adjectives</b><span>Everything runs through OKLab: lightness, chroma, hue distance, contrast. The critique engine's threshold is the point where a human reliably notices a difference, so “too close” is a measurement rather than an opinion. A palette is judged on numbers you could recompute yourself.</span></li>
+      <li class="reveal"><b>Rules that name themselves</b><span>A verdict arrives with the rule that produced it and the value it checked. When a rule is wrong for your work, you can see that it fired and why — which is the only way to disagree with a tool usefully.</span></li>
+      <li class="reveal"><b>Deterministic, so reproducible</b><span>The same brief gives the same palette next month. That is what makes a saved palette reviewable later, and what makes the exported site match what you approved. Randomness exists in one place — a seeded re-forge, seeded from the words you typed — so re-rolling is a choice you made, not noise that happened.</span></li>
+      <li class="reveal"><b>Combinatorics instead of a model</b><span>The 1,750-entry library is composed from atoms and a compatibility matrix, not sampled from a language model. That is why it can refuse 1,390 combinations with a reason, and why nothing needs a network, a key or a quota.</span></li>
+      <li class="reveal"><b>What that costs you</b><span>It will not write your copy, invent a brand, or produce forty variations while you wait. It is a forge: good at colour, structure and judgment, silent about everything else.</span></li>
+    </ul>
+  </section>
 
-      <section id="details">
-        <div class="sechead"><h2>The small print, in full</h2><span class="leader"></span><span class="no">§ 05 — details</span></div>
-        <dl class="spec">
-          <div><dt>Version</dt><dd>0.3.0</dd></div>
-          <div><dt>Platforms</dt><dd>win · mac · linux</dd></div>
-          <div><dt>Disk</dt><dd>~6 mb installed</dd></div>
-          <div><dt>Network needed</dt><dd>never</dd></div>
-          <div><dt>Engine</dt><dd>4 files, all readable</dd></div>
-          <div><dt>Directions in the library</dt><dd>1,750</dd></div>
-          <div><dt>Accounts, keys, telemetry</dt><dd>none of the three</dd></div>
-          <div><dt>Licence</dt><dd>MIT</dd></div>
-          <div><dt>Made by</dt><dd>one person, on purpose</dd></div>
-          <div><dt>This page</dt><dd>one file, one allowed call</dd></div>
-        </dl>
-      </section>
-    </main>
+  <section class="wrap" id="catch">
+    <div class="sechead"><h2>The catch</h2><span class="leader"></span><span class="no">§ 04 — worth reading first</span></div>
+    <ul class="plain">
+      <li class="reveal"><b>No AI, anywhere</b><span>Nothing sends your work away to be generated for you. Some people will find that limiting; it is the point.</span></li>
+      <li class="reveal"><b>No account, no telemetry, no network</b><span>The app runs offline and keeps its files on your disk. This page makes exactly one request of its own: a same-origin read of <code>release.json</code>, to find out what is published. No fonts, no images, no analytics, no cookies, nothing that could count you reading it.</span></li>
+      <li class="reveal"><b>Free, and not “free during beta”</b><span>MIT licence. No key, no seat count, no license screen, nothing that stops working in a year.</span></li>
+      <li class="reveal"><b>0.x, and single-maintainer</b><span>It is one person's tool, version 0.3.0. Expect rough edges and no support desk; expect the changelog to be honest about what is unfinished.</span></li>
+      <li class="reveal"><b>Not a Figma replacement</b><span>No multiplayer, no plugin API, no prototyping. It is strong at colour, critique and a buildable direction library, and quiet about everything else.</span></li>
+      <li class="reveal"><b>Unsigned macOS builds</b><span>One right-click at first launch. The reason is money, not care: there is no Apple Developer ID in this project, and the <code>signing</code> field of <code>release.json</code> says so in words rather than hiding it.</span></li>
+      <li class="reveal"><b>Manual updates, for now</b><span>There is no in-app updater, because a real one needs a signing key that does not exist here. Downloading the new file is the update path, and this page is where it appears.</span></li>
+    </ul>
+  </section>
 
-    <footer>
-      <div class="wrap fbar">
-        <span class="fmark">Hephaestus</span>
-        <span>a design workspace that explains itself · v0.3.0</span>
-        <span class="sp">no cookies, no analytics, nothing loaded from anywhere but here</span>
-        <a href="#top" onclick="scrollTo({top:0,behavior:'smooth'});return false;">↑ top</a>
-      </div>
-    </footer>
+  <section class="wrap" id="details">
+    <div class="sechead"><h2>The small print, in full</h2><span class="leader"></span><span class="no">§ 05 — details</span></div>
+    <dl class="spec">
+      <div><dt>Version</dt><dd data-check="version">0.3.0</dd></div>
+      <div><dt>Licence</dt><dd>MIT</dd></div>
+      <div><dt>Platforms</dt><dd>windows · mac ×2 · linux ×2</dd></div>
+      <div><dt>Runtime needed</dt><dd>none</dd></div>
+      <div><dt>Colour engine</dt><dd><span data-check="engineFiles">9</span> files, <span data-check="engineLines">4,923</span> lines</dd></div>
+      <div><dt>Whole app</dt><dd><span data-check="srcLines">10,688</span> lines of TypeScript</dd></div>
+      <div><dt>Desktop shell</dt><dd><span data-check="rustLines">8</span> lines of Rust</dd></div>
+      <div><dt>Catalogue</dt><dd><span data-check="catalog">1,750</span> entries, <span data-check="refused">1,390</span> refused</dd></div>
+      <div><dt>Grid library</dt><dd><span data-check="grids">17</span> presets</dd></div>
+      <div><dt>Built with</dt><dd>Tauri 2 · React 19 · Rust</dd></div>
+      <div><dt>Made by</dt><dd>one person, on purpose</dd></div>
+      <div><dt>Downloads served from</dt><dd>this hostname, no redirects</dd></div>
+    </dl>
+    <p class="note">
+      <b>How a release gets here.</b> Four build machines produce the installers; a final job checks that
+      every platform's file exists, is a plausible size, and carries the version the project's config
+      files agree on; the survivors are copied into <code>downloads/</code> next to this page and
+      <code>release.json</code> is rewritten with their paths, byte counts and sha256 sums. The site is
+      deployed only after that check passes, and a partial or failed build leaves the live release
+      exactly as it was. There is no step where anyone edits this page to ship a version — which is why
+      nothing on it can be stale.
+    </p>
+  </section>
+</main>
 
-    <script>
-      /* the release reader. Two things it is responsible for: the three cards above, which pick
-         the newest release's file for your system, and the list below them, which shows every
-         published release with everything on it. One rule governs both: this page never writes
-         down a link it hasn't seen come back from GitHub, and every fallback is either plain text
-         or an anchor that already points at this section. "No network", "nothing published", "the
-         repo moved" and "JavaScript off" therefore all look like the page as written — which is
-         the correct answer, not a failure. */
-      (function () {
-        var PAIR = {
-          windows: { name: "Windows", pat: /\.(exe|msi)$/i, prefer: /setup/i },
-          mac:     { name: "macOS",   pat: /\.dmg$/i,            prefer: /aarch64|apple\s?silicon/i },
-          linux:   { name: "Linux",   pat: /\.(AppImage|deb)$/i, prefer: /AppImage/i }
-        };
-        var CAP = 24;                        // how many releases to list; a 25th means older ones exist
-        var band = document.getElementById("status");
-        var line = document.getElementById("statusText");
-        var list = document.getElementById("relList");
-        var count = document.getElementById("relCount");
-        var cards = [].slice.call(document.querySelectorAll(".os [data-dl]"));
+<footer>
+  <div class="wrap fbar">
+    <span>Hephaestus <span data-check="version">0.3.0</span> · MIT</span>
+    <span>free desktop app · <a href="#get">downloads</a> · <a href="#details">details</a></span>
+    <span id="foot2">the portrait above is the app's mark, measured on a 72-cell grid and set in ten characters</span>
+  </div>
+</footer>
 
-        function say(state, tone, text) {
-          if (band) { band.dataset.state = state; band.className = "status " + tone; }
-          if (line) line.textContent = text;
-        }
-        function mb(n) {
-          n = Number(n) || 0;
-          if (n >= 1048576) return (n / 1048576).toFixed(1) + " MB";
-          return n >= 1024 ? Math.max(1, Math.round(n / 1024)) + " KB" : n + " B";
-        }
-        /* built with createElement + textContent, never innerHTML: a release's name is a string
-           somebody typed on another machine, and this page has no business parsing it as markup */
-        function put(tag, cls, text) {
-          var e = document.createElement(tag);
-          if (cls) e.className = cls;
-          if (text !== null && text !== undefined) e.textContent = String(text);
-          return e;
-        }
-        function set(a, href, cls, text) {
-          if (href) a.href = href;
-          a.className = "state" + (cls ? " " + cls : "");
-          var label = a.querySelector("span") || a;
-          if (text) label.textContent = text;
-        }
-        function filesOf(rel) {
-          return (rel && rel.assets || []).filter(function (f) { return f && f.name && f.browser_download_url; });
-        }
-        function urlOf(f) {
-          var u = String((f && f.browser_download_url) || "");
-          return /^https:\/\//.test(u) ? u : null;      // a scheme we didn't expect is not a link
-        }
-        function assetLink(f) {
-          var u = urlOf(f);
-          if (!u) return null;
-          var a = put("a", null, "↓ " + f.name + " · " + mb(f.size));
-          a.href = u;
-          a.setAttribute("download", f.name);            // same tab, saved to disk — not a navigation
-          return a;
-        }
-        function ghLink(url, text) {
-          if (!/^https:\/\/github\.com\//.test(String(url || ""))) return null;
-          var a = put("a", null, text);
-          a.href = String(url);
-          return a;
-        }
+<script>
+  /* Everything on this page that is not fixed prose comes from one place: ./release.json, next to
+     this file, written by the publish job. No other host is contacted, so the page behaves the same
+     whether the source repository is public, private, or on fire.
 
-        var m = /^(?:https?:\/\/(?:www\.)?github\.com\/)?([\w.-]+)\/([\w.-]+?)(?:\.git)?\/?$/i.exec((HEPH_REPO || "").trim());
-        if (!m) return say("no-repo", "warn", "this page wasn't told which repo the releases live in, so the cards and the list stay exactly as they are written");
-        if (!cards.length) return say("stale", "warn", "this page has no cards to fill");
-        if (!("fetch" in window)) return say("stale", "warn", "this browser can't read the release list, so the cards stay as written");
+     It fails in one direction only: if the file cannot be read or understood, every button stays the
+     in-page link it was authored as, and the status line says what happened. That is deliberate. A
+     missing release is a fact about the world, not a reason to hand someone a dead link. */
+  (function () {
+    var band = document.getElementById("status");
+    var line = document.getElementById("statusText");
+    var cards = [].slice.call(document.querySelectorAll(".dl [data-slot]"));
+    var extras = document.getElementById("extras");
+    var older = document.getElementById("older");
+    var olderList = document.getElementById("olderList");
+    var olderCount = document.getElementById("olderCount");
+    var hashBody = document.getElementById("hashBody");
+    var hero = document.getElementById("heroGet");
+    var heroSize = document.getElementById("heroSize");
+    function say(state, tone, text) {
+      if (band) { band.dataset.state = state; band.className = "status " + tone; }
+      if (line) line.textContent = text;
+    }
+    function mb(n) {
+      n = Number(n) || 0;
+      if (n >= 1073741824) return (n / 1073741824).toFixed(2) + " GB";
+      if (n >= 1048576) return (n / 1048576).toFixed(1) + " MB";
+      return n >= 1024 ? Math.max(1, Math.round(n / 1024)) + " KB" : n + " B";
+    }
+    function put(tag, cls, text) {
+      var e = document.createElement(tag);
+      if (cls) e.className = cls;
+      if (text !== null && text !== undefined) e.textContent = String(text);
+      return e;
+    }
+    function sameOrigin(url) {
+      return typeof url === "string" && /^\/downloads\/[A-Za-z0-9._+-]+$/.test(url);
+    }
+    function fill(a, f) {
+      var label = a.querySelector(".state span") || a;
+      if (!f || !sameOrigin(f.url)) {
+        a.className = "none";
+        label.textContent = f ? "file not published at this address" : "not in this release";
+        var s = a.querySelector(".sizes"); if (s) s.textContent = "";
+        return false;
+      }
+      a.href = f.url;
+      a.setAttribute("download", f.file);
+      a.className = "ready";
+      label.textContent = "↓ " + f.file;
+      var sz = a.querySelector(".sizes");
+      if (!sz) { sz = put("span", "sizes"); a.appendChild(sz); }
+      sz.textContent = mb(f.size) + " · sha256 " + String(f.sha256 || "").slice(0, 10) + "…";
+      a.title = f.advisory || f.hint || "";
+      return true;
+    }
 
-        var repo = m[1] + "/" + m[2];
-        var root = "https://api.github.com/repos/" + repo;
-        var all = "https://github.com/" + repo + "/releases";
-        var ctl = "AbortController" in window ? new AbortController() : null;
-        var timer = ctl ? setTimeout(function () { ctl.abort(); }, 6000) : null;
-        var opt = { headers: { accept: "application/vnd.github+json" } };
-        if (ctl) opt.signal = ctl.signal;
+    // which card is "you": cheap, no permissions, and wrong guesses cost nothing
+    function guess() {
+      var p = String(navigator.platform || "") + " " + String(navigator.appVersion || "");
+      if (/win/i.test(p)) return "windows-x64";
+      // Safari won't tell arm64 from x86_64 without a permission prompt, and guessing Intel for
+      // someone on a 2023 laptop would hand them the slower binary: Apple silicon is the likelier.
+      if (/mac/i.test(p)) return "macos-arm64";
+      if (/linux|ubuntu|fedora/i.test(p)) return "linux-x64-appimage";
+      return null;
+    }
+    var mine = null;
+    try { mine = guess(); } catch (e) { mine = null; }
+    if (mine) {
+      var me = cards.filter(function (c) { return c.getAttribute("data-slot") === mine; })[0];
+      if (me) { var tag = me.querySelector(".you"); if (tag) tag.hidden = false; }
+    }
 
-        /* an unhandled rejection is a console error a visitor never sees but QA does, and a 200
-           whose body isn't JSON (a proxy page, a captive portal) is exactly that trap: hand the
-           parse failure back as "answered, couldn't read it" instead of throwing. */
-        function get(url) {
-          return fetch(url, opt).then(function (r) {
-            if (!r.ok) return { ok: false, status: r.status, data: null };
-            return r.json().then(function (d) { return { ok: true, status: r.status, data: d }; },
-                                   function () { return { ok: true, status: r.status, data: null }; });
-          }, function () { return null; });
-        }
+    revealAll();
+    if (!("fetch" in window)) return say("nostalgic", "warn", "this browser can't read the release file, so the buttons stay as written");
+    // file:// cannot fetch anything, and a folder copy opened from disk is a normal way to land here
+    if (location.protocol === "file:") return say("offline", "warn", "this is a copy opened from disk, so the release file can't be read — the buttons stay as written");
 
-        /* Two requests, once, on load. /releases gives us everything — the newest stable one for
-           the cards and the whole list below — so the page does not have to ask /releases/latest
-           as well and hope the two agree. The repo is asked about because a 404 from GitHub means
-           two opposite things: nothing published, in which case <repo>/releases is an honest place
-           to send someone, or the repo isn't public, in which case that same link is a wall. */
-        Promise.all([get(root + "/releases?per_page=" + (CAP + 1)), get(root)]).then(function (both) {
-          if (timer) { clearTimeout(timer); timer = null; }
-          var rel = both[0], head = both[1];
-          if (!rel && !head) return say("offline", "warn", "can't reach GitHub from here — the cards and the list stay as they were written");
-          var items = rel && rel.ok && Array.isArray(rel.data) ? rel.data : null;
-          if (items === null) {
-            if (rel && rel.status === 404 && head && !head.ok) {
-              return say("private", "warn", repo + " isn't readable from outside GitHub, so there is nothing public to download here. make it public, or put the builds somewhere public, and this page changes by itself");
-            }
-            return say("unreadable", "warn", "GitHub answered, but this page couldn't read the answer — the cards and the list stay as they were written");
-          }
-          render(items, !!(head && head.ok));
-        }).catch(function () {
-          if (timer) { clearTimeout(timer); timer = null; }
-          say("error", "warn", "the release reader gave up — the cards and the list stay as they were written");
+    fetch("release.json", { cache: "no-store", headers: { accept: "application/json" } }).then(function (r) {
+      if (!r.ok) throw new Error("http " + r.status);
+      return r.json();
+    }).then(function (doc) {
+      if (!doc || typeof doc !== "object" || doc.schema !== 1) throw new Error("unrecognised");
+      if (doc.status !== "ready") {
+        say("preparing", "warn", "no release is published on this site yet — the buttons will fill themselves when one is");
+        return;
+      }
+      var files = (doc.files || []).filter(function (f) { return f && f.id; });
+      var byId = {};
+      files.forEach(function (f) { byId[f.id] = f; });
+      var ok = 0;
+      cards.forEach(function (c) { if (fill(c, byId[c.getAttribute("data-slot")])) ok++; });
+      if (mine && byId[mine] && sameOrigin(byId[mine].url) && hero) {
+        hero.href = byId[mine].url;
+        hero.setAttribute("download", byId[mine].file);
+        hero.firstChild.nodeValue = "Download for " + (labelOf(byId[mine]) || "your system") + " ";
+        if (heroSize) heroSize.textContent = "· " + mb(byId[mine].size);
+      }
+      // anything the release carries that isn't one of the five cards is still worth offering
+      var extra = files.filter(function (f) {
+        return !cards.some(function (c) { return c.getAttribute("data-slot") === f.id; }) && sameOrigin(f.url);
+      });
+      if (extras && extra.length) {
+        extras.hidden = false;
+        extras.textContent = "";
+        extra.forEach(function (f) {
+          var li = put("li");
+          li.appendChild(put("span", null, (f.label || f.id) + " — "));
+          var a = put("a", null, f.file + " · " + mb(f.size));
+          a.href = f.url; a.setAttribute("download", f.file);
+          li.appendChild(a);
+          extras.appendChild(li);
         });
+      }
+      var when = doc.publishedAt ? String(doc.publishedAt).slice(0, 10) : "date not given";
+      var tot = files.reduce(function (n, f) { return n + (Number(f.size) || 0); }, 0);
+      say("live", "ok", "release " + doc.version + " · published " + when + " · " + ok + " of " + cards.length +
+        " buttons filled · " + (files.length + extra.length) + " file" + (files.length === 1 ? "" : "s") +
+        " hosted here (" + mb(tot) + ")");
 
-        function render(items, readable) {
-          var newest = null, i;
-          for (i = 0; i < items.length; i++) {
-            if (!items[i].prerelease && !items[i].draft) { newest = items[i]; break; }
-          }
-          var shown = items.slice(0, CAP);
-          var onShow = 0;
-          shown.forEach(function (r) { onShow += filesOf(r).length; });
-
-          if (list) list.textContent = "";
-          if (!shown.length) {
-            if (list) {
-              var none = put("li", "none", "Nothing published yet. The moment a release exists on " + repo + " it lands here with its files, and the cards above start handing them out — no edit to this page, and nothing to redeploy.");
-              if (readable) { var a = ghLink(all, " See the releases page →"); if (a) none.appendChild(a); }
-              list.appendChild(none);
-            }
-            if (count) count.textContent = "no releases yet · " + repo;
-            if (readable) cards.forEach(function (c) { set(c, all, "some", "→ all releases"); });
-            return say(readable ? "no-release" : "empty", "warn",
-              readable ? "no published release on " + repo + " yet — the cards take you to the releases page instead"
-                       : "this repo has no releases yet, and nothing else to read");
-          }
-
-          shown.forEach(function (r) {
-            var li = put("li");
-            var row = put("div", "r1");
-            var tag = ghLink(r.html_url, r.tag_name || "untitled");
-            if (tag) { tag.className = "tag"; row.appendChild(tag); } else { row.appendChild(put("span", "tag", r.tag_name || "untitled")); }
-            if (r.prerelease) row.appendChild(put("span", "pre", "pre-release"));
-            if (r.published_at) row.appendChild(put("span", "when", String(r.published_at).slice(0, 10)));
-            var nm = String(r.name || "").trim();
-            if (nm && nm !== r.tag_name) row.appendChild(put("span", "what", nm));
-            var fs = filesOf(r);
-            row.appendChild(put("span", "quiet", fs.length + (fs.length === 1 ? " file" : " files")));
-            li.appendChild(row);
-            if (fs.length) {
-              var ul = put("ul", "files");
-              fs.forEach(function (f) {
-                var one = put("li");
-                var al = assetLink(f);
-                if (al) one.appendChild(al); else one.textContent = f.name;
-                ul.appendChild(one);
-              });
-              li.appendChild(ul);
-            } else {
-              li.appendChild(put("p", "quiet", "no files on this one — just the tag and its notes"));
-            }
-            if (list) list.appendChild(li);
-          });
-
-          if (items.length > CAP && list) {
-            var extra = items.length - CAP;
-            var more = put("li", "none", extra + " older release" + (extra === 1 ? "" : "s") + " not shown here. ");
-            var ma = ghLink(all, "all of them on GitHub →");
-            if (ma) more.appendChild(ma);
-            list.appendChild(more);
-          }
-
-          var filled = 0, nf = filesOf(newest);
-          if (newest) {
-            cards.forEach(function (c) {
-              var want = PAIR[c.getAttribute("data-dl")];
-              if (!want) return;
-              /* only files with a URL worth handing out count as a candidate: a platform whose only
-                 asset links somewhere we didn't expect is "nothing for that system", not a button
-                 that throws you at a wall — or worse, at a javascript: URL somebody published */
-                 var pool = nf.filter(function (f) { return want.pat.test(f.name) && urlOf(f); });
-              var best = pool.filter(function (f) { return want.prefer.test(f.name); })[0] || pool[0];
-              if (best) {
-                c.href = urlOf(best);
-                c.setAttribute("download", best.name);
-                c.className = "state live";
-                (c.querySelector("span") || c).textContent = "↓ " + best.name + " · " + mb(best.size);
-                filled++;
-              } else {
-                set(c, all, "some", "→ nothing for " + want.name + " in " + (newest.tag_name || "this release") + " yet");
-              }
-            });
-          } else {
-            /* pre-releases only: nothing to hand out as "the installer", but the list below is
-               still real and the releases page is a real place, so say which one you're in */
-            cards.forEach(function (c) { set(c, all, "some", "→ pre-releases only, see them all"); });
-          }
-
-          if (count) {
-            count.textContent = shown.length + (shown.length === 1 ? " release" : " releases")
-              + " · " + onShow + (onShow === 1 ? " file" : " files")
-              + (newest ? " · newest " + newest.tag_name : " · pre-releases only") + " · " + repo;
-          }
-          var head = newest
-            ? (newest.tag_name || "a release") + (newest.published_at ? " · published " + String(newest.published_at).slice(0, 10) : "")
-                + " · " + nf.length + (nf.length === 1 ? " file" : " files") + " on it"
-            : (shown[0].tag_name || "the newest") + " is a pre-release, so no card points at it";
-          say(newest && filled ? "live" : (newest ? "no-match" : "pre-release"),
-              newest && filled ? "ok" : "warn",
-              head + " · " + filled + " of " + cards.length + " cards filled"
-              + " · " + shown.length + (shown.length === 1 ? " release" : " releases") + " listed below");
-        }
-      })();
-    </script>
-
-    <script>
-      /* two niceties, both optional: a soft entrance, and a "you" tag on your own platform */
-      (function () {
-        var items = [].slice.call(document.querySelectorAll(".reveal"));
-        if (!("IntersectionObserver" in window) || document.documentElement.className.indexOf("nomotion") >= 0) {
-          return;
-        }
-        var io = new IntersectionObserver(function (rows) {
-          rows.forEach(function (r) {
-            if (r.isIntersecting) { r.target.classList.add("in"); io.unobserve(r.target); }
-          });
-        }, { rootMargin: "0px 0px -12% 0px", threshold: 0.08 });
-        items.forEach(function (el, i) {
-          el.style.transitionDelay = (i % 4) * 70 + "ms";
-          io.observe(el);
+      if (hashBody) {
+        hashBody.textContent = "";
+        var t = put("table");
+        t.appendChild(put("thead")).appendChild(put("tr"));
+        var tr = t.querySelector("tr");
+        ["file", "size", "sha256"].forEach(function (h) { tr.appendChild(put("th", null, h)); });
+        var tb = t.appendChild(put("tbody"));
+        // files[] already holds every published file, cards and extras alike: the table lists it
+        // once, because a checksum shown twice reads like two different files with the same name
+        var seenOnce = {};
+        files.forEach(function (f) {
+          if (seenOnce[f.url]) return;
+          seenOnce[f.url] = 1;
+          var row = tb.appendChild(put("tr"));
+          row.appendChild(put("td", null, f.file));
+          row.appendChild(put("td", null, mb(f.size)));
+          var cell = put("td");
+          cell.appendChild(put("code", null, String(f.sha256 || "")));
+          row.appendChild(cell);
         });
+        hashBody.appendChild(t);
+        hashBody.appendChild(put("p", "noscript-hint", "Compare with: sha256sum " + (files[0] ? files[0].file : "the file") + " — the same hash the publish job verified before deploying."));
+      }
+      var prev = (doc.previous || []).filter(function (v) { return v && (v.files || []).length; });
+      if (older && olderList && prev.length) {
+        older.hidden = false;
+        olderList.textContent = "";
+        olderCount.textContent = prev.length + " earlier release" + (prev.length === 1 ? "" : "s") + " · still hosted here";
+        prev.forEach(function (v) {
+          var li = put("li");
+          var head = put("div", null);
+          head.appendChild(put("b", "tag", "v" + v.version));
+          head.appendChild(put("span", "quiet", (v.publishedAt ? " " + v.publishedAt + " · " : " ") + (v.files || []).length + " file" + ((v.files || []).length === 1 ? "" : "s")));
+          li.appendChild(head);
+          var ul = put("ul", "files");
+          (v.files || []).forEach(function (f) {
+            if (!sameOrigin(f.url)) return;
+            var one = put("li");
+            var a = put("a", null, f.file + " · " + mb(f.size));
+            a.href = f.url; a.setAttribute("download", f.file);
+            one.appendChild(a);
+            ul.appendChild(one);
+          });
+          li.appendChild(ul);
+          olderList.appendChild(li);
+        });
+      }
+    }).catch(function (e) {
+      say("unreadable", "warn", "this site's release file could not be read (" + (e && e.message ? e.message : "no answer") + ") — the buttons stay as they are written rather than guessing");
+    });
 
-        try {
-          var p = (navigator.userAgentData ? navigator.userAgentData.platform : navigator.platform) || "";
-          p = String(p).toLowerCase();
-          var kind = p.indexOf("win") >= 0 ? "windows" : (p.indexOf("mac") >= 0 ? "mac" : (p.indexOf("linux") >= 0 ? "linux" : ""));
-          if (kind) {
-            var card = document.querySelector('.os [data-kind="' + kind + '"] .you') ||
-                       document.querySelectorAll(".os .you")[kind === "windows" ? 0 : kind === "mac" ? 1 : 2];
-            if (card) card.hidden = false;
-          }
-        } catch (e) { /* a browser that won't say — fine, no tag */ }
-      })();
-    </script>
-  </body>
+    function labelOf(f) { return f && (f.label || null); }
+
+    /* reveal on scroll: the class is added by the script that proves JS runs, so a blocked script,
+       a reader that dislikes motion, or a search-engine crawler all see the page complete */
+    var vp = document.getElementById("versionPill");
+    if (vp) vp.title = "release.json is the source of truth for what is published";
+
+    function revealAll() {
+      var reveal = [].slice.call(document.querySelectorAll(".reveal"));
+      if (!("IntersectionObserver" in window) || !reveal.length) {
+        reveal.forEach(function (el) { el.classList.add("seen"); });
+        return;
+      }
+      var io = new IntersectionObserver(function (rows) {
+        rows.forEach(function (r) { if (r.isIntersecting) { r.target.classList.add("seen"); io.unobserve(r.target); } });
+      }, { rootMargin: "0px 0px -8% 0px", threshold: 0.02 });
+      reveal.forEach(function (el) { io.observe(el); });
+      // anything never scrolled past is slid into place after a moment: the transform is cosmetic,
+      // and nothing on this page may wait on an event that never arrives
+      setTimeout(function () { reveal.forEach(function (el) { el.classList.add("seen"); }); }, 2500);
+    }
+  })();
+</script>
+<style>
+  /* the older-releases list, kept in its own block so the download panel's rules stay readable */
+  .rel { margin: 26px 0 0; padding-top: 22px; border-top: 1px dotted #ddcdb6; }
+  .rel h3 { display: flex; flex-wrap: wrap; align-items: baseline; column-gap: 12px; row-gap: 4px; }
+  .rel h3 .leader { flex: 1; border-top: 1px dotted #ddcdb6; transform: translateY(-4px); }
+  .rel h3 em { flex: 0 1 auto; min-width: 0; margin-left: auto; text-align: right; font-family: var(--mono); font-size: 11.5px; font-style: normal; color: var(--ink-3); overflow-wrap: anywhere; }
+  .rel ul { list-style: none; display: grid; gap: 10px; margin: 12px 0 0; padding: 0; }
+  .rel > ul > li { background: var(--card); border: 1px solid var(--line); border-radius: var(--r); padding: 13px 15px; box-shadow: var(--lift); min-width: 0; }
+  .rel .tag { font-family: var(--mono); font-size: 12.5px; font-weight: 700; color: var(--brown); }
+  .rel .quiet { font-family: var(--mono); font-size: 11.5px; color: var(--ink-3); }
+  .rel ul.files { list-style: none; flex-direction: row; flex-wrap: wrap; gap: 8px; margin: 10px 0 0; }
+  .rel ul.files li { border: 1px solid var(--line-soft); border-radius: var(--r-sm); padding: 5px 9px; font-family: var(--mono); font-size: 11.5px; box-shadow: none; }
+  .rel ul.files a { color: var(--brown); text-decoration: none; border-bottom: 1px solid transparent; overflow-wrap: anywhere; }
+  .rel ul.files a:hover { border-bottom-color: var(--brown); }
+</style>
+</body>
 </html>

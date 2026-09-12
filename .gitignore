@@ -17,3 +17,7 @@ __pycache__/
 # the QA harness output and its own deps
 qa-shots/
 qa-tools/node_modules/
+
+# the deployable bundle the release pipeline assembles (site + downloads + release.json)
+site-built/
+site/downloads/

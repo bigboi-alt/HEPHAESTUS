@@ -9,7 +9,6 @@ import {
   ramp, round, simulateCvd, wcagLevel, type CvdType,
 } from "../engine/color";
 import { auditPalette, type Audit } from "../engine/cedalion";
-import { SurfacePlanes, VOICE_JOBS, VoiceSurfaceSplit } from "../components/ForgeSplit";
 import { STUDIO_PRESETS } from "../data/presets";
 import { download } from "../lib/storage";
 
@@ -27,6 +26,7 @@ function gradeColor(score: number): string {
   return score >= 82 ? "var(--ok)" : score >= 70 ? "var(--warn)" : "var(--bad)";
 }
 
+const NEUTRALS: Role[] = ["background", "surface", "border", "text", "muted"];
 const VOICE: Role[] = ["primary", "secondary", "accent"];
 
 export default function Akmon() {
@@ -178,20 +178,20 @@ export default function Akmon() {
       {/* ---------- swatches ---------- */}
       <div style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) 330px", gap: 18, alignItems: "start" }}>
         <div style={{ display: "flex", flexDirection: "column", gap: 18, minWidth: 0 }}>
-          <VoiceSurfaceSplit palette={current} shown={shown} />
-
-          <SurfacePlanes
-            palette={current}
-            shown={shown}
-            onHex={(r, h) => setSwatch(r, h)}
-            onLock={toggleLock}
-          />
-
           <SwatchGroup
-            title="voice · the three that carry the brand"
-            sub="these are the colours you edit. surfaces you only ever adjust."
+            title="surfaces"
+            sub="background, surface, border, text, muted — with a whisper of the brand hue"
+            roles={NEUTRALS}
+            swatch={swatch}
+            shown={shown}
+            bg={bg}
+            onLock={toggleLock}
+            onHex={(r, h) => setSwatch(r, h)}
+          />
+          <SwatchGroup
+            title="voice"
+            sub="the three colours that carry the brand — primary, secondary, accent"
             roles={VOICE}
-            jobs={VOICE_JOBS}
             swatch={swatch}
             shown={shown}
             bg={bg}
@@ -252,10 +252,9 @@ export default function Akmon() {
 }
 
 /* ---------- one swatch group ---------- */
-function SwatchGroup({ title, sub, roles, jobs, swatch, shown, bg, onLock, onHex }: {
+function SwatchGroup({ title, sub, roles, swatch, shown, bg, onLock, onHex }: {
   title: string; sub: string;
   roles: Role[];
-  jobs?: Record<string, string>;
   swatch: (r: Role) => { hex: string; name: string; locked: boolean };
   shown: (h: string) => string;
   bg: string;
@@ -294,9 +293,6 @@ function SwatchGroup({ title, sub, roles, jobs, swatch, shown, bg, onLock, onHex
                   <span className="label" style={{ fontSize: 9 }}>{role}</span>
                   <span className="faint" style={{ fontSize: 9, maxWidth: 120, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.name}</span>
                 </div>
-                {jobs?.[role] && (
-                  <div className="faint" style={{ fontSize: 9.5, lineHeight: 1.5 }}>{jobs[role]}</div>
-                )}
                 <div className="row" style={{ gap: 5 }}>
                   <input
                     type="color"
