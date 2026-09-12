@@ -15,6 +15,8 @@
  * date” — those are different facts and only one of them is a reason to relax.
  */
 
+import { invoke } from "@tauri-apps/api/core";
+
 export const DEFAULT_FEED = "https://hephaestus-app.pages.dev/release.json";
 export const POLL_INTERVAL_HOURS = 24;
 const FETCH_TIMEOUT_MS = 8000;
@@ -132,8 +134,26 @@ export function pickInstallerFile(files: ReleaseFile[]): ReleaseFile | null {
 /**
  * Triggers a direct installer download right in the app.
  */
-export function startUpdateDownload(url: string, filename?: string) {
+export async function startUpdateDownload(url: string, filename?: string) {
   if (!url) return;
+
+  // 1. Try native Tauri command to launch the download in default browser
+  try {
+    await invoke("open_url", { url });
+    return;
+  } catch {
+    // not running in Tauri or command failed; continue to web fallbacks
+  }
+
+  // 2. Try window.open
+  try {
+    const w = window.open(url, "_blank", "noopener,noreferrer");
+    if (w) return;
+  } catch {
+    // ignore
+  }
+
+  // 3. Fallback to anchor click
   try {
     const a = document.createElement("a");
     a.href = url;
@@ -145,12 +165,6 @@ export function startUpdateDownload(url: string, filename?: string) {
     setTimeout(() => {
       if (document.body.contains(a)) document.body.removeChild(a);
     }, 1000);
-  } catch {
-    // ignore
-  }
-
-  try {
-    window.open(url, "_blank", "noopener,noreferrer");
   } catch {
     // ignore
   }

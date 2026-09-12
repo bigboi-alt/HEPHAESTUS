@@ -7,6 +7,7 @@ dist-ssr
 !.vscode/extensions.json
 *.tsbuildinfo
 src-tauri/target
+src-tauri/gen/
 
 # generated single-file site preview (node tools/site-preview.mjs)
 site-preview.html
