@@ -16,6 +16,8 @@ import {
 import { describeColor, ROLE_ORDER, type Palette, type Role } from "./akmon";
 import { getPurpose, getTrend, TRENDS, type Purpose } from "../data/trends";
 import type { CanvasCtx, CedalionAction } from "../store";
+import { detectIntent, thinkAndAnswer, createApplyPaletteAction } from "./cedalionBrain";
+import { askCedalionAI } from "../lib/ai";
 
 /* ------------------------------------------------------------------ *
  * report types
@@ -536,7 +538,10 @@ export type CedalionContext = {
   buildSite?: { purposeLabel: string; sectionsOn: number; sectionNames: string[]; score?: number };
   /** Live facts about the canvas page being edited right now. */
   canvas?: CanvasCtx;
+  settings?: any;
 };
+
+export { createApplyPaletteAction };
 
 export type Answer = {
   text: string;
@@ -1386,9 +1391,17 @@ export function cedalionStarters(screen?: string): string[] {
 }
 
 export function ask(question: string, ctx: CedalionContext = {}): Answer {
-  const q = ` ${question.toLowerCase().replace(/[^\w\s'-]/g, " ").replace(/\s+/g, " ").trim()} `;
-  if (!q.trim()) return { text: "Ask me anything about what you're building.", suggestions: FALLBACK_SUGGESTIONS };
+  const rawQ = question.trim();
+  if (!rawQ) return { text: "Ask me anything about what you're building, color harmony, or design architecture.", suggestions: FALLBACK_SUGGESTIONS };
+  
+  const q = ` ${rawQ.toLowerCase().replace(/[^\w\s'-]/g, " ").replace(/\s+/g, " ").trim()} `;
   if (canvasRoute(q, ctx)) return canvasRead(ctx);
+
+  // Check intent from conversational brain first for greetings, humor, palette requests, etc.
+  const intent = detectIntent(rawQ, ctx);
+  if (["GREETING", "IDENTITY", "HUMOR", "PALETTE_REQUEST", "PHILOSOPHY", "CRITIQUE_CURRENT"].includes(intent.type)) {
+    return thinkAndAnswer(rawQ, ctx);
+  }
 
   let best: Rule | undefined;
   let bestScore = 0;
@@ -1403,28 +1416,28 @@ export function ask(question: string, ctx: CedalionContext = {}): Answer {
     if (score > bestScore) { bestScore = score; best = rule; }
   }
 
-  if (!best || bestScore < 3) {
-    const p = P(ctx);
-    if (p) {
-      const a = auditPalette(p, ctx.purposeId);
-      const actions: CedalionAction[] = [];
-      const worst = a.findings.find((f) => f.fix);
-      if (worst?.fix) actions.push(createFixContrastAction(worst.fix.role, worst.fix.hex));
-      else actions.push(createHarmonizeAction(p));
-      return {
-        text: "I don't have a specific rule for that phrasing, but here's what I can measure about what's on screen right now:",
-        bullets: [`${p.name} scores ${a.score}/100 (${a.grade}). ${a.headline}`],
-        actions,
-        suggestions: FALLBACK_SUGGESTIONS,
-      };
-    }
-    return {
-      text: "I don't have a rule for that one, and I won't guess. I cover colour science, WCAG contrast, typography, spacing, hierarchy, motion, trends, and layout architecture.",
-      suggestions: FALLBACK_SUGGESTIONS,
-    };
+  if (best && bestScore >= 5) {
+    return best.answer(ctx);
   }
 
-  return best.answer(ctx);
+  // Super-smart conversational brain: answers any question intelligently without dead-ends
+  return thinkAndAnswer(rawQ, ctx);
+}
+
+export async function askCedalionAsync(
+  question: string,
+  ctx: CedalionContext = {},
+  settings?: any
+): Promise<Answer> {
+  if (settings && (settings.cedalionAiApiKey || (settings.cedalionAiProvider && settings.cedalionAiProvider !== "offline"))) {
+    try {
+      const aiAnswer = await askCedalionAI(question, ctx, settings);
+      if (aiAnswer) return aiAnswer;
+    } catch {
+      // fallback to offline brain
+    }
+  }
+  return ask(question, ctx);
 }
 
 export const askCedalion = ask;

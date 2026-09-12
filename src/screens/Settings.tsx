@@ -37,7 +37,7 @@ const CLAUDE_STYLES: { id: ClaudeStyle; label: string; note: string; swatch: str
 const ACCENTS = ["#F5F5F5", "#FF7043", "#7FB2FF", "#4ADE80", "#FBBF24", "#C084FC", "#F472B6"];
 
 export default function Settings() {
-  const { settings, setSettings, go, palettes, say, update, checkNow, downloadUpdate } = useApp();
+  const { settings, setSettings, go, palettes, say, update, checkNow, downloadUpdate, installUpdate } = useApp();
   const [section, setSection] = useState<Section>("general");
   const [showSuitsCard, setShowSuitsCard] = useState(false);
 
@@ -107,6 +107,35 @@ export default function Settings() {
               value={settings.cedalionDock}
               onChange={(v) => setSettings({ cedalionDock: v })}
             />
+            <Row
+              label="Cedalion AI Brain"
+              note="Built-in super-smart offline brain is active by default. Optionally connect a Gemini, OpenAI, or local Ollama key for open-domain world chat."
+            >
+              <div style={{ display: "flex", flexDirection: "column", gap: 8, width: "100%", maxWidth: 360 }}>
+                <div className="row gap-1">
+                  {(["offline", "gemini", "openai", "ollama"] as const).map((p) => (
+                    <button
+                      key={p}
+                      className="btn"
+                      style={{ fontSize: 10, padding: "4px 8px" }}
+                      data-active={(settings.cedalionAiProvider || "offline") === p}
+                      onClick={() => setSettings({ cedalionAiProvider: p })}
+                    >
+                      {p}
+                    </button>
+                  ))}
+                </div>
+                {(settings.cedalionAiProvider && settings.cedalionAiProvider !== "offline") && (
+                  <input
+                    className="input"
+                    type="password"
+                    placeholder={settings.cedalionAiProvider === "gemini" ? "Gemini API key (AIza...)" : "API key / token"}
+                    value={settings.cedalionAiApiKey || ""}
+                    onChange={(e) => setSettings({ cedalionAiApiKey: e.target.value })}
+                  />
+                )}
+              </div>
+            </Row>
             <Toggle
               label="Interface motion"
               note="Fades and transitions. Off also respects prefers-reduced-motion behaviour in exports."
@@ -330,15 +359,26 @@ export default function Settings() {
             {update.status === "available" && (
               <Row
                 label={`Get update v${update.latest}`}
-                note={`New version available (you are running v${update.current}). ${update.fileName ? `Downloads ${update.fileName}${update.fileSize ? ` (${(update.fileSize / 1024 / 1024).toFixed(1)} MB)` : ""} directly.` : "Starts the new version download directly."}`}
+                note={`New version available (you are running v${update.current}). ${update.fileName ? `Downloads ${update.fileName}${update.fileSize ? ` (${(update.fileSize / 1024 / 1024).toFixed(1)} MB)` : ""}.` : "Downloads new version directly."} Cleanly replaces files and relaunches app.`}
               >
-                <button
-                  className="btn btn-primary"
-                  style={{ fontSize: 10.5, padding: "6px 14px" }}
-                  onClick={() => downloadUpdate()}
-                >
-                  get update
-                </button>
+                <div className="row gap-1">
+                  <button
+                    className="btn btn-primary"
+                    style={{ fontSize: 10.5, padding: "6px 14px" }}
+                    onClick={() => installUpdate()}
+                    title="Launches installer and cleanly updates Hephaestus"
+                  >
+                    ⚡ install &amp; update
+                  </button>
+                  <button
+                    className="btn"
+                    style={{ fontSize: 10, padding: "5px 12px" }}
+                    onClick={() => downloadUpdate()}
+                    title="Download installer file directly"
+                  >
+                    download .exe
+                  </button>
+                </div>
               </Row>
             )}
             {update.downloadUrl && update.status === "current" && (

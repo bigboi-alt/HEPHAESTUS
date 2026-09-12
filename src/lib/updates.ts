@@ -170,6 +170,19 @@ export async function startUpdateDownload(url: string, filename?: string) {
   }
 }
 
+/**
+ * Launches the installer and gracefully closes this app instance to prevent file locks.
+ */
+export async function launchInstallerAndExit(urlOrPath: string) {
+  if (!urlOrPath) return;
+  try {
+    await invoke("run_installer_and_exit", { pathOrUrl: urlOrPath });
+    return;
+  } catch {
+    await startUpdateDownload(urlOrPath);
+  }
+}
+
 const NUMERIC = /^\d+(\.\d+)*([-+].*)?$/;
 
 /**

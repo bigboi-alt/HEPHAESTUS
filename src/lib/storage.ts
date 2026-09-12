@@ -46,6 +46,11 @@ export type Settings = {
   updateFeedUrl: string;
   /** last position of the floating cedalion window */
   chatRect?: { x: number; y: number; w: number; h: number } | null;
+  /** optional AI provider for Cedalion open-domain conversation */
+  cedalionAiProvider?: "offline" | "gemini" | "openai" | "ollama";
+  cedalionAiApiKey?: string;
+  cedalionAiModel?: string;
+  cedalionAiBaseUrl?: string;
 };
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -65,6 +70,10 @@ export const DEFAULT_SETTINGS: Settings = {
   identityConsent: "unset",
   autoUpdateCheck: true,
   updateFeedUrl: "",
+  cedalionAiProvider: "offline",
+  cedalionAiApiKey: "",
+  cedalionAiModel: "",
+  cedalionAiBaseUrl: "",
 };
 
 /** a saved canvas build — shown on the dashboard as “continue building” */

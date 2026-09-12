@@ -14,7 +14,7 @@ import {
 } from "./lib/storage";
 import { founderMark, forgeMark, type Mark } from "./engine/identity";
 import { readSky } from "./lib/sky";
-import { checkForUpdate, DEFAULT_FEED, dueForCheck, IDLE_CHECK, startUpdateDownload, type UpdateCheck } from "./lib/updates";
+import { checkForUpdate, DEFAULT_FEED, dueForCheck, IDLE_CHECK, launchInstallerAndExit, startUpdateDownload, type UpdateCheck } from "./lib/updates";
 
 /** the running version, baked at build time; a literal fallback keeps plain `node` imports honest */
 export const APP_VERSION = typeof __APP_VERSION__ === "string" ? __APP_VERSION__ : "0.0.0-dev";
@@ -47,7 +47,7 @@ export type CanvasCtx = {
 export type CedalionAction = {
   id: string;
   label: string;
-  kind: "fix-contrast" | "harmonize-neutrals" | "switch-theme" | "make-pop" | "insert-section" | "copy-tokens" | "open-screen";
+  kind: "fix-contrast" | "harmonize-neutrals" | "switch-theme" | "make-pop" | "insert-section" | "copy-tokens" | "open-screen" | "apply-palette";
   payload?: any;
 };
 
@@ -129,6 +129,8 @@ type State = {
   checkNow: () => Promise<void>;
   /** download the latest installer directly in the app */
   downloadUpdate: () => void;
+  /** launch installer and close current app so upgrade completes cleanly */
+  installUpdate: () => void;
 };
 
 /** the in-flight update check, so a double mount or two screens asking share one request */
@@ -268,6 +270,17 @@ export const useApp = create<State>((set, get) => ({
     }
     startUpdateDownload(url, update.fileName ?? undefined);
     get().say(`downloading ${update.fileName || `Hephaestus v${update.latest || APP_VERSION}`}…`);
+  },
+
+  installUpdate() {
+    const update = get().update;
+    const url = update.downloadUrl || update.href;
+    if (!url) {
+      get().say("no installer available to install");
+      return;
+    }
+    get().say(`launching installer & closing Hephaestus to complete upgrade…`);
+    launchInstallerAndExit(url);
   },
 
   go: (screen) => set({ screen }),

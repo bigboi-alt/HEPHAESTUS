@@ -11,7 +11,7 @@ import Emblem from "../components/Emblem";
 import { forgeNote, forgeVoice } from "../lib/voice";
 
 export default function Home() {
-  const { palettes, current, setCurrent, go, deletePalette, toggleFavorite, purposeId, sites, deleteSite, setResumeId, settings, update, unlockFounder, downloadUpdate } = useApp();
+  const { palettes, current, setCurrent, go, deletePalette, toggleFavorite, purposeId, sites, deleteSite, setResumeId, settings, update, unlockFounder, downloadUpdate, installUpdate } = useApp();
   const [prompt, setPrompt] = useState("");
 
   const audit = useMemo(
@@ -186,14 +186,23 @@ export default function Home() {
                   <button
                     className="btn btn-primary"
                     style={{ fontSize: 10, padding: "5px 12px" }}
-                    onClick={() => downloadUpdate()}
+                    onClick={() => installUpdate()}
+                    title="Launches installer and cleanly updates Hephaestus"
                   >
-                    get update
+                    ⚡ install &amp; update
+                  </button>
+                  <button
+                    className="btn"
+                    style={{ fontSize: 10, padding: "5px 10px" }}
+                    onClick={() => downloadUpdate()}
+                    title="Download installer file directly"
+                  >
+                    download
                   </button>
                 </span>
               </div>
               <div className="faint mono-sm" style={{ fontSize: 8.5, marginTop: 6 }}>
-                {update.fileName ? `${update.fileName}${update.fileSize ? ` · ${(update.fileSize / 1024 / 1024).toFixed(1)} MB` : ""} · downloads directly` : "starts the new version download directly"}
+                {update.fileName ? `${update.fileName}${update.fileSize ? ` · ${(update.fileSize / 1024 / 1024).toFixed(1)} MB` : ""} · installs cleanly &amp; relaunches automatically` : "installs cleanly &amp; relaunches automatically"}
               </div>
             </div>
           )}

@@ -6,13 +6,13 @@
  */
 import { useEffect, useRef, useState } from "react";
 import { useApp } from "../store";
-import { askCedalion, auditPalette, cedalionStarters, type CedalionAction } from "../engine/cedalion";
+import { askCedalionAsync, auditPalette, cedalionStarters, type CedalionAction } from "../engine/cedalion";
 
 export function CedalionChat({ compact = false }: { compact?: boolean }) {
   const {
     chat, pushChat, clearChat, current, purposeId, screen,
     buildMeta, canvasCtx, cedalionSeed, clearCedalionSeed,
-    setSwatch, generate, go, say,
+    setSwatch, generate, go, say, settings,
   } = useApp();
   const starters = cedalionStarters(screen);
   const [draft, setDraft] = useState("");
@@ -32,13 +32,13 @@ export function CedalionChat({ compact = false }: { compact?: boolean }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cedalionSeed]);
 
-  function send(text: string) {
+  async function send(text: string) {
     const q = text.trim();
     if (!q) return;
     pushChat({ role: "you", text: q });
     setDraft("");
     try {
-      const a = askCedalion(
+      const a = await askCedalionAsync(
         q,
         {
           palette: current ?? undefined,
@@ -53,7 +53,9 @@ export function CedalionChat({ compact = false }: { compact?: boolean }) {
                 score: current ? auditPalette(current, purposeId ?? undefined).score : undefined,
               }
             : undefined,
-        }
+          settings,
+        },
+        settings
       );
       pushChat({
         role: "cedalion",
@@ -88,6 +90,12 @@ export function CedalionChat({ compact = false }: { compact?: boolean }) {
       if (act.payload.role && act.payload.hex) {
         setSwatch(act.payload.role, act.payload.hex);
         say(`Boosted ${act.payload.role} pop to ${act.payload.hex}`);
+      }
+    } else if (act.kind === "apply-palette") {
+      if (act.payload?.palette) {
+        useApp.setState({ current: act.payload.palette });
+        say(`Loaded "${act.payload.palette.name}" into Akmon`);
+        if (screen !== "akmon") go("akmon");
       }
     } else if (act.kind === "insert-section") {
       if (screen !== "build") {
