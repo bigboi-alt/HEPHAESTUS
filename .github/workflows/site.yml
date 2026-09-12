@@ -42,6 +42,9 @@ concurrency:
   group: hephaestus-release      # shared with release.yml: one deploy at a time, queue instead of race
   cancel-in-progress: false
 
+env:
+  ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: 'true'
+
 jobs:
   deploy:
     runs-on: ubuntu-latest

@@ -17,7 +17,7 @@ if (!/^\d+\.\d+\.\d+$/.test(next || "")) {
 }
 
 // 1) package.json + package-lock.json
-execFileSync("npm", ["pkg", "set", "version=" + next], { cwd: root, stdio: "inherit" });
+execFileSync("npm", ["pkg", "set", "version=" + next], { cwd: root, stdio: "inherit", shell: true });
 
 // 2) Cargo.toml  (first version line = [package] version)
 const cargo = path.join(root, "src-tauri", "Cargo.toml");

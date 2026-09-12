@@ -89,22 +89,16 @@
   .btn small { font-family: var(--mono); font-weight: 400; font-size: 11.5px; opacity: .88; white-space: nowrap; }
   .here { font-family: var(--mono); font-size: 12px; color: var(--ink-3); margin: 16px 0 0; }
 
-  /* ── hero card / visual ────────────────────────────────────────────── */
-  .hero-preview {
-    background: var(--card); border: 1px solid var(--line); border-radius: var(--r);
-    padding: 24px; box-shadow: var(--lift-2); display: flex; flex-direction: column; gap: 16px;
+  /* the portrait: text on the page's own background, no plate, no caption */
+  pre.bust {
+    /* width:max-content keeps the block the size of its own characters: stretched to the column it
+       would claim the portrait's aspect ratio, which the gate measures against the grid */
+    margin: 0 auto; width: max-content; max-width: 100%; font-family: var(--mono);
+    font-size: clamp(6.4px, 1.05vw, 11.2px); line-height: 1.02;
+    color: var(--brown); white-space: pre; text-align: center;
+    letter-spacing: normal; user-select: none;
   }
-  .preview-topbar { display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--line-soft); padding-bottom: 12px; }
-  .preview-dots { display: flex; gap: 6px; }
-  .preview-dots span { width: 10px; height: 10px; border-radius: 50%; background: #e0d5c3; }
-  .preview-title { font-family: var(--mono); font-size: 11px; color: var(--ink-3); letter-spacing: .05em; }
-  .palette-swatches { display: grid; grid-template-columns: repeat(8, 1fr); gap: 6px; border-radius: 8px; overflow: hidden; }
-  .swatch-box { height: 48px; border-radius: 6px; display: flex; flex-direction: column; justify-content: flex-end; padding: 4px; font-family: var(--mono); font-size: 9px; box-shadow: inset 0 0 0 1px rgba(0,0,0,0.06); }
-  .bento-mockup { display: grid; grid-template-columns: 1.2fr 1fr; gap: 10px; margin-top: 4px; }
-  .bento-cell { background: var(--paper); border: 1px solid var(--line-soft); border-radius: 8px; padding: 12px; }
-  .bento-cell h4 { font-size: 13px; margin-bottom: 4px; font-family: var(--sans); font-weight: 600; }
-  .bento-cell p { font-size: 11.5px; color: var(--ink-2); margin: 0; line-height: 1.45; }
-  .bento-metric { font-family: var(--mono); font-size: 20px; font-weight: 700; color: var(--brown); margin-bottom: 2px; }
+  @media (max-width: 900px) { pre.bust { font-size: clamp(4.6px, 1.85vw, 8.4px); } }
 
   /* ── sections ────────────────────────────────────────────────────────── */
   section { padding-top: 64px; padding-bottom: 14px; }
@@ -152,37 +146,6 @@
   .note { margin: 20px 0 0; padding: 16px 18px; border-left: 3px solid var(--brown); background: var(--paper-2); border-radius: 0 var(--r-sm) var(--r-sm) 0; font-size: 14.5px; color: var(--ink-2); line-height: 1.55; }
   .note b { color: var(--ink); }
 
-  /* ── ascii art forge ─────────────────────────────────────────────────── */
-  .forge-ascii-wrap {
-    margin: 22px 0 26px;
-    background: #1a100a;
-    color: #df8a48;
-    border: 1px solid #452816;
-    border-radius: var(--r);
-    padding: 24px 16px 20px;
-    box-shadow: inset 0 2px 12px rgba(0, 0, 0, 0.55), var(--lift);
-    overflow-x: auto;
-    text-align: center;
-  }
-  .forge-ascii {
-    display: inline-block;
-    font-family: var(--mono);
-    font-size: 11px;
-    line-height: 1.16;
-    letter-spacing: 0;
-    margin: 0;
-    white-space: pre;
-    color: #e89857;
-    text-shadow: 0 0 10px rgba(232, 152, 87, 0.45);
-    user-select: none;
-  }
-  @media (max-width: 680px) {
-    .forge-ascii { font-size: 8.5px; line-height: 1.12; }
-  }
-  @media (max-width: 480px) {
-    .forge-ascii { font-size: 7px; line-height: 1.08; }
-  }
-
   /* ── feature grid ────────────────────────────────────────────────────── */
   .grid-3 { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 18px; }
   .feat { background: var(--card); border: 1px solid var(--line); border-radius: var(--r); padding: 22px 20px; box-shadow: var(--lift); display: flex; flex-direction: column; gap: 8px; }
@@ -228,95 +191,67 @@
   <!-- Hero Section -->
   <section class="wrap hero" id="top">
     <div>
-      <p class="eyebrow reveal">Visual Canvas · OKLCH Color Engine · Smart Design Critic</p>
-      <h1 class="reveal">A visual design forge for modern websites.</h1>
-      <p class="lede reveal">Hephaestus combines a freeform drag-and-drop website canvas, an accessible color forge powered by perceptual OKLCH color science, and Cedalion — an intelligent in-app design critic that audits contrast, hierarchy, and usability in real time.</p>
+      <p class="eyebrow reveal">Colour · critique · a buildable library</p>
+      <h1 class="reveal">A design forge<br>that shows its work.</h1>
+      <p class="lede reveal">Hephaestus turns a plain-language brief into a working palette, tells you which of its rules the palette breaks and why, and keeps a library of 1,750 design directions you can build from rather than admire. Every answer comes from its own arithmetic — nothing is generated for you by a model, so the same brief gives the same answer tomorrow, and you can look up how it was reached.</p>
       <div class="acts reveal">
         <a class="btn" href="#get" id="heroGet">Download for your system <small id="heroSize"></small></a>
-        <a class="btn ghost" href="#features">Explore Features</a>
+        <a class="btn ghost" href="#features">See what it actually does</a>
       </div>
-      <p class="here" id="here">Free &amp; Open Source · Windows, macOS &amp; Linux · 100% Local-First</p>
+      <p class="here" id="here">Desktop · Windows, macOS and Linux · free, forever, no account</p>
     </div>
     <div class="reveal">
-      <div class="hero-preview">
-        <div class="preview-topbar">
-          <div class="preview-dots"><span></span><span></span><span></span></div>
-          <span class="preview-title">HEPHAESTUS STUDIO · LIVE PREVIEW</span>
-          <span class="pill">OKLCH</span>
-        </div>
-        <div class="palette-swatches">
-          <div class="swatch-box" style="background:#0F172A; color:#94A3B8;"><span>bg</span></div>
-          <div class="swatch-box" style="background:#1E293B; color:#CBD5E1;"><span>surface</span></div>
-          <div class="swatch-box" style="background:#334155; color:#94A3B8;"><span>border</span></div>
-          <div class="swatch-box" style="background:#F8FAFC; color:#0F172A;"><span>text</span></div>
-          <div class="swatch-box" style="background:#94A3B8; color:#0F172A;"><span>muted</span></div>
-          <div class="swatch-box" style="background:#38BDF8; color:#0F172A;"><span>pri</span></div>
-          <div class="swatch-box" style="background:#818CF8; color:#0F172A;"><span>sec</span></div>
-          <div class="swatch-box" style="background:#F59E0B; color:#0F172A;"><span>acc</span></div>
-        </div>
-        <div class="bento-mockup">
-          <div class="bento-cell">
-            <div class="bento-metric">14.2:1</div>
-            <h4>WCAG AAA Contrast</h4>
-            <p>High readability across all daylight and dark environments.</p>
-          </div>
-          <div class="bento-cell">
-            <div class="bento-metric">0.02 ΔE</div>
-            <h4>Perceptual Uniformity</h4>
-            <p>Equal hue steps look equal to human eyes.</p>
-          </div>
-        </div>
-      </div>
+      <pre class="bust" role="img" aria-label="The Hephaestus mark drawn in text characters: a carved head and shoulders, measured cell by cell, where the darkest cell is an at-sign and the lightest is a space." data-cols="72" data-rows="42">
+                                    -@#%==*%:=,                         
+                               ,@@@@@@#+*@#%@@@**,                      
+                             @@#%@#@@##%+@#@#%*@@%#                     
+                         .,*@@##@@@@@@@%+@@#%+=+++++@@@#                
+                       =@@@@%##@##*%*%%#@@@@#@@##+#=*%=+@%              
+                      *#@@@*@@@@%*#@@#%*##%++#@@@%@+%*%@@+**            
+                    ##@@#@#@#@@@#+#@@#%#*+=*@@@@@@@@##*+=*@@            
+                  :%##@@@%##@@@###@@@@@@@#@@+#*-%**#@@@#%%@-            
+                =#@@@@@%%#%#%##@@@#@#@@##@@@+*%+*#%=+##@##+             
+                %###@@#%##@@@@@%#%*+@#*-@#@@@#*++=%@+*%=%@*             
+               %###@@%%##@@###=@###@@#%=%#%%%@@@@%+%%*#@+*              
+              +#@@@@@%@#@@##@@##@##@@@@@@-+@%-%#@@@%%+*#@@:             
+             +*%%@#@@#%##@@@@@%@*+%@@@##++*@@##%%%*=-=-#%%              
+             +@@@@@%##@@@#@%##@@*%*@@@@*+@@#%*%%*++=+==+@               
+            *@#@#@*%%@###@@@##@@@%*=+@@#%%%#@@**=+==-=-=*               
+            *#@@@%#@@@@@@@#*==+#@@@@+*@@@#@@#%%****%@%+*+               
+            #%@@@##@@@%@@@%+@@@@@@#@%@%**@###@#@#@##@@@**               
+           *@%@@##@@@#@@@@@%%@@@@@@@@%*%##%***##@@*%@@@+:               
+            @@@##@@@##@%*@@@#@@@#@###*=%##%%+=--=%**%##@+,              
+             #@%@#@@@@@#*#@@@@@@@@@@##@+@#@%%*+======*#@@+              
+            +##%@@#@#@@@@#=%%@#@@@#@@@%#*%##%%++====-*#%#%+             
+            #@@%@@@@@@@@@@##@@@#@@@#@@@@#+@##%%**++=+@@@@@@             
+              @@%#@@#@#@#@@@@@##*%#@###@#%##%%**++==-=*#+               
+             =@@@#@*@#@@@@@@@@@@@@@###@#@#@##%%**++==*%#%               
+             @@@@@@%#@@@@#@@@@@@#@@#########%%*%*+=++@%%:               
+              @#@@@@@@@###@@@@@#@#@@@#@#@#@##%%****++*#@                
+               +@%@#*%%##@#@#@##%##@#@#@######%%**++==-*                
+               :%#@%@@@@##@@@@@##%#@@@@@@@@@@#@##%%**+=+                
+               .#@@@@@###@@@@@###%%@#@#@#@#@@@@@@@@@@@#@                
+                 %@@#%@@@@@@@@@##%%%@#@#@@@@@@@@#+                      
+                  #@@##@#@@##@#@#%**%######@#@@@                        
+                  :@@%@@@@@+##@#@%*+%#@##%##@@@*                        
+                     *#@@@%+%@#@##*+*###%%*++#++:                       
+                    ,### +=+%%#%#%*=+*%%%***%*=-*                       
+               -*%*%*%+---=*+**%**+=-++*+***=-:--*+-                    
+           =+=++ + +=- ===*+++ +*+*= -+++= -=--: - =+=*+*+*=--          
+          =+-===-+=== ===+==- ===+=-:--=- :--:, ::----:::==+= =-:       
+       - - , : : : - - - -=- - - - - , : : - , , , : : : - - , - :      
+     ,: :::,: : ,:: : : ::: :::-: : ,,, , : , , ,,,,, , ::: ,,::. ,     
+         , : , , ,   , :     ,   , : .   , , . , ,   , ,     , . . .    
+      , . .   , , . . .   . . . . , . . , .   . . . . .   . , .   .     
+               .                   .                                    
+</pre>
     </div>
   </section>
 
   <!-- Downloads Section -->
   <section class="wrap" id="get">
-    <div class="sechead"><h2>Download Hephaestus</h2><span class="leader"></span><span class="no">§ 01 — forge</span></div>
+    <div class="sechead"><h2>Download Hephaestus</h2><span class="leader"></span><span class="no">§ 01 — downloads</span></div>
     <p class="sub">Direct, stand-alone installers for Windows, macOS, and Linux. Built from source, 100% offline and local-first.</p>
-
-    <!-- ASCII Art of Hephaestus at the Forge -->
-    <div class="forge-ascii-wrap reveal">
-      <pre class="forge-ascii" aria-label="ASCII art of Hephaestus at the forge" role="img">
-                                  .---.
-                               _.'     '._
-                             .'           '.
-                            /   _       _   \
-                           |   (o)     (o)   |
-                           |        ^        |
-                            \     '---'     /
-                             '.           .'
-                               '._     _.'
-                                  `---`
-                                 /|   |\
-                                / |   | \
-              __               /  |   |  \               __
-            .'  `'.           /   |   |   \           .'`  '.
-           /  /\   \         /    |   |    \         /   /\  \
-          |  |  \   \       |     |   |     |       /   /  |  |
-          |  |   \   \     /      |   |      \     /   /   |  |
- [HAMMER] |  |    \   '.  /      /     \      \  .'   /    |  | [FORGE]
-          |  |     \    `'      /       \      `'    /     |  |
-          |  |      \          /    _    \          /      |  |
-          |  |       \________|    / \    |________/       |  |
-          |  |       |        |   |   |   |        |       |  |
-          \  \       |        |    \_/    |        |       /  /
-           \  \      |         \         /         |      /  /
-            \  \     |          `'-----'`          |     /  /
-             \  `'--'|                             |'--'`  /
-              `------'       .-------------.       '------`
-                 ||         /               \         ||
-                 ||        /   .---------.   \        ||
-                _||_      |   |   ANVIL   |   |      _||_
-               [====]     |   |  =======  |   |     [====]
-              /______\     \   \         /   /     /______\
-             | SPARK  |     '.  '-------'  .'     | FLAME  |
-             |  * .   |       `'---------'`       |  ( ) ) |
-             | . *  . |      /             \      | ( ( () |
-            /__________\    (_______________)    /__________\
-             H E P H A E S T U S  ·  G O D   O F   F O R G E
-      </pre>
-    </div>
 
     <p class="status" id="status"><span class="dot"></span><i id="statusText">Checking latest releases…</i></p>
 
@@ -484,9 +419,9 @@
 
 <footer>
   <div class="wrap fbar">
-    <span><b>Hephaestus</b> <span data-check="version">v0.3.0</span> · Open Source (MIT)</span>
+    <span><b>Hephaestus</b> <span data-check="version">v0.4.0</span> · Open Source (MIT)</span>
     <span><a href="#get">Downloads</a> · <a href="#features">Features</a> · <a href="#specs">Specifications</a></span>
-    <span>Crafted with precision for builders, designers, and developers.</span>
+    <span id="foot2">the portrait above is the app's mark, measured on a 72-cell grid and set in ten characters</span>
   </div>
 </footer>
 
