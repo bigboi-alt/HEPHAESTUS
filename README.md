@@ -176,7 +176,7 @@ python3 -m http.server 8099 --directory site      # the site
 cd qa-tools && npm i && npx playwright install chromium && node run-all.mjs
 ```
 
-That's the release gate: 12/12, 453 assertions plus nine viewports of the live page, and
+That's the release gate: 12/12, 455 assertions plus nine viewports of the live page, and
 `run-all.mjs` exits non-zero if any of them complains. `npm run typecheck` (`tsc -b`, not `tsc --noEmit` — the root config is a
 solution file and the latter silently does nothing) and `npm run lint` (oxlint, which also
 covers `tools/` and `qa-tools/`) are expected to come back clean.
@@ -317,15 +317,25 @@ guess, and none is faked):
 4. github.com repo → **Settings → Secrets and variables → Actions → New repository secret**, twice:
    `CLOUDFLARE_API_TOKEN` (step 1) and `CLOUDFLARE_ACCOUNT_ID` (step 2). Names must match **exactly** —
    a typo is a silent skip on a docs deploy, and an explicit failure on a release.
-5. Run the **site** workflow once (repo → Actions → site → Run workflow). Its last step loads the URL it
-   just deployed, checks it is this page, and reads `/release.json` back — so the run summary is either
-   "verified" or an error, never an assumption.
+5. Run the **site** workflow once (repo → Actions → site → Run workflow). Its last steps load the
+   immutable URL wrangler printed and check *that* first, then wait for the production alias to be
+   serving the same bytes and re-check — so the run summary is either "verified" or an error naming
+   which of the two it is, never an assumption.
 6. Then a release: preflight first, tag when it is green. Nothing else is wired up by hand.
 
-**Minutes and limits, honestly.** Public repos get unlimited Actions minutes; a private repo on the
-Free plan gets 2,000/month with macOS counted 10x and Windows 2x, and the default spend limit of $0
-makes running out a hard stop rather than a bill. That is why `release.yml` has no push trigger and
-why manual runs are preflight by default. And it is why the split matters: **Cloudflare Pages serves
+**Minutes and limits, honestly.** Public repos get unlimited Actions minutes **on standard runners**
+— `ubuntu-latest`, `windows-latest`, `macos-latest`, and pinned standard sizes like `ubuntu-22.04`.
+"Larger runners" are a different product: **they are billed even on a public repository, included
+minutes never apply to them, and GitHub refuses to start a job on one until a payment method exists on
+the account**, which arrives as a wall of text about failed payments rather than anything about
+runners. That is the one way this pipeline could cost you money by accident, so `manifest-qa` asserts
+every `runs-on:` in both workflows is a standard label — including the Intel macOS slice, which is
+cross-compiled with `--target x86_64-apple-darwin` on the free ARM runner instead of `macos-latest-large`.
+(If you ever *want* a native Intel box: add a card, set a spend limit, and change that one label.)
+
+A private repo on the Free plan gets 2,000 minutes/month with macOS counted 10x and Windows 2x, and
+the default spend limit of $0 makes running out a hard stop rather than a bill. That is why
+`release.yml` has no push trigger and why manual runs are preflight by default. And it is why the split matters: **Cloudflare Pages serves
 the site and its downloads from its own storage**, so a month with no buildable minutes can stop a
 new release and cannot break the page, the buttons, or a single existing download.
 

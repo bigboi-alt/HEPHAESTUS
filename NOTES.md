@@ -482,3 +482,39 @@ sitebtn 4), `npm run typecheck` clean, `oxlint` 0 errors / 25 warnings, `vite bu
 `bash -n`, and the verifier was run against the live project and its own deployment URL: both exit 0.
 Still not testable in this sandbox, and not claimed: `tauri build` on the four runners, wrangler's
 deploy path, and the promotion of a *release* (this run deployed only the page).
+
+## 2026-09-12 (later) — the Intel job that never started
+
+A real release run came back with three platforms built and `macos intel` dead on arrival:
+
+> The job was not started because recent account payments have failed or your spending limit needs to
+> be increased. Please check the 'Billing & plans' section in your settings.
+
+No build log, because nothing ran. The cause is one label: that job said `runs-on: macos-latest-large`,
+picked so the x86_64 slice would compile on actual Intel hardware. Larger runners are not part of the
+free-for-public-repositories deal — GitHub charges for them even on a public repo, included minutes
+never apply, and with no payment method on file the job is refused outright. Hence the misleading text:
+it is not that a payment failed, it is that a paid runner was asked for by an account that cannot be
+billed. Standard runners (`ubuntu-latest`, `windows-latest`, `macos-latest`, pinned standard sizes like
+`ubuntu-22.04`) stay free on a public repo, which is why exactly one of four jobs hit it.
+
+Fixed by cross-compiling instead: the Intel job now runs on `macos-latest` — the same free ARM runner as
+the Apple Silicon job — and cargo emits x86_64 machine code because the build was always
+`tauri build --target x86_64-apple-darwin` with that Rust target installed. The toolchain step already
+requested the target; only the machine under it changed. Safe for this app specifically: `bundle.externalBin`
+is null (no sidecar binary to match against the host arch) and `plugins` is null, so nothing here needs
+target-architecture libraries at build time. What we give up is native-Intel *validation* — which the
+pipeline never had anyway, since CI does not launch the app.
+
+Pinned so it cannot drift back: `manifest-qa` reads the `runs-on:` values out of both workflows and
+fails on a `-large`/`-x64`/`-arm64`/`self-hosted`/GPU label, fails on anything that is not a standard
+free-for-public name, and requires the Intel job's own label to be `macos-latest` with the x86_64 target
+still in its build command. (It also caught me twice: a comment that *quotes* `macos-latest-large` to
+explain why it is forbidden must not be scanned as if it were a request for it, so the checks parse the
+value after `runs-on:` and nothing else.) `README.md` now carries the rule in the limits section, since
+"public repos are unlimited" is only true with an asterisk, and an asterisk nobody reads is a job that
+fails at 3 a.m.
+
+Checked: `manifest-qa` 126/126, and the full gate 12/12 with 455 assertions plus nine viewports clean.
+Not verified here, and it cannot be: an actual `tauri build --target x86_64-apple-darwin` on a macOS
+runner — the first run on Actions is the proof, and it now costs nothing to obtain.

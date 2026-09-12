@@ -157,6 +157,11 @@ jobs:
   build-linux:
     name: linux x64
     needs: gate
+    # Pinned to 22.04 rather than -latest: the .deb is built against this distro's glibc and
+    # libwebkit2gtk-4.1, so the version inside the bundle is the floor for the machines that can run
+    # it. Standard runner size, so it costs nothing on a public repo — which is the part worth
+    # keeping in mind, since a "-large"/"-x64"/"-arm64" label here would be billed and blocked
+    # outright on an account without a card. `manifest-qa` asserts every runner stays standard.
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
@@ -185,8 +190,8 @@ jobs:
   build-macos-arm:
     name: macos apple silicon
     needs: gate
-    runs-on: macos-latest          # ARM runner; 10x minute cost on a private repo, so this whole
-    steps:                         # workflow deliberately never runs on a plain push
+    runs-on: macos-latest          # standard ARM runner: free on a public repo, 10x minute cost on a
+    steps:                         # private one — so this workflow deliberately never runs on a push
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with: { node-version: 22, cache: npm }
@@ -208,7 +213,14 @@ jobs:
   build-macos-intel:
     name: macos intel
     needs: gate
-    runs-on: macos-latest-large    # the x86_64 runner; "-large" is Intel, plain "-latest" is ARM
+    # Cross-compiled on the same free ARM runner, NOT on "macos-latest-large". That is a *larger*
+    # runner, and larger runners are billed even on public repositories — and, worse, they are
+    # refused outright until a payment method exists on the account, which is the whole text of the
+    # error: "recent account payments have failed or your spending limit needs to be increased".
+    # Nothing ran; the job never had a chance to fail for a code reason. Standard runners are the
+    # free-for-public-repos ones, so both slices build there and cargo emits x86_64 machine code from
+    # ARM hardware. This works because the bundle has no sidecar and no plugin needing target libs.
+    runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -218,7 +230,7 @@ jobs:
       - uses: swatinem/rust-cache@v2
         with: { workspaces: './src-tauri -> target' }
       - run: npm ci
-      - name: build the disk image
+      - name: build the disk image (for x86_64, from an arm64 runner)
         run: npm run tauri build -- --target x86_64-apple-darwin
       - name: upload the package
         uses: actions/upload-artifact@v4

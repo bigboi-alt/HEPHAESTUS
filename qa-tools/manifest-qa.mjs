@@ -339,8 +339,20 @@ console.log("\nmanifest-qa · what the pipeline insists on, checked without a cl
     ok(needs.includes(j), `publish waits for ${j}`);
   ok(/actions\/upload-artifact@v4[\s\S]*?if-no-files-found: error/.test(rel), "a build that produced no files fails, rather than uploading an empty artifact");
   ok(/retention-days: \$\{\{ env\.RETENTION_DAYS \}\}/.test(rel) && /RETENTION_DAYS: '7'/.test(rel), "the installers are kept 7 days: temporary, as agreed");
-  ok(/--target aarch64-apple-darwin/.test(rel) && /--target x86_64-apple-darwin/.test(rel), "both macOS slices are built for their own triple");
-  ok(/runs-on: macos-latest-large/.test(rel) && /runs-on: macos-latest\s+#/.test(rel), "the Intel job runs on an Intel runner, the ARM one on an ARM runner");
+  ok(/--target x86_64-apple-darwin/.test(rel) && /--target aarch64-apple-darwin/.test(rel),
+    "both macOS slices are built for their own triple");
+  const labels = (rel + "\n" + site).split("\n").filter((l) => /^\s+runs-on:/.test(l))
+    .map((l) => (/runs-on:\s*(\S+)/.exec(l) ?? ["", ""])[1]);
+  // Checked on the runs-on lines only: the reason this rule exists is spelled out in a comment, and a
+  // comment that quotes "macos-latest-large" to say "never write this" is not a request for it.
+  const paid = labels.filter((l) => /-large|-x64|-arm64|\d+vcpu|self-hosted|gpu/i.test(l));
+  ok(paid.length === 0,
+    `no larger/self-hosted runner is asked for in either workflow (${labels.join(", ")}) — larger ones are billed even on public repos and blocked outright until a card is on file, which is how the Intel job died without running a step`);
+  ok(labels.every((l) => /^(ubuntu-(latest|2\d\.04)|windows-latest|macos-latest)$/.test(l)),
+    `every runner label is a standard, free-for-public-repo one (${[...new Set(labels)].join(", ")})`);
+  const intel = (/(?:^|\n) {2}build-macos-intel:\n[\s\S]*?\n {2}\S/.exec(rel) || [""])[0];
+  ok((/runs-on:\s*(\S+)/.exec(intel) ?? ["", ""])[1] === "macos-latest" && /--target x86_64-apple-darwin/.test(intel),
+    "the Intel slice cross-compiles for x86_64 on the free ARM runner instead of renting an Intel box");
   ok(/libwebkit2gtk-4\.1-dev/.test(rel), "the Linux job installs the webkit deps Tauri needs");
   const gated = rel.split("\n").filter((l) => /^\s+if: needs\.gate\.outputs\.publish == 'true'/.test(l)).length;
   ok(gated >= 6, `every step that can touch the world is gated on publish (${gated} steps)`);
