@@ -3,7 +3,9 @@
 **A design forge that runs on maths, not models.**
 
 Palette engine, trend intelligence, and a critic that shows its numbers. No AI, no API keys,
-no network calls, no paid services. Everything it claims, it can prove with a measurement.
+no paid services, and no data leaves the machine — the one outbound read it may perform is a
+static file asking whether a newer version exists, and that has a switch. Everything it claims,
+it can prove with a measurement.
 
 - **Akmon** — the anvil. Natural language in, an eight-role, accessibility-checked colour system out.
 - **Cedalion** — the guide. Audits what you make, answers questions, always with the number attached.
@@ -135,9 +137,68 @@ no server, no build.
   click-to-copy, locked or unlocked, with a contrast grade per pair and Cedalion's read across the top
 - Six shell themes (Obsidian, Graphite, Paper, Claude, Blueprint, Ember), accent colour, density, motion
   toggle — and Claude comes in two skins, Ambrosia (cream) and Nyx (dusted black with orange coals)
-- Everything persists locally. No account, no telemetry, no network.
+- Everything persists locally. No account, no telemetry, and no call out except the optional
+  once-a-day read of the release file (Settings → general has the switch, off is respected).
 
 ---
+
+### The forge mark — one palette per person, graded on the anvil
+
+`src/engine/identity.ts` owns it end to end: the seed, the palette, the grading, the seven bands.
+
+```
+seed = latitude + longitude + year + day-of-year + hour + minute + second + millisecond
+       + weather code + temperature + humidity
+```
+
+Latitude and longitude only enter when the person answers *yes* to the one question the card asks.
+`src/lib/sky.ts` is the only file that touches a location: geolocation, then a keyless Open-Meteo
+read, each with a timeout, each degrading into **"clock only"** — a stated fact in the card, not a
+silent substitute. A desktop shell that will not hand its webview a location is a real case, not a
+hypothetical one, and the answer is not a third-party IP lookup: About's own fields take the place
+typed by hand, and the mark can be re-forged from it (`identity-qa` proves a typed place reaches the
+seed instead of being recorded and ignored). It happens once, and the mark is then frozen: written to storage and never
+recomputed, which is what makes it an identity rather than a mood. About lets you read the ten
+numbers, edit them and see what they would have produced; nothing is adopted until you press adopt.
+
+The score is measurement, not ceremony. `gradeMark` recomputes six things from the finished palette
+with the same colour maths the rest of the app uses, and the printed score is the **floor** of the
+components — 99.5 stays 99 and cannot round its way into the band above:
+
+| component | max | what it measures |
+|---|---|---|
+| harmony | 22 | are the three voices on a real chord (≤ 12° off one of the seven) |
+| lightness ladder | 16 | spread across the eight roles, no two crowding, ink clear of the ground |
+| usable contrast | 22 | six role pairs against their own floors (ink 4.5:1, accents 2.2:1) |
+| chroma discipline | 14 | one loud voice and a quiet ground, not six shouting |
+| colour-blind separation | 14 | the three voices stay three voices under four simulations |
+| distinct roles | 12 | no two roles within 0.100 of each other in OKLab |
+
+The bands: 0–39 RAW IRON ⚙️ · 40–54 TEMPERED IRON 🩶 · 55–69 SILVERFORGED ⚪ · 70–79 GILDED 🟡 ·
+80–89 MASTERFORGED 🟠 · 90–96 HEPHAESTEAN 🔥 · 97–100 DIVINE FORGE ✦. Nobody is handed the top one —
+over 3,000 forged marks the mean is 68.7, every band below the top holds at least 20 marks, and none
+reached 97. `qa-tools/identity-qa.mjs` recomputes all of that from the live engine, so the ladder
+cannot be quietly flattened later.
+
+The founder's own set is the single deliberate exception, and it earns its 100 rather than being
+given it: those eight hexes max out every component in the table, and `identity-qa` fails the gate
+the day one of them stops maxing out. Typing the founder's key anywhere in the app applies that
+palette, wears the founder band in Akmon, and shows the signature card in About (the signature is
+your artwork, thresholded to an alpha silhouette and painted through a CSS mask, so it reads on all
+six themes). The key is stored as folded byte offsets, so no plaintext form of it exists in `src/`
+or in the built bundle — `identity-qa` greps both to prove that. That is obfuscation, **not**
+secrecy: anything shipped to a client can be found by someone determined enough, and this repo states
+the limit instead of pretending the boundary is stronger than it is.
+
+### The version check (a check, not an updater)
+
+`src/lib/updates.ts` reads the same static `release.json` the website reads and compares versions —
+`0.4.0` vs `0.10.0` numerically segment by segment, anything with a suffix lexically. Once every 24
+hours at most, on its own; About has **check now** whenever you want one; Settings → general has the
+switch. Three outcomes, each worded as what it is: a newer version (a strip on the dashboard linking
+to `#get` on the same host), nothing newer, or **"couldn't check"** with the reason — a failed read is
+never allowed to read as "up to date". It never downloads or installs anything, which is why it needs
+no signing or updater key: those remain out of scope, documented as absent in *Secrets* below.
 
 ## Architecture
 
@@ -176,7 +237,7 @@ python3 -m http.server 8099 --directory site      # the site
 cd qa-tools && npm i && npx playwright install chromium && node run-all.mjs
 ```
 
-That's the release gate: 12/12, 455 assertions plus nine viewports of the live page, and
+That's the release gate: 13/13, 545 assertions plus nine viewports of the live page, and
 `run-all.mjs` exits non-zero if any of them complains. `npm run typecheck` (`tsc -b`, not `tsc --noEmit` — the root config is a
 solution file and the latter silently does nothing) and `npm run lint` (oxlint, which also
 covers `tools/` and `qa-tools/`) are expected to come back clean.
@@ -253,9 +314,13 @@ node tools/release-manifest.mjs --print-required          # which files a releas
 3. Watch Actions → `release`. Four builds, then the `publish` job. It prints the batch it accepted,
    the preview URL it verified, and the production URL it re-verified. `site/index.html` needs no
    edit and no redeploy: it reads `release.json`, which the job just rewrote.
-4. If any platform is missing, empty, or named for another version, the job fails **before** the
-   deploy step and the live release keeps serving what it served. Nothing is deleted either way,
-   so a failed release never takes the old ones down.
+4. If any platform is missing, empty, or named for another version — **or if any single file is bigger
+   than the 25 MiB Cloudflare Pages allows in a deployment** — the job fails **before** the deploy step
+   and the live release keeps serving what it served. Nothing is deleted either way, so a failed
+   release never takes the old ones down. (`bundle.targets` in `src-tauri/tauri.conf.json` is what
+   decides which files exist; the gate follows that config, so the config is also the fix. A Linux
+   AppImage is ~76 MB because it carries its own GTK/WebKit runtime, and `PLAN.md`
+   §"Files bigger than Pages" has the two ways to handle that.)
 
 To check a release **without** shipping it — the run to use first, since a private repo pays macOS
 minutes at 10x: Actions → **release** → *Run workflow*, leaving **publish** unticked. It builds all

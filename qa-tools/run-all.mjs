@@ -13,7 +13,7 @@
 import { spawn } from "node:child_process";
 
 const ALL = ["voice-qa", "akmon-qa", "merkhet-qa", "imgsel-qa", "imgcovered-qa",
-             "studio-qa", "trends-qa", "manifest-qa", "sitebtn-qa", "ascii-qa", "dl-qa", "site-qa"];
+             "studio-qa", "trends-qa", "identity-qa", "manifest-qa", "sitebtn-qa", "ascii-qa", "dl-qa", "site-qa"];
 const pick = process.argv.slice(2);
 const list = pick.length ? ALL.filter((n) => pick.includes(n)) : ALL;
 
@@ -21,7 +21,7 @@ async function up(url) {
   try { return (await fetch(url, { signal: AbortSignal.timeout(1500) })).status < 500; } catch { return false; }
 }
 const appUp = await up(process.env.APP || "http://127.0.0.1:5199/");
-if (!appUp) console.log("!! the app dev server isn't answering on :5199 — 7 of these suites drive it");
+if (!appUp) console.log("!! the app dev server isn't answering on :5199 — 8 of these suites drive it");
 
 const run = (name) => new Promise((res) => {
   const p = spawn(process.execPath, [`${name}.mjs`], { cwd: new URL(".", import.meta.url).pathname, stdio: ["ignore", "pipe", "pipe"] });

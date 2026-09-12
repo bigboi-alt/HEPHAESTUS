@@ -65,10 +65,24 @@ console.log("greetings + easter eggs");
   ok(seen.size >= 1, `lines rotate across days (saw ${seen.size} variant here)`);
 }
 {
-  const { ctx, page } = await boot(browser, { theme: "paper", displayName: "Hephaestus" });
-  await page.getByText("↻ again").click();
-  await page.waitForTimeout(120);
-  ok((await page.locator("h1").first().innerText()).length > 10, "the ↻ again button re-rolls without breaking");
+  // the greeting is one sentence now: no caption under it, no button to re-roll it. What replaces
+  // those is the thing the user asked for instead — their own forge mark, on the same dashboard.
+  const { ctx, page, errs } = await boot(browser, { theme: "paper", displayName: "Smith" });
+  const once = await h1(page);
+  const header = await page.evaluate(() => {
+    const block = document.querySelector("h1")?.parentElement;
+    return {
+      captions: block ? block.querySelectorAll(".faint, .mono-sm, button").length : -1,
+      text: block ? block.innerText.trim().replace(/\s+/g, " ") : "",
+    };
+  });
+  ok((await page.getByText("↻ again").count()) === 0, "the “say something else” button is gone — a greeting you can re-roll is a slot machine");
+  ok(header.captions === 0, `nothing hangs under the headline any more (${header.captions} caption or button nodes in that block)`);
+  ok(once.length > 10 && header.text.includes(once), `the header is the label plus one line: “${once}”`);
+  await page.reload({ waitUntil: "networkidle" });
+  ok((await h1(page)) === once, "and reloading on the same day says the same thing — it changes by day, not by render");
+  ok(/your forge mark/i.test(await page.evaluate(() => document.body.innerText)), "the dashboard spends that space on the forge mark instead");
+  ok(errs.length === 0, "no page errors on the trimmed header " + JSON.stringify(errs.slice(0, 2)));
   await ctx.close();
 }
 

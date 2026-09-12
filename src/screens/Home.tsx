@@ -5,13 +5,13 @@ import { generatePalette, SPACE_SIZE } from "../engine/akmon";
 import { DIRECTION_SPACE, TRENDS, TRENDS_UPDATED } from "../data/trends";
 import { CATALOG } from "../engine/catalog";
 import PaletteCard from "../components/PaletteCard";
+import ForgeMark from "../components/ForgeMark";
 import Emblem from "../components/Emblem";
 import { forgeNote, forgeVoice } from "../lib/voice";
 
 export default function Home() {
-  const { palettes, current, setCurrent, go, deletePalette, toggleFavorite, purposeId, sites, deleteSite, setResumeId, settings } = useApp();
+  const { palettes, current, setCurrent, go, deletePalette, toggleFavorite, purposeId, sites, deleteSite, setResumeId, settings, update } = useApp();
   const [prompt, setPrompt] = useState("");
-  const [reroll, setReroll] = useState(0);
 
   const audit = useMemo(
     () => (current ? auditPalette(current, purposeId ?? undefined) : null),
@@ -24,10 +24,9 @@ export default function Home() {
     () =>
       forgeVoice(
         { palettes: palettes.length, sites: sites.length, score: audit?.score ?? null, fresh: palettes.length === 0 && sites.length === 0 },
-        settings.displayName,
-        reroll
+        settings.displayName
       ),
-    [palettes.length, sites.length, audit?.score, settings.displayName, reroll]
+    [palettes.length, sites.length, audit?.score, settings.displayName]
   );
 
   const rising = TRENDS.filter((t) => t.status === "rising").slice(0, 3);
@@ -52,7 +51,7 @@ export default function Home() {
       {/* ---------- header ---------- */}
       <div className="row" style={{ justifyContent: "space-between", alignItems: "flex-end", flexWrap: "wrap", gap: 14, marginBottom: 26 }}>
         <div className="row gap-2" style={{ alignItems: "flex-start", flex: "1 1 460px", minWidth: 0, paddingRight: 8 }}>
-          <Emblem size={62} alt="Hephaestus emblem" style={{ marginTop: -2 }} />
+          <Emblem size={62} alt="Hephaestus emblem" style={{ marginTop: 14 }} />
           <div>
             <div className="label" style={{ marginBottom: 8 }}>
               dashboard · {TRENDS_UPDATED}
@@ -62,21 +61,9 @@ export default function Home() {
                 </span>
               )}
             </div>
-            <h1 style={{ fontSize: 34, fontWeight: 600, letterSpacing: "-0.03em", lineHeight: 1.05, margin: 0 }}>
+            <h1 style={{ fontSize: 34, fontWeight: 600, letterSpacing: "-0.03em", lineHeight: 1.05, margin: "6px 0 0" }}>
               {voice.line}
             </h1>
-            <div className="row gap-2" style={{ marginTop: 7, alignItems: "baseline" }}>
-              <span className="faint" style={{ fontSize: 11.5 }}>{voice.sub}</span>
-              <button
-                className="faint mono-sm"
-                onClick={() => setReroll((r) => r + 1)}
-                title="say something else"
-                aria-label="say something else"
-                style={{ fontSize: 10, border: "1px solid var(--line)", padding: "1px 7px", background: "transparent" }}
-              >
-                ↻ again
-              </button>
-            </div>
           </div>
         </div>
         <div className="row gap-1" style={{ alignSelf: "flex-end" }}>
@@ -177,6 +164,33 @@ export default function Home() {
 
         {/* ==================== right column ==================== */}
         <div style={{ position: "sticky", top: 72, display: "flex", flexDirection: "column", gap: 16 }}>
+          {/* the forge mark: one palette, forged once from place and moment, then frozen */}
+          <ForgeMark />
+
+          {/* only shows when the download feed actually has a newer version — never a nag */}
+          {update.status === "available" && (
+            <div className="panel" style={{ padding: "12px 14px", borderColor: "var(--accent)" }}>
+              <div className="row" style={{ justifyContent: "space-between", alignItems: "baseline", gap: 10, flexWrap: "wrap" }}>
+                <span style={{ fontSize: 11.5 }}>
+                  <b>v{update.latest}</b> is out — you are on {update.current}
+                </span>
+                <span className="row gap-1">
+                  <a
+                    className="btn"
+                    style={{ fontSize: 10, padding: "5px 10px" }}
+                    href={update.href ?? "#get"}
+                    onClick={(e) => { if (!window.open(update.href ?? "", "_blank", "noopener,noreferrer")) e.preventDefault(); }}
+                  >
+                    get it
+                  </a>
+                </span>
+              </div>
+              <div className="faint mono-sm" style={{ fontSize: 8.5, marginTop: 6 }}>
+                the installers come from the same place the site links; nothing downloads itself
+              </div>
+            </div>
+          )}
+
           {/* forge bar */}
           <div className="panel" style={{ padding: 18 }}>
             <div className="row gap-1" style={{ justifyContent: "space-between", marginBottom: 10 }}>
@@ -244,8 +258,10 @@ export default function Home() {
       </div>
 
       <div className="row" style={{ justifyContent: "space-between", marginTop: 30, paddingTop: 14, borderTop: "1px solid var(--line-soft)" }}>
-        <span className="faint mono-sm" style={{ fontSize: 9.5, letterSpacing: ".04em" }}>{forgeNote(reroll)}</span>
-        <span className="faint mono-sm" style={{ fontSize: 9.5 }}>local only · no account · no network</span>
+        <span className="faint mono-sm" style={{ fontSize: 9.5, letterSpacing: ".04em" }}>{forgeNote()}</span>
+        <span className="faint mono-sm" style={{ fontSize: 9.5 }}>
+          local only · no account · {settings.autoUpdateCheck ? "one version read a day, at most" : "no network at all"}
+        </span>
       </div>
     </div>
   );

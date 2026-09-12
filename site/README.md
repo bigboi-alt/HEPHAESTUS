@@ -24,6 +24,20 @@ nobody has to guess how it was made:
 |---|---|
 | the portrait in the hero | `python3 tools/ascii-art.py --write` — the mark measured on a 72-cell grid, one character per cell (Pillow; `qa-tools/ascii-qa.mjs` fails the gate if the page and the generator ever disagree) |
 
+## what the page covers
+
+Four sections, and the nav is the whole map: **what it does** (`#does`), **how it thinks**
+(`#thinks`, four cards — the commitments, each with the measurement that makes it checkable),
+**your mark** (`#mark`, the identity palette the app forges once, with the tier ladder copied
+straight out of `src/engine/identity.ts` — `ascii-qa` fails if the two ever drift), and
+**get it** (`#get`, the downloads).
+
+The page states what the software does and nothing else. It used to carry a section confessing what
+the project does not do, and a small-print section about the pipeline that builds it; both were cut,
+because the pipeline is a build concern, not a selling point, and a reader looking for the catch
+should find it in this README instead. The one number the page still asks to be checked is the
+version in the footer, which must equal `package.json`.
+
 ## how the downloads work, and why nothing can lie
 
 `#get` is five platform cards (Windows, Apple Silicon, Intel, AppImage, .deb), an extras row for
@@ -103,6 +117,17 @@ slot table, which says what the build actually does (nothing is signed or notari
 certificate exists in this project). Regenerate the whole file by hand with
 `node tools/release-manifest.mjs --scan <dir-of-installers> --version 0.4.0` and read
 `--print-required` / `--check-only` for what the gate demands.
+
+### the one ceiling the site cannot deploy past
+
+Cloudflare refuses any single file above **25 MiB** in a Pages deployment, and installers are files
+too — a Linux `.AppImage` (which bundles the GTK/WebKit runtime so it runs anywhere) is roughly 76 MB.
+So `release.json` and `/downloads/` are validated against that number *before* anything is uploaded:
+a release containing a bigger file is refused at validation, and a site deploy that would have to carry
+one is refused too rather than shipping a bundle with a hole where a download button points. That is
+why no card can ever offer a file the host cannot serve, and why the same release never fails twice in
+silence. `PLAN.md` §"Files bigger than Pages" holds the two exits (drop the bundler from
+`bundle.targets`, or keep the same `/downloads/` url and let R2 hold the bytes behind a Pages Function).
 
 ### headers that make the downloads behave
 

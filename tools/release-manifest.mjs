@@ -38,6 +38,21 @@ export const ROOT = resolve(fileURLToPath(new URL("..", import.meta.url)));
 export const MIN_BYTES = 1024 * 1024;
 /** The ceiling: above this, something was packaged wrong (a target/ dir swept up by a bad glob). */
 export const MAX_BYTES = 400 * 1024 * 1024;
+/**
+ * What the delivery host can actually hold. Cloudflare Pages refuses any single asset over 25 MiB —
+ * a platform rule with no setting behind it — and a bundle containing a bigger file fails inside
+ * `wrangler pages deploy`, i.e. after four platforms were built and paid for, and again on every
+ * later site deploy that carries that release forward. So the number is checked here, where the
+ * answer can still be a decision rather than a stack trace.
+ */
+export const PAGES_MAX_FILE = 25 * 1024 * 1024;
+export const OVER_PAGES = (f) =>
+  `${f.file} is ${(f.size / 1048576).toFixed(1)} MB and Cloudflare Pages refuses any single file over 25 MiB, ` +
+  `so it cannot live in the site's own bundle. Two ways out: ` +
+  `(1) take "${f.ext}" out of src-tauri/tauri.conf.json bundle.targets — the required-slot list follows the config, ` +
+  `and the site then says "not in this release" for that platform instead of lying about a link; ` +
+  `(2) keep it and serve it from outside Pages (R2 behind the same /downloads/ url via a Pages Function — ` +
+  `PLAN.md §"Files bigger than Pages"). Nothing half-published: the release stops here, live site untouched.`;
 
 /* ── config ─────────────────────────────────────────────────────────────── */
 
@@ -155,6 +170,7 @@ export function build({ scanned, version, date, productName, carry = null, slots
   for (const f of files) {
     if (f.size < MIN_BYTES) errors.push(`${f.file} is ${f.size} bytes — below the ${MIN_BYTES / 1024} KiB floor for a real bundle. Empty or truncated upload.`);
     if (f.size > MAX_BYTES) errors.push(`${f.size / 1048576 | 0} MB for ${f.file} is past the ${MAX_BYTES / 1048576} MB ceiling — a build glob probably swept the target dir`);
+    if (f.size > PAGES_MAX_FILE) errors.push(OVER_PAGES(f));
     if (version && f.version && f.version !== version)
       errors.push(`${f.file} carries version ${f.version} while the config says ${version} — a stale artifact would have shipped`);
     if (version && !f.version) warnings.push(`${f.file} has no version in its filename; trusting the build's config check`);

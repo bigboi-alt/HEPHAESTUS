@@ -208,6 +208,66 @@ console.log("\nmanifest-qa · what the pipeline insists on, checked without a cl
   await url.close();
 }
 
+// ── 4b. the 25 MiB wall ────────────────────────────────────────────────────────────────────────
+/*
+   Cloudflare Pages refuses any single asset above 25 MiB, and installers live inside that ceiling's
+   reach: a Tauri Linux AppImage is ~76 MB because linuxdeploy bundles webkit and GTK with it (the
+   app's own payload is ~2 MB). Discovered in `wrangler pages deploy`, the failure lands after four
+   platforms were built — which is exactly what happened on the first real publish — and it would then
+   repeat on every docs push, because carrying the live release forward has to move that same file. So
+   the number lives in the gate now, at the point where the answer is still a decision.
+*/
+{
+  const WALL = 25 * MB;
+  const at = path.join(tmp, "wall-at");
+  const over = path.join(tmp, "wall-over");
+  artifacts(at, { sizes: { "Hephaestus_0.4.0_amd64.AppImage": WALL } });
+  artifacts(over, { sizes: { "Hephaestus_0.4.0_amd64.AppImage": WALL + 1 } });
+
+  const fine = run("release-manifest.mjs", ["--scan", at, "--version", "0.4.0", "--check-only"]);
+  ok(fine.code === 0 && /release verified/.test(fine.out),
+    `a file of exactly 25 MiB is allowed — the rule is the platform's number, not a margin of fear (${(fine.out.match(/· [^\n]*/) || [""])[0]})`);
+
+  const bad = run("release-manifest.mjs", ["--scan", over, "--version", "0.4.0", "--check-only"]);
+  ok(bad.code === 1 && /Hephaestus_0\.4\.0_amd64\.AppImage is 25\.0 MB/.test(bad.out),
+    "one byte over, the batch is refused and the file is named with its size");
+  ok(/25 MiB/.test(bad.out) && /bundle\.targets/.test(bad.out), "and the message states the ceiling and the config that controls it");
+  ok(/PLAN\.md/.test(bad.out), "and points at the other way out (host it beside the site, same url) instead of only saying no");
+  const written = run("release-manifest.mjs", ["--scan", over, "--version", "0.4.0",
+    "--out", path.join(tmp, "wall-out/release.json"), "--downloads", path.join(tmp, "wall-out/downloads")]);
+  ok(written.code === 1 && !fs.existsSync(path.join(tmp, "wall-out")),
+    "refused in writing mode too — a release the host cannot serve never gets a manifest, so no card can point at it");
+
+  const site = await startSite("ready");
+  const doc = JSON.parse(fs.readFileSync(path.join(site.tmp, "release.json"), "utf8"));
+  const big = "Hephaestus_0.4.0_amd64.AppImage";
+  fs.writeFileSync(path.join(site.tmp, "downloads", big), Buffer.alloc(0));
+  fs.truncateSync(path.join(site.tmp, "downloads", big), 76 * MB);      // sparse: a real length, no real write
+  const slot = doc.files.find((f) => f.id === "linux-x64-appimage");
+  ok(!!slot && slot.file === big, `the ready fixture's AppImage slot is the one the ceiling applies to (${slot && slot.file})`);
+  slot.size = 76 * MB;                       // what the manifest claims, with a matching file behind it
+  fs.truncateSync(path.join(site.tmp, "downloads", big), 76 * MB);
+  fs.writeFileSync(path.join(site.tmp, "release.json"), JSON.stringify(doc, null, 2) + "\n");
+  const into = path.join(tmp, "wall-site-built");
+  const carry = await runAsync("prepare-site.mjs", ["--into", into, "--carry-from", site.origin]);
+  ok(carry.code === 1 && carry.out.includes(big),
+    `a live release with an oversized file stops the site deploy, naming it: ${(carry.out.match(/FAIL[^\n]*/) || ["(nothing)"])[0].slice(0, 76)}…`);
+  ok(!site.reqs.some((q) => q.path.endsWith(big)),
+    "and the file is never fetched — refusing on the manifest's own number saves 76 MB of download before a deploy that would fail anyway");
+  ok(!fs.existsSync(path.join(into, "downloads", big)), "nothing oversized is left sitting in the bundle");
+  ok(/Fix the release, not the deploy/.test(carry.out), "and the error says which of the two ways out to take");
+  ok(fs.existsSync(path.join(site.tmp, "downloads", big)), "the live file is untouched — refusing to carry it is not the same as deleting it");
+
+  // and a manifest that lies about its size is caught by measuring what arrived, not by trusting it
+  slot.size = 8 * MB;
+  fs.writeFileSync(path.join(site.tmp, "release.json"), JSON.stringify(doc, null, 2) + "\n");
+  const lied = await runAsync("prepare-site.mjs", ["--into", path.join(tmp, "wall-lied"), "--carry-from", site.origin]);
+  ok(lied.code === 1 && /claims 8\.0 MB/.test(lied.out),
+    "a manifest that understates a file is caught too, by saying what the two numbers were");
+  fs.rmSync(path.join(tmp, "wall-lied"), { recursive: true, force: true });
+  await site.close();
+}
+
 // ── 5. the verifier, against a real bundle it can disagree with ─────────────────────────────────
 {
   const site = await startSite("ready");

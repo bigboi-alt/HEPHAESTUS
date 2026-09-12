@@ -10,8 +10,14 @@ import {
 import { describeColor } from "./engine/akmon";
 import {
   DEFAULT_SETTINGS, LocalStore, SNAPSHOT_VERSION, store as backend,
-  type SavedSite, type Settings, type Snapshot,
+  type IdentityConsent, type SavedSite, type Settings, type Snapshot,
 } from "./lib/storage";
+import { founderMark, forgeMark, type Mark } from "./engine/identity";
+import { readSky } from "./lib/sky";
+import { checkForUpdate, DEFAULT_FEED, dueForCheck, IDLE_CHECK, type UpdateCheck } from "./lib/updates";
+
+/** the running version, baked at build time; a literal fallback keeps plain `node` imports honest */
+export const APP_VERSION = typeof __APP_VERSION__ === "string" ? __APP_VERSION__ : "0.0.0-dev";
 
 export type Screen = "home" | "akmon" | "library" | "trends" | "build" | "settings";
 
@@ -64,6 +70,12 @@ type State = {
   sites: SavedSite[];
   resumeId: string | null;
   canvasCtx: CanvasCtx | null;
+  /** the forge mark: captured once, then kept exactly as it was forged */
+  mark: Mark | null;
+  identityBusy: boolean;
+  /** true once the founder's key has been typed */
+  founder: boolean;
+  update: UpdateCheck;
 
   init: () => Promise<void>;
   go: (s: Screen) => void;
@@ -94,7 +106,23 @@ type State = {
   deleteSite: (id: string) => void;
   setResumeId: (id: string | null) => void;
   setCanvasCtx: (c: CanvasCtx | null) => void;
+
+  /** read place + sky (if allowed), forge the mark, freeze it */
+  forgeIdentity: () => Promise<void>;
+  /** the answer to the card's one question; both answers end with a forged mark */
+  setIdentityConsent: (c: IdentityConsent) => Promise<void>;
+  /** replace the frozen mark on purpose, from the edited numbers in About */
+  adoptMark: (m: Mark) => void;
+  /** load the mark into Akmon as the working palette */
+  applyMark: () => void;
+  /** the founder's key, typed anywhere in the app */
+  unlockFounder: () => void;
+  /** ask the download feed what the latest version is */
+  checkNow: () => Promise<void>;
 };
+
+/** the in-flight update check, so a double mount or two screens asking share one request */
+let checking: Promise<void> | null = null;
 
 let saveTimer: ReturnType<typeof setTimeout> | undefined;
 function persist(get: () => State) {
@@ -107,6 +135,9 @@ function persist(get: () => State) {
       settings: s.settings,
       savedAt: Date.now(),
       sites: s.sites,
+      identity: s.mark,
+      founder: s.founder,
+      update: s.update.status === "idle" ? null : s.update,
     };
     void backend.save(snap);
   }, 400);
@@ -127,6 +158,10 @@ export const useApp = create<State>((set, get) => ({
   sites: [],
   resumeId: null,
   canvasCtx: null,
+  mark: null,
+  identityBusy: false,
+  founder: false,
+  update: IDLE_CHECK,
 
   async init() {
     const loaded = (await backend.load()) ?? (await new LocalStore().load());
@@ -136,7 +171,76 @@ export const useApp = create<State>((set, get) => ({
       palettes: loaded?.palettes ?? [],
       current: loaded?.palettes?.[0] ?? generatePalette({ prompt: "deep ember on obsidian, technical" }),
       sites: loaded?.sites ?? [],
+      mark: loaded?.identity ?? null,
+      founder: loaded?.founder ?? false,
+      update: loaded?.update ?? IDLE_CHECK,
     });
+
+    // Someone who has never been asked, or who was asked and left: the card handles it.
+    // Someone who already has a mark keeps it — that is what "frozen" means.
+    const consent = loaded?.settings?.identityConsent ?? "unset";
+    if (!loaded?.identity && consent !== "unset") void get().forgeIdentity();
+
+    // one quiet check a day, if they want it; About always has "check now"
+    const settings = get().settings;
+    if (settings.autoUpdateCheck && dueForCheck(loaded?.update?.at ?? 0)) void get().checkNow();
+  },
+
+  async forgeIdentity() {
+    if (get().mark || get().identityBusy) return;
+    set({ identityBusy: true });
+    const reading = await readSky(get().settings.identityConsent);
+    const mark = forgeMark(reading);
+    set({ mark, identityBusy: false });
+    persist(get);
+    get().say(
+      mark.place === "coords"
+        ? `forge mark set · ${mark.score}/100 · ${mark.tier.name}`
+        : `forge mark set from the clock alone · ${mark.score}/100 · ${mark.tier.name}`,
+    );
+  },
+
+  async setIdentityConsent(c) {
+    set({ settings: { ...get().settings, identityConsent: c } });
+    persist(get);
+    if (!get().mark) await get().forgeIdentity();
+  },
+
+  adoptMark(mark) {
+    set({ mark });
+    persist(get);
+    get().say(`mark updated · ${mark.score}/100 · ${mark.tier.name}`);
+  },
+
+  applyMark() {
+    const m = get().mark;
+    if (!m) { get().say("no mark yet"); return; }
+    set({ current: { ...m.palette, createdAt: Date.now() } });
+    get().say(`${m.tier.mark} ${m.tier.name} loaded into akmon`);
+  },
+
+  unlockFounder() {
+    if (get().founder) return;
+    const mark = founderMark();
+    set({ founder: true, mark, current: { ...mark.palette, createdAt: Date.now() } });
+    persist(get);
+    get().say(`${mark.tier.mark} ${mark.tier.name} — the master's own set`);
+  },
+
+  async checkNow() {
+    if (checking) return checking;                     // one request at a time, however many screens ask
+    checking = (async () => {
+      const feed = get().settings.updateFeedUrl || DEFAULT_FEED;
+      set({ update: { ...IDLE_CHECK, status: "checking", current: APP_VERSION, at: Date.now() } });
+      const next = await checkForUpdate({ current: APP_VERSION, feed });
+      set({ update: next });
+      persist(get);
+    })();
+    try {
+      await checking;
+    } finally {
+      checking = null;
+    }
   },
 
   go: (screen) => set({ screen }),

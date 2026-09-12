@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { useApp } from "./store";
 import TopBar from "./components/TopBar";
 import CedalionDock from "./components/CedalionDock";
+import { useKeystone } from "./lib/keystone";
 import Home from "./screens/Home";
 import Akmon from "./screens/Akmon";
 import Library from "./screens/Library";
@@ -13,6 +14,9 @@ export default function App() {
   const { ready, screen, settings, toast, init, cedalionOpen } = useApp();
 
   useEffect(() => { void init(); }, [init]);
+
+  /* the founder's key can be typed on any screen; nothing else listens for it */
+  useKeystone();
 
   useEffect(() => {
     const root = document.documentElement;

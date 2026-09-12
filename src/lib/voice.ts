@@ -20,7 +20,7 @@ export type ForgeState = {
   fresh: boolean;
 };
 
-export type Voice = { line: string; sub: string; who: "forge" | "cedalion" | "hephaestus" };
+export type Voice = { line: string; who: "forge" | "cedalion" | "hephaestus" };
 
 /* ---------- the day's index, 0..n-1 over a cycle ---------- */
 
@@ -48,21 +48,6 @@ export const HEPHAESTUS_GREETINGS = [
   "If you are me, start working. The automatons need fixing.",
 ] as const;
 
-/** What the master says back, one line under the headline. */
-const HEPHAESTUS_SUBS = [
-  "the bench is yours for today. no gods, no masters — just the work",
-  "prove it in the next hour, not in the name field",
-  "I lost the foot, the wife and the Olympus vote. you still have to build",
-  "automatons checked: gold ones walking, the rest are on me",
-] as const;
-
-const CEDALION_SUBS = [
-  "I have read the palette while you were away. it wants one more pass",
-  "every contrast in there is a number, and every number is a decision",
-  "your apprentice is at the far end of the bench, as usual",
-  "ask me to fix it and I will not pretend it was already fine",
-] as const;
-
 /** Names are matched on the display-name field, trimmed, case- and punctuation-insensitive. */
 export function whoAmIDisplayedAs(displayName: string | undefined): Voice["who"] | null {
   const n = (displayName ?? "").trim().toLowerCase().replace(/[^a-z]/g, "");
@@ -71,41 +56,44 @@ export function whoAmIDisplayedAs(displayName: string | undefined): Voice["who"]
   return null;
 }
 
-/* ---------- the ordinary forge copy, by state ---------- */
+/* ---------- the ordinary forge copy, by state ---------- *
+ * One line only. The dashboard used to carry a caption under the headline and a "say something
+ * else" button next to it; both are gone, because a greeting should be a sentence rather than a
+ * caption with a re-roll control attached. The pools of second lines went with them. */
 
-type Line = { line: string; sub: string };
+type Line = { line: string };
 
 const COLD: readonly Line[] = [
-  { line: "The forge is cold — heat it up.", sub: "one prompt is enough to get the metal moving" },
-  { line: "Nothing on the bench yet.", sub: "forge a palette, then let Cedalion try to break it" },
-  { line: "The anvil is clean. That won't last.", sub: "start with a feeling, not a colour" },
-  { line: "Every good site starts as a bad first heat.", sub: "make the bad one here, where it's free" },
-  { line: "Two things today: a palette, and a reason for it.", sub: "the reason is the harder half" },
+  { line: "The forge is cold — heat it up." },
+  { line: "Nothing on the bench yet." },
+  { line: "The anvil is clean. That won't last." },
+  { line: "Every good site starts as a bad first heat." },
+  { line: "Two things today: a palette, and a reason for it." },
 ];
 
 const WARM: readonly Line[] = [
-  { line: "The forge is warm.", sub: "saved work below — pick up where the last heat left off" },
-  { line: "There is metal cooling on the bench.", sub: "read the grades, then re-forge the one that embarrassed you" },
-  { line: "You have things here now.", sub: "a palette nobody audits is a guess with good lighting" },
-  { line: "Steady hands, steady heat.", sub: "trends are moving on the left; your eye is the tiebreaker" },
-  { line: "Some of these are already good.", sub: "which ones is measurable — Cedalion will tell you the cost" },
+  { line: "The forge is warm." },
+  { line: "There is metal cooling on the bench." },
+  { line: "You have things here now." },
+  { line: "Steady hands, steady heat." },
+  { line: "Some of these are already good." },
 ];
 
 const BUSY: readonly Line[] = [
-  { line: "Sites on the bench.", sub: "finish one before you start another. that's the whole discipline" },
-  { line: "Half-built is a state, not a verdict.", sub: "the autosave means you can leave and come back to the same heat" },
-  { line: "The forge is loud today.", sub: "blocks, palettes and grades all waiting on the same decision" },
-  { line: "One more page won't save it. One better decision will.", sub: "look at what Cedalion keeps repeating — that's the real thing" },
+  { line: "Sites on the bench." },
+  { line: "Half-built is a state, not a verdict." },
+  { line: "The forge is loud today." },
+  { line: "One more page won't save it. One better decision will." },
 ];
 
 const STRONG: readonly Line[] = [
-  { line: "That one's holding.", sub: "the grade says it works; say what it's for and prove it in the build" },
-  { line: "The heat is right.", sub: "a passing palette is a starting point, not a finish line" },
+  { line: "That one's holding." },
+  { line: "The heat is right." },
 ];
 
 const WEAK: readonly Line[] = [
-  { line: "Something in there is wrong.", sub: "Cedalion already knows what. ask instead of hoping" },
-  { line: "The metal's not ready.", sub: "contrast first, taste second — in that order, always" },
+  { line: "Something in there is wrong." },
+  { line: "The metal's not ready." },
 ];
 
 /** One line for the header. Deterministic per day + salted by state. */
@@ -117,14 +105,12 @@ export function forgeVoice(state: ForgeState, displayName?: string, reroll = 0):
   if (who === "hephaestus") {
     return {
       line: pick(HEPHAESTUS_GREETINGS, salt),
-      sub: pick(HEPHAESTUS_SUBS, day + reroll * 3),
       who: "hephaestus",
     };
   }
   if (who === "cedalion") {
     return {
       line: CEDALION_GREETING,
-      sub: pick(CEDALION_SUBS, salt),
       who: "cedalion",
     };
   }
@@ -136,7 +122,7 @@ export function forgeVoice(state: ForgeState, displayName?: string, reroll = 0):
     : state.fresh || state.palettes === 0 ? COLD
     : WARM;
   const v = pick(pool, salt);
-  return { line: v.line, sub: v.sub, who: "forge" };
+  return { line: v.line, who: "forge" };
 }
 
 /* ---------- the same trick for the small label under the stat band ---------- */

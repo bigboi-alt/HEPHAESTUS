@@ -20,9 +20,10 @@
   Carrying is best-effort on purpose: a first deploy has nothing to carry, and that is not a
   failure. A failed fetch is reported and the deploy proceeds with what the repo has.
 */
-import { existsSync, mkdirSync, rmSync, cpSync, readFileSync, writeFileSync, readdirSync, copyFileSync } from "node:fs";
+import { existsSync, mkdirSync, rmSync, cpSync, readFileSync, writeFileSync, readdirSync, copyFileSync, statSync } from "node:fs";
 import { basename, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { PAGES_MAX_FILE } from "./release-manifest.mjs";
 
 const ROOT = resolve(fileURLToPath(new URL("..", import.meta.url)));
 const args = process.argv.slice(2);
@@ -81,11 +82,20 @@ const downloads = join(into, "downloads");
 mkdirSync(downloads, { recursive: true });
 let carried = 0;
 let lost = 0;
+const tooBig = [];
+const liveSize = (name) => {
+  const all = ((live && live.files) || []).concat(((live && live.previous) || []).flatMap((v) => v.files || []));
+  return (all.find((f) => basename(String(f.url || f.file || "")) === name) || {}).size ?? 0;
+};
 if (live && live.status === "ready") {
   const files = (live.files || []).concat((live.previous || []).flatMap((v) => v.files || []));
   for (const f of files) {
     const name = basename(String(f.url || f.file || ""));
     if (!name || existsSync(join(downloads, name))) continue;
+    // Checked before fetching: a bundle containing a >25 MiB file is refused by Pages outright, so
+    // downloading it to find out would waste the transfer and fail the deploy step anyway. A site
+    // push must not be held hostage by this either — it exits with the reason, naming the file.
+    if (Number(f.size) > PAGES_MAX_FILE) { tooBig.push({ name, size: Number(f.size), ext: name.split(".").pop() }); continue; }
     const fromDir = !base ? resolve(carryFrom) : null;
     if (fromDir && existsSync(join(fromDir, "downloads", name))) { copyFileSync(join(fromDir, "downloads", name), join(downloads, name)); carried++; continue; }
     if (base) {
@@ -98,6 +108,28 @@ if (live && live.status === "ready") {
       } catch (e) { lost++; console.log(`  note  could not carry ${name} (${e.message})`); continue; }
     }
     lost++;
+  }
+  // Then measure what actually landed, because a manifest is a claim: a file it declared as 8 MB that
+  // arrives at 76 MB would pass the check above and be refused by Pages at the deploy step instead.
+  for (const name of readdirSync(downloads)) {
+    const size = statSync(join(downloads, name)).size;
+    if (size > PAGES_MAX_FILE && !tooBig.some((t) => t.name === name))
+      tooBig.push({ name, size, lied: true });
+  }
+  if (tooBig.length) {
+    // Refusing here is the honest half of the rule. Dropping those files and deploying anyway would
+    // ship a bundle whose release.json still advertises them — a hole in the live site, which is the
+    // one thing this folder's whole design exists to prevent.
+    console.log("");
+    for (const t of tooBig)
+      console.log(`  FAIL  ${t.name} is ${(t.size / 1048576).toFixed(1)} MB${t.lied ? ` (its release.json claims ${(Number(liveSize(t.name)) / 1048576).toFixed(1)} MB — the manifest and the bytes disagree, which is its own problem)` : ""} — Cloudflare Pages refuses any single file over `
+        + `${PAGES_MAX_FILE / 1048576} MiB, so it cannot be carried into this bundle, and carrying the release without it `
+        + `would leave the site advertising a download that 404s`);
+    console.log("  This deploy stops here. Fix the release, not the deploy:");
+    console.log("    · take that bundler out of src-tauri/tauri.conf.json bundle.targets, bump, and publish again; or");
+    console.log('    · host those files outside Pages and keep the same url (R2 behind a Pages Function) — PLAN.md §"Files bigger than Pages".');
+    if (process.env.GITHUB_ACTIONS) for (const t of tooBig) console.log(`::error::${t.name} is over the 25 MiB Pages file ceiling and cannot be carried into the bundle`);
+    process.exit(1);
   }
   if (!filesOnly) { writeFileSync(join(into, "release.json"), JSON.stringify(live, null, 2) + "\n"); doc = live; }
 } else if (live) console.log(`  note  the live release.json is not a published release (${live.status}) — keeping the repo's`);

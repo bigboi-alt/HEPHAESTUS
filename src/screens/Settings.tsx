@@ -6,6 +6,8 @@ import { CATALOG, CATALOG_INFO } from "../engine/catalog";
 import { SPACE_SIZE } from "../engine/akmon";
 
 import Emblem from "../components/Emblem";
+import ForgeMark from "../components/ForgeMark";
+import { APP_VERSION } from "../store";
 
 type Section = "general" | "profile" | "appearance" | "data" | "about";
 
@@ -34,7 +36,7 @@ const CLAUDE_STYLES: { id: ClaudeStyle; label: string; note: string; swatch: str
 const ACCENTS = ["#F5F5F5", "#FF7043", "#7FB2FF", "#4ADE80", "#FBBF24", "#C084FC", "#F472B6"];
 
 export default function Settings() {
-  const { settings, setSettings, go, palettes, say } = useApp();
+  const { settings, setSettings, go, palettes, say, update, checkNow } = useApp();
   const [section, setSection] = useState<Section>("general");
   /* Claude has two skins, so its tile opens a second row of choices instead of
      just selecting the theme. */
@@ -108,6 +110,21 @@ export default function Settings() {
                 ))}
               </div>
             </Row>
+            <Toggle
+              label="Look for a new version"
+              note="Once every 24 hours at most, reading a static file on the download site. No account, no identifier sent — and About always has “check now”."
+              value={settings.autoUpdateCheck}
+              onChange={(v) => setSettings({ autoUpdateCheck: v })}
+            />
+            <Row label="Update feed" note="Leave empty for the release file on the app's own download site. Point it somewhere else if you mirror the builds.">
+              <input
+                className="input"
+                style={{ maxWidth: 380 }}
+                placeholder="https://hephaestus-app.pages.dev/release.json"
+                value={settings.updateFeedUrl}
+                onChange={(e) => setSettings({ updateFeedUrl: e.target.value })}
+              />
+            </Row>
             <Row label="Trend library source" note="Leave empty to use the bundled library. Point it at raw JSON to update every install by pushing a file.">
               <input
                 className="input"
@@ -128,8 +145,8 @@ export default function Settings() {
             <Row label="Handle" note="Cosmetic for now — it becomes your identity when cloud sync lands.">
               <input className="input" style={{ maxWidth: 300 }} value={settings.handle} onChange={(e) => setSettings({ handle: e.target.value })} />
             </Row>
-            <Row label="Account" note="Hephaestus runs entirely on this machine. No account, no telemetry, no network calls.">
-              <span className="faint mono-sm">local · offline</span>
+            <Row label="Account" note="Hephaestus runs entirely on this machine. No account, no telemetry. The one thing that can leave it is the daily read of the release file looking for a newer version — no identifier travels with it, and the switch above turns even that off.">
+              <span className="faint mono-sm">local · {settings.autoUpdateCheck ? "1 read/day" : "no reads"}</span>
             </Row>
           </Panel>
         )}
@@ -263,13 +280,43 @@ export default function Settings() {
                 <div className="faint mono-sm" style={{ fontSize: 9, marginTop: 3 }}>design forge · the bust, on transparency</div>
               </div>
             </div>
-            <Meta k="version" v="0.3.0 — the forge rework" />
+            <Meta k="version" v={`${APP_VERSION} — the forge rework · built ${__BUILD_DATE__}`} />
             <Meta k="current release" v="palette engine · trend library · direction engine · Cedalion" />
             <Meta k="next" v="Akmon canvas · live composition scoring" />
+            <Meta
+              k="updates"
+              v={
+                update.status === "checking" ? "asking the download feed…"
+                : update.status === "available" ? `v${update.latest} is out`
+                : update.status === "current" ? `v${update.latest} is the newest`
+                : update.status === "unreachable" ? "couldn’t check"
+                : "not checked yet"
+              }
+            />
+            <Row label="Check for a new version" note="Reads the same release file the website reads, at most once a day on its own. It tells you what is newer; it never installs anything.">
+              <span className="row gap-1" style={{ alignItems: "baseline" }}>
+                <button className="btn" style={{ fontSize: 10 }} disabled={update.status === "checking"} onClick={() => void checkNow()}>
+                  {update.status === "checking" ? "checking…" : "check now"}
+                </button>
+                {update.at > 0 && (
+                  <span className="faint mono-sm" style={{ fontSize: 8.5 }}>
+                    last asked {new Date(update.at).toLocaleString("en-GB", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}
+                  </span>
+                )}
+              </span>
+            </Row>
+            {update.status === "unreachable" && (
+              <div className="faint mono-sm" style={{ fontSize: 9, lineHeight: 1.6, padding: "2px 0 10px" }}>
+                {update.reason}
+              </div>
+            )}
             <Meta k="trend library" v={`v${TRENDS_VERSION} · ${TRENDS_UPDATED} · ${CATALOG.length} entries (${CATALOG_INFO.curated} curated, ${CATALOG_INFO.composed} composed)`} />
             <Meta k="colour space" v={`${SPACE_SIZE.pretty} addressable palettes`} />
             <Meta k="built with" v="React · TypeScript · Vite · Zustand" />
             <Meta k="dependencies for colour, trends or scoring" v="none" />
+            <div style={{ marginTop: 18 }}>
+              <ForgeMark full />
+            </div>
             <p className="faint mono-sm" style={{ lineHeight: 1.7, marginTop: 20 }}>
               Named for the smith who was thrown off Olympus and built better things than the gods who
               threw him. Akmon is the anvil. Cedalion is the guide who carried him to the sunrise —

@@ -1,7 +1,7 @@
 # The plan, in plain English
 
 > **Status: implemented in this branch, nothing deployed.** Every item below is in the tree and behind
-> the QA gate (12/12, 432 assertions, 9 viewports). The "not testable in this sandbox" list at the
+> the QA gate (13/13, 545 assertions, 9 viewports). The "not testable in this sandbox" list at the
 > bottom is still true: no `tauri build`, no wrangler deploy and no tag was run — read it as the plan
 > for your first preflight run, then for the tag.
 
@@ -72,9 +72,10 @@ downloads are unaffected, because they were never depending on it.
 9. **No signing claims.** Nothing is signed or notarised, so nothing says otherwise: the manifest
    carries `"signing": { "windows": "unsigned", "macos": "unsigned", "linux": "unsigned" }` and the
    site shows the honest macOS advisory (right-click → Open). No signing key, no Apple
-   credentials, no updater key is invented, requested or faked — and the updater is deliberately
-   left out of this change, because in-app updates need a real Tauri updater key that does not
-   exist here. Direct downloads first; updater work is its own later job.
+   credentials, no updater key is invented, requested or faked. What *is* here is a version check —
+   `src/lib/updates.ts` reads `release.json`, compares the number, and points at the download page;
+   it downloads and installs nothing, which is precisely why it needs no key. A real in-app updater
+   (Tauri's plugin, signing, an update endpoint) stays its own later job.
 
 ## What `release.json` looks like
 
@@ -154,3 +155,58 @@ budget and a byte comparison, with `--expect-version` on a release publish so a 
 pass as a verified one. Everything else above — the build factory, the static `release.json`, the
 same two secrets, nothing published without validation — is unchanged by it, and no production state
 was altered to find this out. `NOTES.md` (2026-09-12) has the fix and the tests that pin it.
+
+
+## Files bigger than Pages — the 25 MiB wall
+
+**The fact.** Cloudflare Pages refuses any single asset above 25 MiB, and there is no setting for it:
+"the maximum file size for a single Cloudflare Pages site asset is 25 MiB… to serve larger files,
+consider uploading them to R2 and utilizing the public bucket feature" (Cloudflare Pages limits). The
+first real publish found this the expensive way: four platforms built and validated, then
+`wrangler pages deploy` died on `downloads/Hephaestus_0.3.0_amd64.AppImage is 76.5 MiB` — after the
+minutes were spent, which is exactly what the gate is supposed to prevent. It is prevented now:
+`tools/release-manifest.mjs` refuses an over-ceiling file at validation, and `tools/prepare-site.mjs`
+refuses to carry one (and measures what actually arrived, so an understated size in `release.json`
+cannot smuggle it in).
+
+**Why the AppImage is 76 MB and why that is not sloppiness.** The app's own payload is tiny — `src/`
+is 1.1 MB and the built JS is ~500 KB — but a Tauri Linux AppImage carries its GTK/WebKit runtime
+inside it (that is the entire point of an AppImage: it runs on a distro that has no
+`libwebkit2gtk-4.1`). So there is nothing honest to shave: it is a runtime, not debug symbols. The
+release profile is already the size-tuned one (`codegen-units = 1`, `lto = true`, `opt-level = "s"`,
+`strip = true`).
+
+**Why "just that one file" is not a one-off.** Every future site deploy has to carry the live release
+forward, and carrying means putting those bytes back into the bundle — so a docs push would fail at
+the same place, forever. Either the file shrinks below the ceiling or it stops living in Pages.
+
+**Two ways out, and which is which**
+
+1. **Today, no new infrastructure:** take `"appimage"` out of `src-tauri/tauri.conf.json`
+   `bundle.targets`. The required-slot list is derived from that config, so nothing else needs
+   editing: the release ships Windows (.exe/.msi), both macOS slices and the Linux `.deb`, and the
+   site's AppImage card says "not in this release" instead of pointing at nothing. Linux users on
+   Debian/Ubuntu lose nothing; Fedora/Arch users lose the no-install option. This is a *product*
+   decision, not a build detail, which is why it is not something the pipeline decides silently.
+2. **The durable fix: keep the URL, move the bytes.** The installers live in an R2 bucket; a Pages
+   Function at `/downloads/*` streams the object when the file is not a static asset of the bundle.
+   Worth doing *because* it bends no rule: `release.json` still says `url:
+   "/downloads/Hephaestus_0.4.0_amd64.AppImage"`, still same-origin, so the page never gains an
+   absolute URL, `connect-src 'self'` stays, and `tools/verify-release.mjs` still head-checks the real
+   byte length through the same path a visitor uses. Carry-forward gets *stronger*: a Pages deploy
+   replaces the bundle, but it does not touch R2, so an old release's installers cannot be deleted by
+   a docs push even in principle.
+
+   What it costs: the existing `CLOUDFLARE_API_TOKEN` gains an **R2:Edit** scope (no new secret), plus
+   the R2 free tier (10 GB stored, no egress charges — four platforms × 5 releases is well under that).
+   What it changes in the tools: each manifest entry gains `storage: "pages" | "r2"`; `prepare-site`
+   skips `r2` files by design instead of erroring; the publish job does `wrangler r2 object put
+   hephaestus-downloads/<file> --file … --content-type application/octet-stream` before deploying, and
+   configures the bucket binding on the Pages project (same create-if-missing pattern the project
+   already uses, via the API); the Function sets its own `Content-Disposition: attachment`, because
+   `_headers` governs static assets, not function responses.
+   Honest caveats: a function response is not CDN-cached by default, so each download is one function
+   invocation (100k/day on the free plan, streaming costs no real CPU); and none of it is verifiable in
+   this sandbox — no R2 bucket, no Cloudflare credentials here, and inventing them is out of the
+   question. So it ships behind the same preflight discipline as everything else: build, dry-run, and
+   let the verify step be the judge.

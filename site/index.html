@@ -60,6 +60,12 @@
   .panel code, .note code { background: #f7f0e6; }
   .skip { position: absolute; left: -9999px; top: 0; background: var(--brown); color: var(--on-brown); padding: 10px 14px; border-radius: 0 0 var(--r-sm) 0; z-index: 5; }
   .skip:focus { left: 0; }
+  /* the forge-mark ladder, drawn with the page's own ink: no images, no plates, no animation */
+  .tiers { display: grid; gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: var(--r-sm); overflow: hidden; margin-top: 16px; }
+  .tiers > span { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; padding: 7px 10px; background: var(--card); font: 500 11px/1.5 var(--mono), "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji"; letter-spacing: .02em; }
+  .tiers b { color: var(--brown); min-width: 52px; }
+  .tiers small { flex: 1 1 100%; color: var(--ink-3); font: 400 10.5px/1.45 var(--sans); letter-spacing: 0; }
+  .tiers .div { background: #fbf3e4; }
 
   /* ── header ────────────────────────────────────────────────────────── */
   header { border-bottom: 1px solid var(--line); background: var(--paper); position: sticky; top: 0; z-index: 3; }
@@ -68,9 +74,9 @@
   .mark b { font-family: var(--serif); font-size: 1.12rem; font-weight: 600; letter-spacing: .01em; }
   .pill { font-family: var(--mono); font-size: 11px; letter-spacing: .06em; color: var(--ink-2); border: 1px solid var(--line); border-radius: 999px; padding: 2px 9px; white-space: nowrap; }
   nav { margin-left: auto; display: flex; gap: 20px; flex-wrap: wrap; }
-  nav a { font-family: var(--mono); font-size: 12.5px; letter-spacing: .02em; color: var(--ink-2); text-decoration: none; border-bottom: 1px solid transparent; padding-bottom: 2px; }
+  nav a { font-family: var(--mono); font-size: 12.5px; min-width: 0; letter-spacing: .02em; color: var(--ink-2); text-decoration: none; border-bottom: 1px solid transparent; padding-bottom: 2px; }
   nav a:hover { color: var(--brown); border-bottom-color: var(--brown); }
-  nav a.dl { color: var(--brown); }
+  nav a.hot { color: var(--brown); min-width: 0; }   /* not .dl — .dl is the download grid, and its 214px track cannot live in a nav */
   @media (max-width: 720px) {
     .bar { flex-wrap: wrap; padding-top: 12px; padding-bottom: 12px; }
     /* a wrapping flex row of links leaves one orphan on its own line at 390px; two tidy columns don't */
@@ -190,9 +196,8 @@
     <nav aria-label="Sections">
       <a href="#does">what it does</a>
       <a href="#thinks">how it thinks</a>
-      <a class="dl" href="#get">get it</a>
-      <a href="#catch">the catch</a>
-      <a href="#details">details</a>
+      <a href="#mark">your mark</a>
+      <a class="hot" href="#get">get it</a>
     </nav>
   </div>
 </header>
@@ -327,61 +332,41 @@
 
   <section class="wrap" id="thinks">
     <div class="sechead"><h2>How it thinks</h2><span class="leader"></span><span class="no">§ 03 — arithmetic, on purpose</span></div>
-    <p class="sub">The design tool market has settled on “ask it to make something”. Hephaestus is deliberately the other kind of tool, and the trade-offs are real in both directions.</p>
-    <ul class="plain">
-      <li class="reveal"><b>Colour science, not adjectives</b><span>Everything runs through OKLab: lightness, chroma, hue distance, contrast. The critique engine's threshold is the point where a human reliably notices a difference, so “too close” is a measurement rather than an opinion. A palette is judged on numbers you could recompute yourself.</span></li>
-      <li class="reveal"><b>Rules that name themselves</b><span>A verdict arrives with the rule that produced it and the value it checked. When a rule is wrong for your work, you can see that it fired and why — which is the only way to disagree with a tool usefully.</span></li>
-      <li class="reveal"><b>Deterministic, so reproducible</b><span>The same brief gives the same palette next month. That is what makes a saved palette reviewable later, and what makes the exported site match what you approved. Randomness exists in one place — a seeded re-forge, seeded from the words you typed — so re-rolling is a choice you made, not noise that happened.</span></li>
-      <li class="reveal"><b>Combinatorics instead of a model</b><span>The 1,750-entry library is composed from atoms and a compatibility matrix, not sampled from a language model. That is why it can refuse 1,390 combinations with a reason, and why nothing needs a network, a key or a quota.</span></li>
-      <li class="reveal"><b>What that costs you</b><span>It will not write your copy, invent a brand, or produce forty variations while you wait. It is a forge: good at colour, structure and judgment, silent about everything else.</span></li>
-    </ul>
+    <p class="sub">Four commitments, and each one is visible from the outside: you can always see which number produced a verdict.</p>
+    <div class="duo">
+      <div class="feat reveal"><h3>Colour science <em>not adjectives</em></h3><p>Everything runs through OKLab: lightness, chroma, hue distance, contrast. The critique threshold sits where a human reliably notices a difference, so “too close” is a measurement rather than an opinion — and you can recompute it yourself from the numbers on screen.</p></div>
+      <div class="feat reveal"><h3>Rules that name themselves</h3><p>A verdict arrives with the rule that fired and the value it checked. When a rule is wrong for your work, you can see that it fired and why, which is the only way to disagree with a tool usefully — or to overrule it on purpose.</p></div>
+      <div class="feat reveal"><h3>Deterministic <em>so it stays reviewable</em></h3><p>The same brief gives the same palette next month. That is what makes a saved palette worth reading later and the exported site match what you approved. Randomness lives in exactly one place: a seeded re-forge, seeded from the words you typed.</p></div>
+      <div class="feat reveal"><h3>Combinatorics, not a model</h3><p>The 1,750-entry direction library is composed from atoms and a compatibility matrix. Nothing is sampled from a service, so nothing needs a key, a quota or a network — and 1,390 combinations can be refused with a stated reason.</p></div>
+    </div>
   </section>
 
-  <section class="wrap" id="catch">
-    <div class="sechead"><h2>The catch</h2><span class="leader"></span><span class="no">§ 04 — worth reading first</span></div>
-    <ul class="plain">
-      <li class="reveal"><b>No AI, anywhere</b><span>Nothing sends your work away to be generated for you. Some people will find that limiting; it is the point.</span></li>
-      <li class="reveal"><b>No account, no telemetry, no network</b><span>The app runs offline and keeps its files on your disk. This page makes exactly one request of its own: a same-origin read of <code>release.json</code>, to find out what is published. No fonts, no images, no analytics, no cookies, nothing that could count you reading it.</span></li>
-      <li class="reveal"><b>Free, and not “free during beta”</b><span>MIT licence. No key, no seat count, no license screen, nothing that stops working in a year.</span></li>
-      <li class="reveal"><b>0.x, and single-maintainer</b><span>It is one person's tool, version 0.3.0. Expect rough edges and no support desk; expect the changelog to be honest about what is unfinished.</span></li>
-      <li class="reveal"><b>Not a Figma replacement</b><span>No multiplayer, no plugin API, no prototyping. It is strong at colour, critique and a buildable direction library, and quiet about everything else.</span></li>
-      <li class="reveal"><b>Unsigned macOS builds</b><span>One right-click at first launch. The reason is money, not care: there is no Apple Developer ID in this project, and the <code>signing</code> field of <code>release.json</code> says so in words rather than hiding it.</span></li>
-      <li class="reveal"><b>Manual updates, for now</b><span>There is no in-app updater, because a real one needs a signing key that does not exist here. Downloading the new file is the update path, and this page is where it appears.</span></li>
-    </ul>
+  <section class="wrap" id="mark">
+    <div class="sechead"><h2>Your forge mark</h2><span class="leader"></span><span class="no">§ 04 — one palette per person</span></div>
+    <p class="sub">On first launch the app reads your place and your moment — latitude, longitude, the year, the day, the hour, the minute, the second, the millisecond, and the sky overhead — and forges a palette from them. It is then frozen, so it ages with your work instead of following your mood.</p>
+    <div class="duo">
+      <div class="feat reveal"><h3>Seeded from where you are</h3><p>The inputs are all shown in <i>Settings → About</i>, in plain numbers, so the result is explainable: the same ten values in, the same six colours out. Location and sky are read once, only if you say yes; say no and the mark is forged from the clock alone, and the card says so.</p></div>
+      <div class="feat reveal"><h3>Graded on the anvil</h3><p>Every mark is scored out of 100 for harmony, lightness ladder, usable contrast pairs, chroma discipline, colour-blind separation and non-duplication — the same measurements Akmon applies to any palette. Nothing is graded by taste, and no one is handed the top tier for free.
+        <span class="tiers">
+          <span><b>0–39</b>RAW IRON<small>unrefined, functional, little harmony</small></span>
+          <span><b>40–54</b>TEMPERED IRON<small>solid and usable, some character</small></span>
+          <span><b>55–69</b>SILVERFORGED<small>clean harmony, strong balance</small></span>
+          <span><b>70–79</b>GILDED<small>distinctive, refined, visually memorable</small></span>
+          <span><b>80–89</b>MASTERFORGED<small>exceptional harmony and personality</small></span>
+          <span><b>90–96</b>HEPHAESTEAN<small>extremely rare, almost perfectly composed</small></span>
+          <span class="div"><b>97–100</b>DIVINE FORGE<small>exceptional enough to become an identity of its own</small></span>
+        </span>
+      </p></div>
+    </div>
   </section>
 
-  <section class="wrap" id="details">
-    <div class="sechead"><h2>The small print, in full</h2><span class="leader"></span><span class="no">§ 05 — details</span></div>
-    <dl class="spec">
-      <div><dt>Version</dt><dd data-check="version">0.3.0</dd></div>
-      <div><dt>Licence</dt><dd>MIT</dd></div>
-      <div><dt>Platforms</dt><dd>windows · mac ×2 · linux ×2</dd></div>
-      <div><dt>Runtime needed</dt><dd>none</dd></div>
-      <div><dt>Colour engine</dt><dd><span data-check="engineFiles">9</span> files, <span data-check="engineLines">4,923</span> lines</dd></div>
-      <div><dt>Whole app</dt><dd><span data-check="srcLines">10,688</span> lines of TypeScript</dd></div>
-      <div><dt>Desktop shell</dt><dd><span data-check="rustLines">8</span> lines of Rust</dd></div>
-      <div><dt>Catalogue</dt><dd><span data-check="catalog">1,750</span> entries, <span data-check="refused">1,390</span> refused</dd></div>
-      <div><dt>Grid library</dt><dd><span data-check="grids">17</span> presets</dd></div>
-      <div><dt>Built with</dt><dd>Tauri 2 · React 19 · Rust</dd></div>
-      <div><dt>Made by</dt><dd>one person, on purpose</dd></div>
-      <div><dt>Downloads served from</dt><dd>this hostname, no redirects</dd></div>
-    </dl>
-    <p class="note">
-      <b>How a release gets here.</b> Four build machines produce the installers; a final job checks that
-      every platform's file exists, is a plausible size, and carries the version the project's config
-      files agree on; the survivors are copied into <code>downloads/</code> next to this page and
-      <code>release.json</code> is rewritten with their paths, byte counts and sha256 sums. The site is
-      deployed only after that check passes, and a partial or failed build leaves the live release
-      exactly as it was. There is no step where anyone edits this page to ship a version — which is why
-      nothing on it can be stale.
-    </p>
-  </section>
+
 </main>
 
 <footer>
   <div class="wrap fbar">
     <span>Hephaestus <span data-check="version">0.3.0</span> · MIT</span>
-    <span>free desktop app · <a href="#get">downloads</a> · <a href="#details">details</a></span>
+    <span>free desktop app · <a href="#get">downloads</a> · <a href="#mark">your mark</a></span>
     <span id="foot2">the portrait above is the app's mark, measured on a 72-cell grid and set in ten characters</span>
   </div>
 </footer>

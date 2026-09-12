@@ -8,7 +8,7 @@ where a picture matters, the assertion recomputes what the picture should have s
 ```bash
 npm i && npx playwright install chromium
 
-npm run dev -- --port 5199                       # terminal 1 — the app (7 suites drive it)
+npm run dev -- --port 5199                       # terminal 1 — the app (8 suites drive it)
 node qa-tools/run-all.mjs                        # terminal 2 — the gate
 node qa-tools/manifest-qa.mjs                    # or one suite on its own
 ```
@@ -25,6 +25,7 @@ deploys — and none of them can pass by looking at an empty page.
 
 | suite | what it refuses to let happen |
 |---|---|
+| `identity-qa.mjs` | the forge mark: ten inputs that all move the seed, a score that is the floor of six measurements, a top band nobody is handed, a mark that stays frozen across reloads, a consent flow that forges something honest when you say no, an update check that never calls "couldn't reach it" "up to date", a place that can be typed by hand where a shell cannot read one, and a founder key that is not in the bundle in plaintext |
 | `voice-qa` | the dashboard saying the same line every day, the display-name easter eggs misfiring, the two Claude skins being swapped or ignored |
 | `akmon-qa` | the colour screen losing its two labelled swatch grids — eight cards, each lockable, copyable, editable by picker, annotated with its OKLab `L`/`C` and (for the seven that can be) its measured contrast and WCAG grade; a lock that doesn't survive a shake; a CVD simulation that repaints the wrong thing or won't repaint back; and the rejected "planes" experiment staying gone |
 | `merkhet-qa` | the reviewer claiming a fix it hasn't verified, or a "fixed" change that actually made the page worse |

@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { TierChip } from "../components/ForgeMark";
 import { useApp } from "../store";
 import {
   exportPalette, generatePalette, SCHEME_LABEL, SCHEMES, SPACE_SIZE,
@@ -30,7 +31,7 @@ const NEUTRALS: Role[] = ["background", "surface", "border", "text", "muted"];
 const VOICE: Role[] = ["primary", "secondary", "accent"];
 
 export default function Akmon() {
-  const { current, generate, vary, toggleLock, setSwatch, savePalette, purposeId, askCedalion } = useApp();
+  const { current, generate, vary, toggleLock, setSwatch, savePalette, purposeId, askCedalion, founder, mark } = useApp();
   const [prompt, setPrompt] = useState(current?.prompt ?? "");
   const [tool, setTool] = useState<Tool | null>(null);
   const [cvd, setCvd] = useState<CvdType | "none">("none");
@@ -72,7 +73,19 @@ export default function Akmon() {
           <div className="label">akmon · the anvil</div>
           <h1 style={{ fontSize: 27, fontWeight: 400, margin: "5px 0 0", letterSpacing: "-0.01em" }}>
             Forge a palette.
+            {founder && mark && (
+              <TierChip
+                score={mark.score}
+                tier={mark.tier.name}
+                mark={mark.tier.mark}
+              />
+            )}
           </h1>
+          {founder && mark && (
+            <div className="faint mono-sm" style={{ fontSize: 8.5, marginTop: 6 }}>
+              {mark.tier.note.toLowerCase()} · ({mark.seed === 0 ? "the founder's set, measured at 100" : "your own mark, measured below"}) · these eight colours came off the founder's anvil, measured on the same scale as yours
+            </div>
+          )}
         </div>
         <div className="row gap-1">
           <button

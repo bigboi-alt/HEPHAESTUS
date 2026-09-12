@@ -8,6 +8,11 @@
 
 import type { Palette } from "../engine/akmon";
 import type { CvDoc } from "../engine/canvas";
+import type { Mark } from "../engine/identity";
+import type { UpdateCheck } from "./updates";
+
+/** who was allowed to read place and sky, once, when the mark was forged */
+export type IdentityConsent = "unset" | "granted" | "declined";
 
 export type ThemeId = "obsidian" | "graphite" | "paper" | "claude" | "blueprint" | "ember";
 
@@ -33,6 +38,12 @@ export type Settings = {
   trendsAutoRefresh: boolean;
   displayName: string;
   handle: string;
+  /** the forge mark may read place + sky once, only if this says "granted" */
+  identityConsent: IdentityConsent;
+  /** ask the download feed for a newer version at most once a day, by itself */
+  autoUpdateCheck: boolean;
+  /** where to ask; default is the site's own static release.json */
+  updateFeedUrl: string;
   /** last position of the floating cedalion window */
   chatRect?: { x: number; y: number; w: number; h: number } | null;
 };
@@ -51,6 +62,9 @@ export const DEFAULT_SETTINGS: Settings = {
   trendsAutoRefresh: false,
   displayName: "Smith",
   handle: "@forge",
+  identityConsent: "unset",
+  autoUpdateCheck: true,
+  updateFeedUrl: "",
 };
 
 /** a saved canvas build — shown on the dashboard as “continue building” */
@@ -69,7 +83,23 @@ export type Snapshot = {
   settings: Settings;
   savedAt: number;
   sites?: SavedSite[];
+  /** the forge mark, captured once and never recomputed while it is kept */
+  identity?: Mark | null;
+  /** the founder's key was typed — unlocks the founder set and the signature card */
+  founder?: boolean;
+  /** the last answer from the download feed, so the 24 h throttle survives a restart */
+  update?: UpdateCheck | null;
 };
+
+/** a mark is only trusted if it still looks like a mark */
+function asMark(v: unknown): Mark | null {
+  if (!v || typeof v !== "object") return null;
+  const m = v as Partial<Mark>;
+  const swatches = (m.palette as { swatches?: unknown } | undefined)?.swatches;
+  if (!Array.isArray(swatches) || swatches.length < 6 || typeof m.score !== "number") return null;
+  if (!m.tier || typeof (m.tier as { name?: unknown }).name !== "string") return null;
+  return m as Mark;
+}
 
 export const SNAPSHOT_VERSION = 1;
 
@@ -97,6 +127,12 @@ export class LocalStore implements Store {
         settings: { ...DEFAULT_SETTINGS, ...(parsed.settings ?? {}) },
         savedAt: parsed.savedAt ?? Date.now(),
         sites: Array.isArray(parsed.sites) ? parsed.sites : [],
+        identity: asMark(parsed.identity),
+        founder: parsed.founder === true,
+        update:
+          parsed.update && typeof parsed.update === "object" && typeof (parsed.update as { at?: unknown }).at === "number"
+            ? (parsed.update as UpdateCheck)
+            : null,
       };
     } catch {
       return null;

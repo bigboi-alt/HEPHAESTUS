@@ -518,3 +518,108 @@ fails at 3 a.m.
 Checked: `manifest-qa` 126/126, and the full gate 12/12 with 455 assertions plus nine viewports clean.
 Not verified here, and it cannot be: an actual `tauri build --target x86_64-apple-darwin` on a macOS
 runner — the first run on Actions is the proof, and it now costs nothing to obtain.
+
+## 2026-09-12 (later again) — the publish died on a file, not on code
+
+The second real run got further: `gate` agreed with the tag, all four platforms built (the Intel
+cross-compile worked, on the free runner), the batch validated, `release.json` was written — and then
+
+```
+✘ [ERROR] Error: Pages only supports files up to 25 MiB in size
+  downloads/Hephaestus_0.3.0_amd64.AppImage is 76.5 MiB in size
+Error: the preview deploy failed; production untouched
+```
+
+That is Cloudflare's ceiling on a single asset in a Pages deployment, and it has no setting: the docs
+say 25 MiB and point at R2 for anything bigger. It is also not bloat in your app — `src/` is 1.1 MB and
+the built JS is ~500 KB — it is the GTK/WebKit runtime that makes an AppImage run on a distro with
+nothing installed. Worth knowing: the `.deb` is fine, and `bundle.linux.deb.depends: []` does *not*
+mean "no dependencies" (Tauri's stock `.deb` already declares `libwebkit2gtk-4.1-0` and `libgtk-3-0`;
+that field is only for extras) — I checked rather than assuming.
+
+The pipeline did its job: it failed at the *deploy* step with production untouched, which is the
+designed behaviour. But "designed" is not "good enough" for two reasons, and both are fixed:
+
+- **It cost four builds to learn it.** `tools/release-manifest.mjs` now knows `PAGES_MAX_FILE`
+  (25 MiB) and refuses an over-ceiling file during validation, naming it with its size and stating
+  both exits — the config that removes the target, and the R2 route that keeps it.
+- **Every later site deploy would have died there too.** Carrying the live release forward means
+  putting the same 76 MB back into the bundle, so a *docs* push would fail forever. `tools/prepare-site.mjs`
+  now reads the ceiling off the manifest before fetching anything (no 76 MB download just to fail),
+  and then re-measures whatever landed, so a `release.json` that understates a file's size cannot
+  smuggle it past the platform either. It refuses rather than publishing a bundle with a hole in it,
+  and it says so: "Fix the release, not the deploy."
+
+`PLAN.md` gained §"Files bigger than Pages": why the file is that big, the two ways out, and what the
+R2-behind-a-Pages-Function option would change (`storage: "pages" | "r2"` per manifest entry, an
+`r2 object put` in the publish job, a Function that streams the object at the *same* `/downloads/` url
+so the page gains no absolute link, `connect-src 'self'` stays, and carry-forward gets stronger because
+a Pages deploy cannot touch R2). It is spelled out rather than built, because it cannot be verified from
+this sandbox and the shorter path — one line in `bundle.targets` — ships you a release today.
+
+Checked: `manifest-qa` 138 (12 new: exactly-25 MiB passes, one byte over is refused by name, refusing
+writes nothing, the carry refuses without fetching, an understated size is caught, and refusing to
+carry never deletes the live file), gate **12/12 with 467 assertions plus nine viewports clean**,
+`npm run typecheck` 0, oxlint 25 warnings / 0 errors (the baseline), `vite build` clean,
+`tools/ascii-art.py --write` a no-op.
+
+## 2026-09-12 (later still) — the mark, the cut copy, and a nav link that widened the page
+
+**What the owner asked for, and what was decided.** The site's copy was theirs to own and they said
+plainly that the version on screen was "not my type", so this round *deleted* rather than redesigned:
+the confession section and the small-print/pipeline section are gone, the nav is four sections
+(`#does / #thinks / #mark / #get`), and "how it thinks" became four cards carrying the four
+commitments. No prose was rewritten to mean the same thing in fancier words; the removed claims were
+removed, and the pipeline's notes now live in `site/README.md`, where an operator reads them. The
+one contract that was not negotiable stayed exactly as it was: a relative read of `/release.json`,
+`#get` with its `[data-slot]` cards, no `github.com` anywhere in the page, and `_headers` rules.
+
+**The identity palette is a measurement, not a badge.** `src/engine/identity.ts` forges one mark per
+person from ten numbers (lat, lon, year, day of year, hour, minute, second, millisecond, weather code,
+temperature + humidity), freezes it in the snapshot, and grades it against six recomputed
+components. Four things in here were wrong on the first try and are worth recording:
+
+- the OKLab distances I first scored against were invented on a 0–5 scale; real ones for
+  near-neighbour colours are 0.01–0.3, so "full marks at 4.00" was unreachable for every palette
+  on earth. Thresholds are now 0.100 with the detail line naming the measurement;
+- the founder set first measured **99.5**, and `Math.round` promoted it to 100. That is exactly the
+  kind of gift the ladder exists to refuse: the total is floored now, and the palette was rebuilt
+  (from a search over chord-locked candidates) until all six components max out on their own;
+- the harmony component compares against a table of chord offsets, and the founder's near-neighbour
+  complement simply was not in that table, so a palette with perfect hue relationships scored 0.
+  A rubric that cannot express the thing it is grading is the bug to look for first;
+- the generator was so gentle that 3,000 marks spanned only the top three bands, which makes a
+  seven-band ladder decorative. The wander is wider and a fifth of marks come out coarse, because
+  a forge demonstrably produces bad work. Now: mean 68.7, RAW IRON 44 marks, DIVINE FORGE none.
+
+**Consent, in the shape the app can actually keep.** The clock is always read. Place and sky are read
+*once*, only after the card is answered yes, through `src/lib/sky.ts`: geolocation and a keyless
+Open-Meteo GET, both with timeouts, both degrading into a mark that says "clock only" out loud. A
+refusal is not an error state to retry — declining forges the clock mark immediately so nobody is
+left sitting under an unanswered question. The QA suite drives the real denial path (Playwright refuses
+geolocation, the app forges anyway in 0.5 s) rather than a stub of it.
+
+**A check, not an updater.** `src/lib/updates.ts` reads the same static `release.json` the site reads,
+compares numerically when the versions are dotted numbers and lexically when they are not, throttles
+itself to one read a day, and has three honest outcomes. A failed read says "couldn't check" with the
+reason; the suite asserts that "up to date" cannot be produced by a network failure. Two accidental
+problems surfaced here: a StrictMode double-mount made one boot two requests (fixed with a
+single-flight promise in the store — `voice-qa` caught it by timing out, which is the gate earning
+its keep), and the daily read invalidated four sentences in the app and README that said "no network".
+Those now state what happens and honour the switch, because a claim that outlives a feature is worse
+than no claim.
+
+**The founder key, and its honest limit.** Keystrokes are watched app-wide (`src/lib/keystone.ts`),
+compared in a normalised form so `Ø Ξ Λ`, plain ASCII, spaces and caps all collapse to the same
+thing, and the key itself is stored as folded byte offsets so `grep` finds nothing in `src/` or in
+`dist/assets/`. `identity-qa` greps both to hold that line. This is obfuscation, not secrecy: it stops
+a curious reader, not a determined one, and the README says so in the same breath as the feature.
+The signature is their own artwork, thresholded into an alpha silhouette and painted through a CSS
+mask with `currentColor`, so one asset reads correctly on all six themes; the GitHub link prints its
+own address beside the anchor, because a desktop shell that refuses `window.open` must not turn a
+button into a dead end.
+
+**One real bug the narrow-viewport gate caught:** the nav's "get it" link carried `class="dl"`, which
+is the download *grid* — 214px minimum tracks inside a nav. The bar could not shrink, so the page was
+416px wide on a 390px phone. `site-qa` measured it; the nav link got its own class. The lesson is
+that a shared class name is a shared contract, and CSS has no way to warn you.
