@@ -183,6 +183,20 @@ export async function launchInstallerAndExit(urlOrPath: string) {
   }
 }
 
+/**
+ * Downloads the installer in the background and executes silent installation without user interaction.
+ */
+export async function performAutoUpdate(url: string) {
+  if (!url) return;
+  try {
+    await invoke("auto_install_update", { url });
+    return;
+  } catch (err) {
+    console.warn("Auto-update failed, falling back:", err);
+    await startUpdateDownload(url);
+  }
+}
+
 const NUMERIC = /^\d+(\.\d+)*([-+].*)?$/;
 
 /**

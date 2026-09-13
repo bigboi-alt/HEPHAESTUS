@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { useApp } from "../store";
+import { useApp, APP_VERSION } from "../store";
 import { auditPalette } from "../engine/cedalion";
 import { generatePalette, SPACE_SIZE } from "../engine/akmon";
 import { keyMatches } from "../engine/identity";
@@ -9,9 +9,10 @@ import PaletteCard from "../components/PaletteCard";
 import ForgeMark from "../components/ForgeMark";
 import Emblem from "../components/Emblem";
 import { forgeNote, forgeVoice } from "../lib/voice";
+import { compareVersions } from "../lib/updates";
 
 export default function Home() {
-  const { palettes, current, setCurrent, go, deletePalette, toggleFavorite, purposeId, sites, deleteSite, setResumeId, settings, update, unlockFounder, downloadUpdate, installUpdate } = useApp();
+  const { palettes, current, setCurrent, go, deletePalette, toggleFavorite, purposeId, sites, deleteSite, setResumeId, settings, update, updating, unlockFounder, downloadUpdate } = useApp();
   const [prompt, setPrompt] = useState("");
 
   const audit = useMemo(
@@ -175,34 +176,27 @@ export default function Home() {
           {/* the forge mark: one palette, forged once from place and moment, then frozen */}
           <ForgeMark />
 
-          {/* only shows when the download feed actually has a newer version — never a nag */}
-          {update.status === "available" && (
+          {/* only shows when the download feed actually has a newer version than current running build */}
+          {update.status === "available" && update.latest && compareVersions(update.latest, APP_VERSION) > 0 && (
             <div className="panel" style={{ padding: "12px 14px", borderColor: "var(--accent)" }}>
               <div className="row" style={{ justifyContent: "space-between", alignItems: "baseline", gap: 10, flexWrap: "wrap" }}>
                 <span style={{ fontSize: 11.5 }}>
-                  <b>v{update.latest}</b> is out — you are on {update.current}
+                  <b>v{update.latest}</b> is out — you are on v{APP_VERSION}
                 </span>
                 <span className="row gap-1">
                   <button
                     className="btn btn-primary"
-                    style={{ fontSize: 10, padding: "5px 12px" }}
-                    onClick={() => installUpdate()}
-                    title="Launches installer and cleanly updates Hephaestus"
-                  >
-                    ⚡ install &amp; update
-                  </button>
-                  <button
-                    className="btn"
-                    style={{ fontSize: 10, padding: "5px 10px" }}
+                    style={{ fontSize: 10, padding: "5px 14px" }}
                     onClick={() => downloadUpdate()}
-                    title="Download installer file directly"
+                    disabled={updating}
+                    title="1-click automated update · downloads and installs cleanly"
                   >
-                    download
+                    {updating ? "fetching & installing…" : "get update"}
                   </button>
                 </span>
               </div>
               <div className="faint mono-sm" style={{ fontSize: 8.5, marginTop: 6 }}>
-                {update.fileName ? `${update.fileName}${update.fileSize ? ` · ${(update.fileSize / 1024 / 1024).toFixed(1)} MB` : ""} · installs cleanly &amp; relaunches automatically` : "installs cleanly &amp; relaunches automatically"}
+                {updating ? "downloading update in background and launching automatically…" : "1-click automated update · downloads and installs without touching anything"}
               </div>
             </div>
           )}

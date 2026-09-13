@@ -8,6 +8,7 @@ import { SPACE_SIZE } from "../engine/akmon";
 import Emblem from "../components/Emblem";
 import ForgeMark from "../components/ForgeMark";
 import { APP_VERSION } from "../store";
+import { compareVersions } from "../lib/updates";
 import sigUrl from "../assets/signature.png";
 
 type Section = "general" | "profile" | "appearance" | "data" | "about";
@@ -37,7 +38,7 @@ const CLAUDE_STYLES: { id: ClaudeStyle; label: string; note: string; swatch: str
 const ACCENTS = ["#F5F5F5", "#FF7043", "#7FB2FF", "#4ADE80", "#FBBF24", "#C084FC", "#F472B6"];
 
 export default function Settings() {
-  const { settings, setSettings, go, palettes, say, update, checkNow, downloadUpdate, installUpdate } = useApp();
+  const { settings, setSettings, go, palettes, say, update, updating, checkNow, downloadUpdate } = useApp();
   const [section, setSection] = useState<Section>("general");
   const [showSuitsCard, setShowSuitsCard] = useState(false);
 
@@ -327,27 +328,20 @@ export default function Settings() {
                 )}
               </span>
             </Row>
-            {update.status === "available" && (
+            {update.status === "available" && update.latest && compareVersions(update.latest, APP_VERSION) > 0 && (
               <Row
                 label={`Get update v${update.latest}`}
-                note={`New version available (you are running v${update.current}). ${update.fileName ? `Downloads ${update.fileName}${update.fileSize ? ` (${(update.fileSize / 1024 / 1024).toFixed(1)} MB)` : ""}.` : "Downloads new version directly."} Cleanly replaces files and relaunches app.`}
+                note={`New version available (you are running v${APP_VERSION}). ${update.fileName ? `${update.fileName}${update.fileSize ? ` (${(update.fileSize / 1024 / 1024).toFixed(1)} MB)` : ""}.` : ""} 1-click update: downloads in background, cleanly installs, and relaunches automatically.`}
               >
                 <div className="row gap-1">
                   <button
                     className="btn btn-primary"
                     style={{ fontSize: 10.5, padding: "6px 14px" }}
-                    onClick={() => installUpdate()}
-                    title="Launches installer and cleanly updates Hephaestus"
-                  >
-                    ⚡ install &amp; update
-                  </button>
-                  <button
-                    className="btn"
-                    style={{ fontSize: 10, padding: "5px 12px" }}
                     onClick={() => downloadUpdate()}
-                    title="Download installer file directly"
+                    disabled={updating}
+                    title="Fetches update and automatically installs without having to touch anything"
                   >
-                    download .exe
+                    {updating ? "fetching & installing…" : "get update"}
                   </button>
                 </div>
               </Row>

@@ -14,7 +14,7 @@ import {
 } from "./lib/storage";
 import { founderMark, forgeMark, type Mark } from "./engine/identity";
 import { readSky } from "./lib/sky";
-import { checkForUpdate, DEFAULT_FEED, dueForCheck, IDLE_CHECK, launchInstallerAndExit, startUpdateDownload, type UpdateCheck } from "./lib/updates";
+import { checkForUpdate, compareVersions, DEFAULT_FEED, dueForCheck, IDLE_CHECK, performAutoUpdate, type UpdateCheck } from "./lib/updates";
 
 /** the running version, baked at build time; a literal fallback keeps plain `node` imports honest */
 export const APP_VERSION = typeof __APP_VERSION__ === "string" ? __APP_VERSION__ : "0.0.0-dev";
@@ -84,6 +84,7 @@ type State = {
   /** true once the founder's key has been typed */
   founder: boolean;
   update: UpdateCheck;
+  updating: boolean;
 
   init: () => Promise<void>;
   go: (s: Screen) => void;
@@ -141,6 +142,7 @@ function persist(get: () => State) {
   clearTimeout(saveTimer);
   saveTimer = setTimeout(() => {
     const s = get();
+    const isNewer = s.update.latest && compareVersions(s.update.latest, APP_VERSION) > 0;
     const snap: Snapshot = {
       version: SNAPSHOT_VERSION,
       palettes: s.palettes,
@@ -149,7 +151,7 @@ function persist(get: () => State) {
       sites: s.sites,
       identity: s.mark,
       founder: s.founder,
-      update: s.update.status === "idle" ? null : s.update,
+      update: s.update.status === "idle" ? null : isNewer ? s.update : { ...s.update, status: "current", current: APP_VERSION },
     };
     void backend.save(snap);
   }, 400);
@@ -174,9 +176,16 @@ export const useApp = create<State>((set, get) => ({
   identityBusy: false,
   founder: false,
   update: IDLE_CHECK,
+  updating: false,
 
   async init() {
     const loaded = (await backend.load()) ?? (await new LocalStore().load());
+    let restoredUpdate = loaded?.update ?? IDLE_CHECK;
+    if (!restoredUpdate.latest || compareVersions(restoredUpdate.latest, APP_VERSION) <= 0) {
+      restoredUpdate = { ...IDLE_CHECK, status: "current", current: APP_VERSION, latest: APP_VERSION };
+    } else {
+      restoredUpdate = { ...restoredUpdate, current: APP_VERSION };
+    }
     set({
       ready: true,
       settings: loaded?.settings ?? DEFAULT_SETTINGS,
@@ -185,7 +194,8 @@ export const useApp = create<State>((set, get) => ({
       sites: loaded?.sites ?? [],
       mark: loaded?.identity ?? null,
       founder: loaded?.founder ?? false,
-      update: loaded?.update ?? IDLE_CHECK,
+      update: restoredUpdate,
+      updating: false,
     });
 
     // Someone who has never been asked, or who was asked and left: the card handles it.
@@ -261,26 +271,27 @@ export const useApp = create<State>((set, get) => ({
     }
   },
 
-  downloadUpdate() {
+  async downloadUpdate() {
     const update = get().update;
     const url = update.downloadUrl || update.href;
     if (!url) {
       get().say("no installer available to download");
       return;
     }
-    startUpdateDownload(url, update.fileName ?? undefined);
-    get().say(`downloading ${update.fileName || `Hephaestus v${update.latest || APP_VERSION}`}…`);
+    if (get().updating) return;
+    set({ updating: true });
+    get().say(`fetching & installing Hephaestus v${update.latest || APP_VERSION}…`);
+    try {
+      await performAutoUpdate(url);
+    } catch (e: any) {
+      get().say(`update failed: ${e?.message || "error"}`);
+    } finally {
+      set({ updating: false });
+    }
   },
 
-  installUpdate() {
-    const update = get().update;
-    const url = update.downloadUrl || update.href;
-    if (!url) {
-      get().say("no installer available to install");
-      return;
-    }
-    get().say(`launching installer & closing Hephaestus to complete upgrade…`);
-    launchInstallerAndExit(url);
+  async installUpdate() {
+    await get().downloadUpdate();
   },
 
   go: (screen) => set({ screen }),
