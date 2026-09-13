@@ -17,7 +17,6 @@ import { describeColor, ROLE_ORDER, type Palette, type Role } from "./akmon";
 import { getPurpose, getTrend, TRENDS, type Purpose } from "../data/trends";
 import type { CanvasCtx, CedalionAction } from "../store";
 import { detectIntent, thinkAndAnswer, createApplyPaletteAction } from "./cedalionBrain";
-import { askCedalionAI } from "../lib/ai";
 
 /* ------------------------------------------------------------------ *
  * report types
@@ -538,7 +537,6 @@ export type CedalionContext = {
   buildSite?: { purposeLabel: string; sectionsOn: number; sectionNames: string[]; score?: number };
   /** Live facts about the canvas page being edited right now. */
   canvas?: CanvasCtx;
-  settings?: any;
 };
 
 export { createApplyPaletteAction };
@@ -1422,22 +1420,6 @@ export function ask(question: string, ctx: CedalionContext = {}): Answer {
 
   // Super-smart conversational brain: answers any question intelligently without dead-ends
   return thinkAndAnswer(rawQ, ctx);
-}
-
-export async function askCedalionAsync(
-  question: string,
-  ctx: CedalionContext = {},
-  settings?: any
-): Promise<Answer> {
-  if (settings && (settings.cedalionAiApiKey || (settings.cedalionAiProvider && settings.cedalionAiProvider !== "offline"))) {
-    try {
-      const aiAnswer = await askCedalionAI(question, ctx, settings);
-      if (aiAnswer) return aiAnswer;
-    } catch {
-      // fallback to offline brain
-    }
-  }
-  return ask(question, ctx);
 }
 
 export const askCedalion = ask;

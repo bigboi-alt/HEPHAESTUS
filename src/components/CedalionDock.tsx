@@ -6,13 +6,13 @@
  */
 import { useEffect, useRef, useState } from "react";
 import { useApp } from "../store";
-import { askCedalionAsync, auditPalette, cedalionStarters, type CedalionAction } from "../engine/cedalion";
+import { askCedalion, auditPalette, cedalionStarters, type CedalionAction } from "../engine/cedalion";
 
 export function CedalionChat({ compact = false }: { compact?: boolean }) {
   const {
     chat, pushChat, clearChat, current, purposeId, screen,
     buildMeta, canvasCtx, cedalionSeed, clearCedalionSeed,
-    setSwatch, generate, go, say, settings,
+    setSwatch, generate, go, say,
   } = useApp();
   const starters = cedalionStarters(screen);
   const [draft, setDraft] = useState("");
@@ -32,13 +32,13 @@ export function CedalionChat({ compact = false }: { compact?: boolean }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cedalionSeed]);
 
-  async function send(text: string) {
+  function send(text: string) {
     const q = text.trim();
     if (!q) return;
     pushChat({ role: "you", text: q });
     setDraft("");
     try {
-      const a = await askCedalionAsync(
+      const a = askCedalion(
         q,
         {
           palette: current ?? undefined,
@@ -53,9 +53,7 @@ export function CedalionChat({ compact = false }: { compact?: boolean }) {
                 score: current ? auditPalette(current, purposeId ?? undefined).score : undefined,
               }
             : undefined,
-          settings,
-        },
-        settings
+        }
       );
       pushChat({
         role: "cedalion",

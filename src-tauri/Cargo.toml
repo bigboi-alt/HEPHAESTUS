@@ -1,6 +1,6 @@
 [package]
 name = "hephaestus"
-version = "0.5.0"
+version = "0.5.1"
 description = "Hephaestus — design intelligence for the rest of us."
 authors = ["Hephaestus"]
 edition = "2021"

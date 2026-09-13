@@ -107,35 +107,6 @@ export default function Settings() {
               value={settings.cedalionDock}
               onChange={(v) => setSettings({ cedalionDock: v })}
             />
-            <Row
-              label="Cedalion AI Brain"
-              note="Built-in super-smart offline brain is active by default. Optionally connect a Gemini, OpenAI, or local Ollama key for open-domain world chat."
-            >
-              <div style={{ display: "flex", flexDirection: "column", gap: 8, width: "100%", maxWidth: 360 }}>
-                <div className="row gap-1">
-                  {(["offline", "gemini", "openai", "ollama"] as const).map((p) => (
-                    <button
-                      key={p}
-                      className="btn"
-                      style={{ fontSize: 10, padding: "4px 8px" }}
-                      data-active={(settings.cedalionAiProvider || "offline") === p}
-                      onClick={() => setSettings({ cedalionAiProvider: p })}
-                    >
-                      {p}
-                    </button>
-                  ))}
-                </div>
-                {(settings.cedalionAiProvider && settings.cedalionAiProvider !== "offline") && (
-                  <input
-                    className="input"
-                    type="password"
-                    placeholder={settings.cedalionAiProvider === "gemini" ? "Gemini API key (AIza...)" : "API key / token"}
-                    value={settings.cedalionAiApiKey || ""}
-                    onChange={(e) => setSettings({ cedalionAiApiKey: e.target.value })}
-                  />
-                )}
-              </div>
-            </Row>
             <Toggle
               label="Interface motion"
               note="Fades and transitions. Off also respects prefers-reduced-motion behaviour in exports."
